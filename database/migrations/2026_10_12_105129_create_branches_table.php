@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('name', 100)->unique();
             $table->string('address')->nullable();
             $table->string('phone')->nullable();
+            $table->enum('type', ['shop', 'warehouse'])->default('shop');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

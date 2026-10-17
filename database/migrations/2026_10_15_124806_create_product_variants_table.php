@@ -17,15 +17,18 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained();
             $table->foreignId('color_id')->constrained();
             $table->foreignId('size_id')->constrained();
+            $table->string('sku', 50)->unique();
+
 
             $table->decimal('selling_price', 12, 2);
+            $table->decimal('minimum_selling_price', 12, 2)->nullable();
 
+            $table->boolean('is_active')->default(true);
             // منع تكرار نفس اللون والمقاس لنفس المنتج
             $table->unique(
                 ['product_id', 'color_id', 'size_id'],
                 'product_color_size_unique'
             );
-            $table->boolean('i_active')->default(true);
             $table->timestamps();
         });
     }
@@ -35,6 +38,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product__variants');
+        Schema::dropIfExists('product_variants');
     }
 };
