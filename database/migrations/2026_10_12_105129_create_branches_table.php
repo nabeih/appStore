@@ -15,10 +15,10 @@ return new class extends Migration
 
         Schema::create('branches', function (Blueprint $table) {
             $table->id();
-            $table->string('name', '100')->unique();
+            $table->string('name', 100)->unique();
             $table->string('address')->nullable();
             $table->string('phone')->nullable();
-            $table->boolean('is_active');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('sizes', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->unsignedSmallInteger('stor_order');
-            $table->boolean('is_active');
+            $table->string('name')->unique();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
-            $table->string('name', 50);
-            $table->string('disaply_name', 150);
-            $table->boolean('is_active');
+            $table->string('name', 50)->unique();
+            $table->string('display_name', 150);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

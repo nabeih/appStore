@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة المتجر</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<!-- ============ شاشة تسجيل الدخول ============ -->
+<div id="loginScreen">
+    <div class="login-box">
+        <div class="logo">👕</div>
+        <h2>نظام إدارة المتجر</h2>
+        <p>سجّل دخولك للمتابعة</p>
+        <form onsubmit="handleLogin(event)">
+            <input type="email" id="loginEmail" value="owner@store.com" placeholder="البريد الإلكتروني" required>
+            <input type="password" id="loginPassword" value="123456" placeholder="كلمة المرور" required>
+            <button type="submit">دخول</button>
+        </form>
+        <div class="demo-accounts">
+            <p>حسابات تجريبية:</p>
+            <div class="demo-buttons">
+                <button onclick="quickLogin('owner@store.com')">👑 المالك</button>
+                <button onclick="quickLogin('manager@store.com')">👔 مدير</button>
+                <button onclick="quickLogin('cashier@store.com')">💰 كاشير</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ التطبيق ============ -->
+<div id="appScreen">
+    <div class="mobile-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <button onclick="toggleSidebar()" class="mobile-toggle-btn" title="القائمة الرئيسية"><i class="fas fa-bars"></i></button>
+            <h2>👕 متجر الأناقة</h2>
+        </div>
+        <div class="mobile-header-actions" style="display:flex;align-items:center;gap:8px;">
+            <button class="notif-bell-btn mobile" id="notifBellBtnMobile" onclick="toggleNotifDropdown(event)" title="التنبيهات">
+                <i class="fas fa-bell"></i>
+                <span class="notif-badge" id="notifBadgeMobile">0</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-tshirt"></i><span>متجر الأناقة</span>
+        </div>
+        <div class="sidebar-user">
+            <div class="user-avatar" id="userAvatar">م</div>
+            <div class="sidebar-user-info">
+                <h6 id="userName">محمد</h6>
+                <small id="userRole">المالك</small>
+            </div>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <main class="main-content">
+        <!-- الشريط العلوي والتنبيهات (Topbar) -->
+        <header class="app-topbar">
+            <div class="topbar-right">
+                <div class="topbar-store-info">
+                    <span class="topbar-store-name"><i class="fas fa-store text-primary"></i> متجر الأناقة</span>
+                    <span class="topbar-branch-tag"><i class="fas fa-map-marker-alt"></i> الفرع الرئيسي</span>
+                    <span class="topbar-date" id="topbarDate"><i class="far fa-calendar-alt"></i> —</span>
+                </div>
+            </div>
+            <div class="topbar-left">
+                <!-- زر الكاشير السريع -->
+                <button class="topbar-quick-pos-btn" onclick="switchScreen('pos')" title="الانتقال السريع للكاشير">
+                    <i class="fas fa-cash-register"></i>
+                    <span>الكاشير السريع</span>
+                </button>
+
+                <!-- زر جرس التنبيهات مع القائمة المنسدلة -->
+                <div class="notif-dropdown-wrapper" id="notifWrapper">
+                    <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifDropdown(event)" title="التنبيهات والإشعارات">
+                        <i class="fas fa-bell"></i>
+                        <span class="notif-badge" id="notifBadge">0</span>
+                    </button>
+
+                    <!-- القائمة المنسدلة للتنبيهات -->
+                    <div class="notif-dropdown" id="notifDropdown">
+                        <div class="notif-header">
+                            <div class="notif-header-title">
+                                <i class="fas fa-bell text-primary"></i>
+                                <strong>التنبيهات والإشعارات</strong>
+                                <span class="notif-count-pill" id="notifCountPill">0</span>
+                            </div>
+                            <div class="notif-header-actions">
+                                <button class="notif-action-btn" onclick="refreshNotifications()" title="تحديث">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <button class="notif-action-btn" onclick="markAllNotificationsAsRead()" title="تحديد الكل كمقروء">
+                                    <i class="fas fa-check-double"></i>
+                                </button>
+                                <button class="notif-action-btn" onclick="closeNotifDropdown()" title="إغلاق">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="notif-tabs">
+                            <button class="notif-tab active" data-tab="all" onclick="filterNotifTab('all')">
+                                الكل <span class="notif-tab-badge" id="notifTabAll">0</span>
+                            </button>
+                            <button class="notif-tab" data-tab="stock" onclick="filterNotifTab('stock')">
+                                المخزون <span class="notif-tab-badge" id="notifTabStock">0</span>
+                            </button>
+                            <button class="notif-tab" data-tab="debts" onclick="filterNotifTab('debts')">
+                                الديون <span class="notif-tab-badge" id="notifTabDebts">0</span>
+                            </button>
+                            <button class="notif-tab" data-tab="orders" onclick="filterNotifTab('orders')">
+                                الطلبات <span class="notif-tab-badge" id="notifTabOrders">0</span>
+                            </button>
+                        </div>
+
+                        <div class="notif-list" id="notifList">
+                            <!-- يتم ملؤها ديناميكياً بواسطة JavaScript -->
+                        </div>
+
+                        <div class="notif-footer">
+                            <button class="notif-view-all-btn" onclick="switchScreen('dashboard'); closeNotifDropdown();">
+                                <i class="fas fa-chart-pie"></i> لوحة التحكم والتنبيهات العامة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- شارة المستخدم في التوب بار -->
+                <div class="topbar-user-pill" onclick="switchScreen('dashboard')" title="حساب المستخدم">
+                    <div class="user-avatar-sm" id="topbarUserAvatar">م</div>
+                    <span class="user-name-sm" id="topbarUserName">محمد</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="demoBanner"></div>
+
+        <!-- ============ لوحة التحكم ============ -->
+        <div id="screen-dashboard" class="screen active">
+            <h1 class="section-title"><i class="fas fa-chart-pie text-primary"></i> لوحة التحكم</h1>
+            <p class="section-subtitle">نظرة شاملة على أداء متجرك</p>
+            <div class="stats-grid" id="dashboardStats"></div>
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-clock text-primary"></i> آخر المبيعات</h3>
+                    <button class="btn btn-sm btn-outline" onclick="switchScreen('sales-record')">عرض الكل</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>العميل</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                        <tbody id="recentSalesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-exclamation-triangle text-warning"></i> تنبيهات</h3></div>
+                <div id="inventoryAlerts"></div>
+            </div>
+        </div>
+
+        <!-- ============ إدارة المشتريات والمخزون ============ -->
+        <div id="screen-inventory" class="screen">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:18px;">
+                <div>
+                    <h1 class="section-title"><i class="fas fa-dolly-flatbed text-primary"></i> إدارة المشتريات</h1>
+                    <p class="section-subtitle" style="margin:0;">فاتورة واحدة لمنتجات موجودة وجديدة مع ضبط التكلفة والمخزون</p>
+                </div>
+             
+            </div>
+
+            <!-- تبويبات الشاشة -->
+            <div class="screen-subtabs">
+                <div class="screen-subtab active" id="tabBtn-purch-invoice" onclick="switchPurchSubtab('invoice')">
+                    <i class="fas fa-file-invoice"></i> فاتورة مشتريات جديدة
+                </div>
+                <div class="screen-subtab" id="tabBtn-purch-stock" onclick="switchPurchSubtab('stock')">
+                    <i class="fas fa-boxes"></i> جرد المخزون الحالي
+                </div>
+                <div class="screen-subtab" id="tabBtn-purch-history" onclick="switchPurchSubtab('history')">
+                    <i class="fas fa-history"></i> سجل فواتير التوريد
+                </div>
+            </div>
+
+            <!-- 1. تبويب الفاتورة التفاعلية -->
+            <div id="purchSubtab-invoice">
+                <div class="purch-layout">
+                    <main class="purch-main">
+                        <!-- الخطوة 1: بيانات الفاتورة -->
+                        <div class="card" style="margin-bottom:0;">
+                            <div class="card-header">
+                                <h3><span class="purch-step">1</span> بيانات الفاتورة</h3>
+                                <span id="purchSaveStatus" class="purch-status-badge">مسودة — غير معتمدة</span>
+                            </div>
+                            <div style="padding:16px;">
+                                <div class="form-grid" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                            <label style="margin:0;font-weight:700;">المورد / التاجر *</label>
+                                            <span style="font-size:0.75rem;color:var(--gray-500);"><i class="fas fa-info-circle"></i> يمكنك الاختيار من القائمة أو كتابة اسم مورد جديد مباشرة</span>
+                                        </div>
+                                        <div style="display:flex;gap:8px;align-items:center;">
+                                            <div style="position:relative;flex:1;">
+                                                <input type="text" id="purchSupplier" list="purchSupplierList" 
+                                                       placeholder="اختر من القائمة أو اكتب اسم مورد جديد..." 
+                                                       autocomplete="off" 
+                                                       oninput="onPurchSupplierInput()" 
+                                                       onchange="onPurchSupplierInput()"
+                                                       style="width:100%;padding:10px 14px 10px 36px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:0.92rem;">
+                                                <i class="fas fa-truck-loading" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none;"></i>
+                                                <datalist id="purchSupplierList"></datalist>
+                                            </div>
+                                            <button type="button" class="btn btn-outline" onclick="openQuickAddSupplierModal()" title="إضافة مورد جديد مع رقم هاتف" style="white-space:nowrap;padding:9px 14px;border-radius:10px;height:46px;display:flex;align-items:center;gap:6px;">
+                                                <i class="fas fa-user-plus"></i> مورد جديد
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>رقم فاتورة المورد *</label>
+                                        <input type="text" id="purchInvoiceNo" placeholder="SUP-1258">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>تاريخ الفاتورة *</label>
+                                        <input type="date" id="purchDate">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>طريقة الدفع</label>
+                                        <select id="purchMethod" onchange="onPurchMethodChange()">
+                                            <option value="cash">نقدي</option>
+                                            <option value="bank">بنك / محفظة</option>
+                                            <option value="partial">دفع جزئي</option>
+                                            <option value="credit">آجل بالكامل</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>المبلغ المدفوع</label>
+                                        <input type="number" id="purchPaid" min="0" step="0.01" value="0">
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label>ملاحظات</label>
+                                        <input type="text" id="purchNote" placeholder="ملاحظات اختيارية">
+                                    </div>
+                                    <!-- تفاصيل الدفع البنكي والمحفظة للمورد -->
+                                    <div id="purchBankDetailsBox" style="display:none;grid-column: 1 / -1;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:14px;margin-top:6px;">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                                            <h6 style="color:#166534;font-weight:800;font-size:0.85rem;margin:0;display:flex;align-items:center;gap:6px;">
+                                                <i class="fas fa-university"></i> بيانات التحويل البنكي / المحفظة للدفع للمورد
+                                            </h6>
+                                            <span class="badge success" style="font-size:0.72rem;padding:3px 8px;">دفع بنكي / محفظة</span>
+                                        </div>
+                                        <div class="form-grid" style="grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));gap:10px;">
+                                            <div class="form-group">
+                                                <label style="font-size:0.78rem;">اسم البنك أو المحفظة</label>
+                                                <input type="text" id="purchBankName" placeholder="مثال: بنك فلسطين / جوال باي / PalPay" style="height:42px!important;" oninput="savePurchDraft(true)">
+                                            </div>
+                                            <div class="form-group">
+                                                <label style="font-size:0.78rem;">رقم الحساب أو الآيبان أو الهاتف المحول له</label>
+                                                <input type="text" id="purchBankAccount" placeholder="رقم حساب المورد أو الهاتف" style="height:42px!important;" oninput="savePurchDraft(true)">
+                                            </div>
+                                            <div class="form-group">
+                                                <label style="font-size:0.78rem;">رقم الحوالة / إشعار العملية (Ref No)</label>
+                                                <input type="text" id="purchBankRef" placeholder="رقم إشعار التحويل البنكي" style="height:42px!important;" oninput="savePurchDraft(true)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="purch-hint">
+                                    <i class="fas fa-shield-alt text-primary"></i>
+                                    <span>المسودة تحفظ تلقائياً على هذا الجهاز. لا يتغير المخزون ولا حساب المورد قبل الاعتماد النهائي.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- الخطوة 2: أصناف الفاتورة -->
+                        <div class="card" style="margin-bottom:0;">
+                            <div class="card-header">
+                                <h3><span class="purch-step">2</span> أصناف الفاتورة</h3>
+                                <button class="btn btn-primary" onclick="openPurchNewProductModal()">
+                                    <i class="fas fa-plus"></i> إدخال منتج جديد ضمن الفاتورة
+                                </button>
+                            </div>
+                            <div style="padding:16px;">
+                                <div style="display:flex;gap:8px;">
+                                    <div class="purch-search-box" style="position:relative;flex:1;">
+                                        <i class="fas fa-search" style="position:absolute;right:14px;top:14px;color:var(--gray);"></i>
+                                        <input type="text" id="purchSearch" placeholder="ابحث بالاسم أو الكود أو الباركود..." style="width:100%;padding:10px 38px 10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;" oninput="onPurchSearchInput()">
+                                    </div>
+                                    <button class="btn btn-outline" onclick="clearPurchSearch()">مسح</button>
+                                </div>
+                                <div id="purchSearchResults" class="purch-search-results"></div>
+                                <div class="purch-hint">
+                                    <i class="fas fa-info-circle text-info"></i>
+                                    <span>كل منتج له جدول مستقل داخل الفاتورة. اختر منتجاً موجوداً أو أدخل منتجاً جديداً من هنا.</span>
+                                </div>
+
+                                <!-- الحاوية الديناميكية لبطاقات المنتجات -->
+                                <div id="purchProductsContainer" style="margin-top:14px;"></div>
+                            </div>
+                        </div>
+                    </main>
+
+                    <!-- العمود الجانبي: ملخص الفاتورة -->
+                    <aside class="purch-side">
+                        <div class="card" style="margin-bottom:0;">
+                            <div class="card-header">
+                                <h3><i class="fas fa-receipt text-primary"></i> ملخص الفاتورة</h3>
+                            </div>
+                            <div style="padding:16px;">
+                                <div class="purch-summary-line">
+                                    <span>عدد المنتجات</span>
+                                    <b id="purchCountView">0</b>
+                                </div>
+                                <div class="purch-summary-line">
+                                    <span>إجمالي القطع</span>
+                                    <b id="purchQtyTotalView">0</b>
+                                </div>
+                                <div class="purch-summary-line">
+                                    <span>إجمالي الفاتورة</span>
+                                    <b id="purchTotalView">₪0.00</b>
+                                </div>
+                                <div class="purch-summary-line">
+                                    <span>المبلغ المدفوع</span>
+                                    <b id="purchPaidView" style="color:var(--success);">₪0.00</b>
+                                </div>
+
+                                <div class="purch-grand-box">
+                                    <small>المبلغ المتبقي للمورد</small>
+                                    <div class="big" id="purchRemainingView">₪0.00</div>
+                                    <small>ينشأ قيد حساب المورد عند الاعتماد.</small>
+                                </div>
+
+                                <div class="purch-cost-formula-box">
+                                    <i class="fas fa-calculator" style="margin-left:4px;"></i>
+                                    <strong>متوسط التكلفة</strong> = (المخزون القديم × متوسط تكلفته + كمية الدفعة × سعر شرائها) ÷ الكمية بعد الشراء. الفاتورة تحفظ سعر هذه الدفعة كما هو.
+                                </div>
+
+                                <div class="purch-actions-stack">
+                                    <button class="btn btn-outline" onclick="savePurchDraft(false)">
+                                        <i class="fas fa-save"></i> حفظ المسودة الآن
+                                    </button>
+                                    <button class="btn btn-primary" onclick="requestConfirmPurchInvoice()">
+                                        <i class="fas fa-check-circle"></i> اعتماد الفاتورة
+                                    </button>
+                                    <button class="btn btn-danger" onclick="discardPurchDraft()">
+                                        <i class="fas fa-trash-alt"></i> حذف المسودة المحلية
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card" style="margin-bottom:0;">
+                            <div class="card-header">
+                                <h3><i class="fas fa-laptop text-info"></i> المسودة على هذا الجهاز</h3>
+                            </div>
+                            <div style="padding:16px;">
+                                <div id="purchDraftListView" class="purch-draft-box">لا توجد مسودة محفوظة.</div>
+                                <small style="color:var(--gray);font-size:0.75rem;display:block;margin-top:8px;text-align:center;">
+                                    في التطبيق الفعلي: حفظ على الخادم ومزامنة عند عودة الإنترنت.
+                                </small>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+
+            <!-- 2. تبويب جرد المخزون والمنتجات -->
+            <div id="purchSubtab-stock" style="display:none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-boxes text-primary"></i> قائمة المنتجات والكميات الحالية</h3>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="inventorySearch" placeholder="🔍 بحث بالاسم أو الكود..." oninput="loadInventoryTable()">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>الكود</th><th>المنتج</th><th>التصنيف</th><th>المقاس</th><th>اللون</th>
+                                    <th>متوسط التكلفة</th><th>سعر البيع</th><th>الكمية المتاحة</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventoryTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. تبويب سجل فواتير التوريد -->
+            <div id="purchSubtab-history" style="display:none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-history text-primary"></i> سجل فواتير المشتريات والتوريد</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>رقم الفاتورة</th><th>التاريخ</th><th>المورد</th>
+                                    <th>عدد الأصناف</th><th>إجمالي القطع</th><th>التكلفة الإجمالية</th><th>إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchasesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ============ التصنيفات والألوان والمقاسات ============ -->
+        <div id="screen-categories" class="screen">
+            <h1 class="section-title"><i class="fas fa-tags text-primary"></i> التصنيفات، الألوان، والمقاسات</h1>
+            <p class="section-subtitle">إدارة الخصائص وتصنيفات المنتجات</p>
+            
+            <div class="row g-4 mb-4">
+                <!-- إضافة تصنيف -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-plus-circle"></i> إضافة تصنيف</h3></div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <input type="text" id="newCategoryInput" placeholder="اسم التصنيف الجديد..." style="flex:1;min-width:140px;padding:10px 13px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;">
+                            <button class="btn btn-primary" onclick="saveCategory()"><i class="fas fa-save"></i> حفظ</button>
+                        </div>
+                        <input type="hidden" id="editingCategoryId">
+                    </div>
+                </div>
+
+                <!-- إضافة لون -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-palette"></i> إضافة لون</h3></div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <input type="text" id="newColorInput" placeholder="اسم اللون الجديد..." style="flex:1;min-width:140px;padding:10px 13px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;">
+                            <button class="btn btn-primary" onclick="typeof saveColor === 'function' ? saveColor() : alert('سيتم تفعيل هذه الخاصية لاحقاً أو عند إضافة الكود البرمجي')"><i class="fas fa-save"></i> حفظ</button>
+                        </div>
+                        <input type="hidden" id="editingColorId">
+                    </div>
+                </div>
+
+                <!-- إضافة مقاس -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-ruler"></i> إضافة مقاس</h3></div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <input type="text" id="newSizeInput" placeholder="اسم المقاس الجديد..." style="flex:1;min-width:140px;padding:10px 13px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;">
+                            <button class="btn btn-primary" onclick="typeof saveSize === 'function' ? saveSize() : alert('سيتم تفعيل هذه الخاصية لاحقاً أو عند إضافة الكود البرمجي')"><i class="fas fa-save"></i> حفظ</button>
+                        </div>
+                        <input type="hidden" id="editingSizeId">
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- قائمة التصنيفات -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-list"></i> قائمة التصنيفات</h3></div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>التصنيف</th><th>المنتجات</th><th>إجراءات</th></tr></thead>
+                                <tbody id="categoriesTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- قائمة الألوان -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-list"></i> قائمة الألوان</h3></div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>اللون</th><th>المنتجات</th><th>إجراءات</th></tr></thead>
+                                <tbody id="colorsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- قائمة المقاسات -->
+                <div class="col-xl-4 col-lg-4 col-md-12">
+                    <div class="card h-100" style="margin-bottom: 0;">
+                        <div class="card-header"><h3><i class="fas fa-list"></i> قائمة المقاسات</h3></div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>المقاس</th><th>المنتجات</th><th>إجراءات</th></tr></thead>
+                                <tbody id="sizesTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ الكاشير ============ -->
+        <div id="screen-pos" class="screen">
+            <h1 class="section-title"><i class="fas fa-cash-register text-primary"></i> الكاشير</h1>
+            <p class="section-subtitle">اضغط على المنتج لإضافته للسلة</p>
+            <div class="pos-layout">
+                <div class="pos-products">
+                    <div class="pos-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="posSearch" placeholder="ابحث بالاسم أو الكود..." oninput="filterPosProducts()">
+                    </div>
+                    <div class="products-grid" id="posProductsGrid"></div>
+                </div>
+
+                <div class="pos-cart">
+                    <div class="cart-header">
+                        <h4>🛒 السلة</h4>
+                        <button class="btn-icon danger" onclick="clearCart()" title="تفريغ">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+
+                    <div class="cart-items" id="cartItems">
+                        <div class="empty-cart">
+                            <i class="fas fa-shopping-basket"></i>
+                            <p>السلة فارغة</p>
+                        </div>
+                    </div>
+
+                    <div class="cart-summary">
+                        <div class="summary-row">
+                            <span>المجموع:</span>
+                            <strong id="cartSubtotal">0.00 ₪</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>الخصم:</span>
+                            <input type="number" id="cartDiscount" value="0" min="0" oninput="updateCartTotals()">
+                        </div>
+                        <div class="summary-row total">
+                            <span>الإجمالي:</span>
+                            <strong id="cartTotal">0.00 ₪</strong>
+                        </div>
+                    </div>
+
+                    <input type="text" id="customerName" placeholder="اسم العميل (اختياري)" style="width:100%;padding:10px 13px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;margin-bottom:10px;">
+
+                    <!-- طرق الدفع -->
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:6px;">طريقة الدفع:</label>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+                            <button type="button" class="payment-btn active" data-method="cash" onclick="selectPaymentMethod('cash')">
+                                <i class="fas fa-money-bill-wave"></i> كاش
+                            </button>
+                            <button type="button" class="payment-btn" data-method="app" onclick="selectPaymentMethod('app')">
+                                <i class="fas fa-mobile-alt"></i> تطبيق
+                            </button>
+                            <button type="button" class="payment-btn" data-method="debt" onclick="selectPaymentMethod('debt')">
+                                <i class="fas fa-hand-holding-usd"></i> دين
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- حقول التطبيق -->
+                    <div id="appPaymentFields" style="display:none;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                        <h6 style="color:#92400e;font-weight:800;font-size:.84rem;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                            <i class="fas fa-mobile-alt text-warning"></i> بيانات الدفع الإلكتروني / البنكي
+                        </h6>
+
+                        <!-- اختيار البنك أو المحفظة -->
+                        <div style="margin-bottom:10px;">
+                            <label style="display:block;font-size:0.78rem;font-weight:700;color:#92400e;margin-bottom:4px;">اختر المحفظة أو البنك المحول إليه:</label>
+                            <select id="appName" style="width:100%;padding:10px 12px;border:2px solid #fcd34d;border-radius:10px;font-family:inherit;background:#fff;font-weight:700;" onchange="updateStoreAccountDisplay()">
+                                <option value="PalPay">محفظة PalPay</option>
+                                <option value="Jawwal Pay">جوال باي (Jawwal Pay)</option>
+                                <option value="بنك فلسطين">بنك فلسطين</option>
+                                <option value="البنك الإسلامي الفلسطيني">البنك الإسلامي الفلسطيني</option>
+                                <option value="البنك العربي">البنك العربي</option>
+                                <option value="Zain Cash">زين كاش (Zain Cash)</option>
+                                <option value="PayPal">PayPal</option>
+                                <option value="أخرى">حساب آخر...</option>
+                            </select>
+                        </div>
+
+                        <!-- كرت تفاصيل رقم الحساب والآيبان للمتجر -->
+                        <div id="storeAccountInfoCard" style="background:#fff;border:2px solid #fcd34d;border-radius:10px;padding:12px;margin-bottom:12px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-weight:800;color:#92400e;font-size:0.8rem;"><i class="fas fa-university"></i> حوّل إلى حساب المتجر:</span>
+                                <span class="badge warning" id="storeAccTypeBadge" style="font-size:0.7rem;padding:2px 8px;">محفظة إلكترونية</span>
+                            </div>
+                            <div style="font-size:0.8rem;color:#475569;margin-bottom:6px;">
+                                <span>اسم المستفيد: </span><strong id="storeAccTitle" style="color:var(--dark);">متجر الأناقة للملابس</strong>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;background:#fef3c7;padding:8px 10px;border-radius:8px;gap:8px;">
+                                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                    <strong style="font-size:0.75rem;color:#92400e;" id="storeAccLabel">رقم المحفظة / الهاتف:</strong>
+                                    <span id="storeAccNo" style="font-family:monospace;font-size:0.95rem;font-weight:900;color:#1e293b;letter-spacing:0.5px;">0599-887766</span>
+                                </div>
+                                <button type="button" class="btn btn-outline btn-sm" onclick="copyStoreAccNo()" style="padding:4px 10px;font-size:0.75rem;height:auto!important;background:#fff;border-color:#f59e0b;color:#b45309;">
+                                    <i class="fas fa-copy"></i> نسخ
+                                </button>
+                            </div>
+                            <div id="storeAccIbanRow" style="display:none;background:#f8fafc;padding:8px 10px;border-radius:8px;border:1px dashed #cbd5e1;margin-top:6px;">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                    <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                        <span style="font-size:0.72rem;color:var(--gray);">الآيبان IBAN:</span>
+                                        <span id="storeAccIban" style="font-family:monospace;font-size:0.82rem;font-weight:bold;color:#1e293b;">PS04 PALS...</span>
+                                    </div>
+                                    <button type="button" class="btn btn-outline btn-sm" onclick="copyStoreIban()" style="padding:4px 10px;font-size:0.75rem;height:auto!important;background:#fff;border-color:#94a3b8;color:#475569;">
+                                        <i class="fas fa-copy"></i> نسخ
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- بيانات المرسل ورقم الحوالة -->
+                        <div style="display:grid;gap:6px;">
+                            <input type="text" id="senderName" placeholder="اسم المرسل (مطلوب)" style="width:100%;padding:9px 12px;border:2px solid #fcd34d;border-radius:8px;font-family:inherit;background:#fff;">
+                            <input type="text" id="senderPhone" placeholder="رقم هاتف المرسل (مطلوب)" style="width:100%;padding:9px 12px;border:2px solid #fcd34d;border-radius:8px;font-family:inherit;background:#fff;">
+                            <input type="text" id="transferRef" placeholder="رقم الحوالة / كود العملية (اختياري)" style="width:100%;padding:9px 12px;border:2px solid #fcd34d;border-radius:8px;font-family:inherit;background:#fff;">
+                        </div>
+
+                        <label style="display:block;font-size:.78rem;font-weight:700;color:#92400e;margin-top:8px;margin-bottom:5px;">
+                            <i class="fas fa-camera"></i> صورة الإشعار (اختياري):
+                        </label>
+                        <input type="file" id="paymentScreenshot" accept="image/*" style="width:100%;padding:7px;border:2px dashed #fcd34d;border-radius:8px;font-family:inherit;font-size:.78rem!important;background:#fff;cursor:pointer;">
+                        <div id="screenshotPreview" style="display:none;margin-top:8px;">
+                            <img id="previewImg" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:2px solid #fcd34d;">
+                            <button type="button" onclick="removeScreenshot()" style="width:100%;margin-top:5px;padding:5px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-family:inherit;font-weight:700;font-size:.75rem;cursor:pointer;">
+                                <i class="fas fa-trash"></i> حذف الصورة
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- حقول الدين -->
+                    <div id="debtFields" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:12px;padding:12px;margin-bottom:10px;">
+                        <h6 style="color:#991b1b;font-weight:800;font-size:.8rem;margin-bottom:8px;">
+                            <i class="fas fa-hand-holding-usd"></i> بيانات الدين
+                        </h6>
+                        <input type="text" id="debtCustomerName" placeholder="اسم العميل (مطلوب)" style="width:100%;padding:9px 12px;border:2px solid #fca5a5;border-radius:8px;font-family:inherit;margin-bottom:6px;background:#fff;">
+                        <input type="text" id="debtCustomerPhone" placeholder="رقم الهاتف (مطلوب)" style="width:100%;padding:9px 12px;border:2px solid #fca5a5;border-radius:8px;font-family:inherit;margin-bottom:6px;background:#fff;">
+                        <input type="number" step="0.01" id="debtPaidAmount" placeholder="الدفعة الأولى / المدفوع (اختياري)" style="width:100%;padding:9px 12px;border:2px solid #fca5a5;border-radius:8px;font-family:inherit;margin-bottom:6px;background:#fff;">
+                        <input type="text" id="debtNote" placeholder="ملاحظة (اختياري)" style="width:100%;padding:9px 12px;border:2px solid #fca5a5;border-radius:8px;font-family:inherit;background:#fff;">
+                    </div>
+
+                    <button class="btn btn-success btn-block" onclick="checkout()" style="padding:13px;font-size:.95rem;">
+                        <i class="fas fa-check-circle"></i> إتمام البيع
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ سجل المبيعات ============ -->
+        <div id="screen-sales-record" class="screen">
+            <div class="card-header" style="margin-bottom:18px;">
+                <div>
+                    <h1 class="section-title"><i class="fas fa-history text-primary"></i> سجل المبيعات</h1>
+                    <p class="section-subtitle" style="margin:0;">كل فاتورة بتفاصيلها</p>
+                </div>
+                <input type="date" id="filterSalesDate" onchange="loadSalesHistory()" style="padding:8px 13px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;">
+            </div>
+            <div class="card">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th><th>التاريخ</th><th>العميل</th><th>الكاشير</th>
+                                <th>الأصناف</th><th>الإجمالي</th><th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salesHistoryTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- ============ طلبات الموقع ============ -->
+        <div id="screen-online-orders" class="screen">
+            <h1 class="section-title"><i class="fas fa-globe text-primary"></i> طلبات الموقع</h1>
+            <p class="section-subtitle">إدارة الطلبات الواردة من المتجر الإلكتروني</p>
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> قائمة الطلبات الحالية</h3>
+                    <button class="btn btn-primary" onclick="simulateNewOnlineOrder()"><i class="fas fa-sync"></i> جلب الطلبات (محاكاة)</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>رقم الطلب</th><th>تاريخ الطلب</th><th>اسم الزبون</th><th>المنتجات</th><th>الإجمالي</th><th>الحالة</th><th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="onlineOrdersTableBody">
+                            <tr><td colspan="7" class="empty">لا توجد طلبات جديدة حالياً</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ ديون العملاء ============ -->
+        <div id="screen-debts" class="screen">
+            <h1 class="section-title"><i class="fas fa-hand-holding-usd text-danger"></i> ديون العملاء</h1>
+            <p class="section-subtitle">متابعة ديون العملاء والدفعات</p>
+
+            <div class="stats-grid" id="debtsStatsGrid"></div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-plus-circle"></i> تسجيل دفعة من عميل</h3></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>اسم العميل *</label>
+                        <input type="text" id="debtPayName" placeholder="أحمد محمد" list="customerList">
+                        <datalist id="customerList"></datalist>
+                    </div>
+                    <div class="form-group"><label>المبلغ (₪) *</label><input type="number" step="0.01" id="debtPayAmount" placeholder="50"></div>
+                    <div class="form-group"><label>ملاحظات</label><input type="text" id="debtPayNote" placeholder="دفعة جزئية"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-success" onclick="saveCustomerPayment()"><i class="fas fa-check"></i> تسجيل الدفعة</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> أرصدة العملاء</h3>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="debtsSearch" placeholder="🔍 بحث..." oninput="loadDebtsTable()">
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>العميل</th><th>الهاتف</th><th>إجمالي الدين</th>
+                                <th>المدفوع</th><th>المتبقي</th><th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="debtsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ الموظفين ============ -->
+        <div id="screen-employees" class="screen">
+            <div class="card-header" style="margin-bottom:18px;">
+                <div>
+                    <h1 class="section-title"><i class="fas fa-users text-primary"></i> الموظفين</h1>
+                    <p class="section-subtitle" style="margin:0;">إدارة فريق العمل</p>
+                </div>
+                <button class="btn btn-primary" onclick="openEmployeeModal()">
+                    <i class="fas fa-plus"></i> موظف جديد
+                </button>
+            </div>
+            <div class="card">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>الاسم</th><th>البريد</th><th>الدور</th><th>الفرع</th><th>إجراءات</th></tr>
+                        </thead>
+                        <tbody id="employeesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ الفروع ============ -->
+        <div id="screen-branches" class="screen">
+            <div class="card-header" style="margin-bottom:18px;">
+                <div>
+                    <h1 class="section-title"><i class="fas fa-store text-primary"></i> الفروع</h1>
+                    <p class="section-subtitle" style="margin:0;">إدارة فروع المتجر</p>
+                </div>
+                <button class="btn btn-primary" onclick="openBranchModal()">
+                    <i class="fas fa-plus"></i> فرع جديد
+                </button>
+            </div>
+            <div class="card">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>اسم الفرع</th><th>الكود</th><th>الهاتف</th><th>العنوان</th><th>إجراءات</th></tr>
+                        </thead>
+                        <tbody id="branchesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ حسابات التجار ============ -->
+        <div id="screen-merchants" class="screen">
+            <h1 class="section-title"><i class="fas fa-handshake text-primary"></i> حسابات التجار</h1>
+            <p class="section-subtitle">متابعة الفواتير والمدفوعات (ذمم مالية)</p>
+
+            <div class="stats-grid" id="merchantStatsGrid"></div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-plus-circle"></i> تسجيل فاتورة توريد</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم التاجر *</label><input type="text" id="m-name" placeholder="مصنع الأمل"></div>
+                    <div class="form-group"><label>رقم الفاتورة</label><input type="text" id="m-ref" placeholder="#INV-101"></div>
+                    <div class="form-group"><label>القيمة (₪) *</label><input type="number" step="0.01" id="m-amount" placeholder="350"></div>
+                    <div class="form-group"><label>ملاحظات</label><input type="text" id="m-note" placeholder="ملاحظات"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-warning" onclick="saveMerchantInvoice()">
+                        <i class="fas fa-file-invoice"></i> حفظ الفاتورة
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-money-bill-wave"></i> تسجيل دفعة</h3></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>اسم التاجر *</label><input type="text" id="pay-name" placeholder="مصنع الأمل"></div>
+                    <div class="form-group"><label>المبلغ (₪) *</label><input type="number" step="0.01" id="pay-amount" placeholder="150"></div>
+                    <div class="form-group"><label>ملاحظات</label><input type="text" id="pay-note" placeholder="دفعة"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-success" onclick="saveMerchantPayment()">
+                        <i class="fas fa-check"></i> تسجيل الدفعة
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-list"></i> أرصدة التجار</h3></div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>التاجر</th><th>الفواتير</th><th>المدفوعات</th>
+                                <th>الرصيد</th><th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="merchantsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ المصروفات ============ -->
+        <div id="screen-expenses" class="screen">
+            <h1 class="section-title"><i class="fas fa-money-bill-wave text-primary"></i> المصروفات</h1>
+            <p class="section-subtitle">المصروفات الثابتة والمتغيرة</p>
+
+            <div class="stats-grid" id="expensesStatsGrid"></div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-home"></i> مصروف ثابت</h3></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>النوع *</label>
+                        <select id="fixed-type">
+                            <option value="إيجار المحل">إيجار المحل</option>
+                            <option value="رواتب موظفين">رواتب موظفين</option>
+                            <option value="اشتراك إنترنت">اشتراك إنترنت</option>
+                            <option value="ضريبة / رسوم">ضريبة / رسوم</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>المبلغ (₪) *</label><input type="number" step="0.01" id="fixed-amount" placeholder="500"></div>
+                    <div class="form-group"><label>الفترة</label><input type="text" id="fixed-period" placeholder="يناير 2026"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-warning" onclick="saveFixedExpense()"><i class="fas fa-save"></i> حفظ</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-bolt"></i> مصروف متغير / طارئ</h3></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>البند *</label>
+                        <select id="variable-category">
+                            <option value="مواصلات وشحن">مواصلات وشحن</option>
+                            <option value="كهرباء وماء">كهرباء وماء</option>
+                            <option value="صيانة">صيانة</option>
+                            <option value="تنسيق بضاعة">تنسيق بضاعة</option>
+                            <option value="أخرى">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>المبلغ (₪) *</label><input type="number" step="0.01" id="variable-amount" placeholder="80"></div>
+                    <div class="form-group"><label>السبب *</label><input type="text" id="variable-reason" placeholder="شحن بضاعة"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-danger" onclick="saveVariableExpense()"><i class="fas fa-save"></i> حفظ</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-list"></i> سجل المصروفات</h3></div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>التاريخ</th><th>النوع</th><th>البند</th><th>المبلغ</th><th>إجراء</th></tr>
+                        </thead>
+                        <tbody id="expensesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ التقارير ============ -->
+        <div id="screen-reports" class="screen">
+            <h1 class="section-title"><i class="fas fa-chart-line text-primary"></i> التقارير المالية</h1>
+            <p class="section-subtitle">إيرادات فعلية (بعد سداد الدين)</p>
+        
+            <!-- الصف الأول: الأرقام الرئيسية -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon success"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="stat-label">إجمالي الإيرادات المقبوضة</div>
+                    <div class="stat-value" id="repRevenue">₪0</div>
+                    <small style="color:var(--gray);font-size:0.72rem;">(نقد + دفعات الديون)</small>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning"><i class="fas fa-shopping-bag"></i></div>
+                    <div class="stat-label">تكلفة البضاعة (COGS)</div>
+                    <div class="stat-value" id="repCOGS">₪0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon danger"><i class="fas fa-money-bill-wave"></i></div>
+                    <div class="stat-label">إجمالي المصروفات</div>
+                    <div class="stat-value" id="repExpenses">₪0</div>
+                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;">
+                    <div class="stat-icon" style="background:rgba(255,255,255,0.2);color:#fff;"><i class="fas fa-crown"></i>
+                    </div>
+                    <div class="stat-label" style="color:rgba(255,255,255,0.8);">صافي الربح الفعلي</div>
+                    <div class="stat-value" id="repNetProfit" style="color:#fff;">₪0</div>
+                </div>
+            </div>
+        
+            <!-- الصف الثاني: تفصيل الإيرادات والسيولة -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-balance-scale text-primary"></i> تفصيل المبيعات والديون</h3>
+                </div>
+                <div class="stats-grid" style="margin-bottom:0;">
+                    <div class="stat-card" style="border-right:4px solid var(--success);">
+                        <div class="stat-icon success"><i class="fas fa-money-bill-wave"></i></div>
+                        <div class="stat-label">مبيعات نقدية وقت البيع</div>
+                        <div class="stat-value" id="repCashRevenue" style="color:var(--success);">₪0</div>
+                        <small style="color:var(--gray);font-size:0.72rem;">كاش + تطبيق</small>
+                    </div>
+                    <div class="stat-card" style="border-right:4px solid var(--primary);">
+                        <div class="stat-icon primary"><i class="fas fa-handshake"></i></div>
+                        <div class="stat-label">مقبوضات الديون</div>
+                        <div class="stat-value" id="repDebtPayments" style="color:var(--primary);">₪0</div>
+                        <small style="color:var(--gray);font-size:0.72rem;">دفعات سداد العملاء</small>
+                    </div>
+                    <div class="stat-card" style="border-right:4px solid var(--info);">
+                        <div class="stat-icon info"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="stat-label">إجمالي الديون المتبقية</div>
+                        <div class="stat-value" id="repReceivables" style="color:var(--info);">₪0</div>
+                        <small style="color:var(--gray);font-size:0.72rem;">مبالغ معلقة (لم تُقبض)</small>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- الصف الثالث: ملاحظة محاسبية -->
+            <div class="card" style="background:#eff6ff;border:1px solid #bfdbfe;">
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <i class="fas fa-info-circle" style="color:var(--info);font-size:1.3rem;margin-top:2px;"></i>
+                    <div style="font-size:0.82rem;color:#1e40af;line-height:1.7;">
+                        <strong>💡 بناءً على طلبك:</strong><br>
+                        • <strong>مبيعات الدين:</strong> لا يتم احتسابها كإيرادات ولا تضاف للأرباح عند البيع.<br>
+                        • <strong>دفعات السداد:</strong> بمجرد دفع العميل لجزء من الدين (أو كله)، يُحتسب المبلغ المدفوع مباشرة ضمن الإيرادات وأرباح المحل.<br>
+                        • <strong>الربح الفعلي:</strong> يعكس تماماً السيولة النقدية التي دخلت الصندوق بعد خصم تكلفة كافة المنتجات المباعة (نقد ودين).
+                    </div>
+                </div>
+            </div>
+        
+            <!-- الصف الرابع: الرسم البياني -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-bar"></i> أفضل المنتجات مبيعاً</h3>
+                </div>
+                <div style="position:relative;height:260px;"><canvas id="topProductsChart"></canvas></div>
+            </div>
+        
+            <!-- الصف الخامس: التنبيهات -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-exclamation-triangle text-warning"></i> تنبيهات ذكية</h3>
+                </div>
+                <div style="display:grid;gap:10px;">
+                    <div style="background:#fff5f5;border:1px solid #fed7d7;padding:12px;border-radius:12px;">
+                        <h6 style="color:#dc2626;margin-bottom:8px;font-size:.85rem;">⚠️ منتجات نفدت</h6>
+                        <div id="outOfStockAlerts" style="font-size:.82rem;color:#64748b;"></div>
+                    </div>
+                    <div style="background:#fffaf0;border:1px solid #feebc8;padding:12px;border-radius:12px;">
+                        <h6 style="color:#d97706;margin-bottom:8px;font-size:.85rem;">🔻 منتجات خاسرة</h6>
+                        <div id="lossProductAlerts" style="font-size:.82rem;color:#64748b;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ============ Modal: الموظف ============ -->
+<div class="modal-overlay" id="employeeModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5 id="employeeModalTitle">موظف جديد</h5>
+            <button class="modal-close" onclick="closeModal('employeeModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveEmployee(event)">
+                <input type="hidden" id="employeeId">
+                <div class="form-group" style="margin-bottom:10px;"><label>الاسم *</label><input type="text" id="emp-name" required></div>
+                <div class="form-group" style="margin-bottom:10px;"><label>البريد *</label><input type="email" id="emp-email" required></div>
+                <div class="form-group" style="margin-bottom:10px;"><label>كلمة المرور *</label><input type="text" id="emp-password" required></div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>الدور *</label>
+                    <select id="emp-role" required>
+                        <option value="cashier">كاشير</option>
+                        <option value="manager">مدير فرع</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>الفرع</label>
+                    <select id="emp-branch"><option value="">بدون</option></select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('employeeModal')">إلغاء</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Modal: الفرع ============ -->
+<div class="modal-overlay" id="branchModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5 id="branchModalTitle">فرع جديد</h5>
+            <button class="modal-close" onclick="closeModal('branchModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveBranch(event)">
+                <input type="hidden" id="branchId">
+                <div class="form-group" style="margin-bottom:10px;"><label>اسم الفرع *</label><input type="text" id="br-name" required></div>
+                <div class="form-group" style="margin-bottom:10px;"><label>الكود</label><input type="text" id="br-code" placeholder="BR-01"></div>
+                <div class="form-group" style="margin-bottom:10px;"><label>الهاتف</label><input type="text" id="br-phone"></div>
+                <div class="form-group" style="margin-bottom:10px;"><label>العنوان</label><input type="text" id="br-address"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('branchModal')">إلغاء</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Modal: إدخال منتج جديد ضمن الفاتورة ============ -->
+<div class="modal-overlay" id="purchNewProductModal">
+    <div class="modal-box" style="max-width:580px;">
+        <div class="modal-header">
+            <h5><i class="fas fa-plus-circle text-primary"></i> إدخال منتج جديد ضمن الفاتورة</h5>
+            <button class="modal-close" onclick="closeModal('purchNewProductModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap:12px;">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>اسم المنتج *</label>
+                    <input type="text" id="purchNewName" placeholder="مثال: فستان سهرة مخملي / تيشيرت قطن رجالي">
+                </div>
+                <div class="form-group">
+                    <label>كود المنتج / الباركود</label>
+                    <input type="text" id="purchNewCode" placeholder="تلقائي إن ترك فارغاً">
+                </div>
+                <div class="form-group">
+                    <label>التصنيف *</label>
+                    <select id="purchNewCategory"></select>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>طبيعة وتركيبة المنتج</label>
+                    <select id="purchNewMode" onchange="onPurchNewModeChange()">
+                        <option value="both">لون ومقاس</option>
+                        <option value="color">لون فقط</option>
+                        <option value="size">مقاس فقط</option>
+                        <option value="none">بدون لون أو مقاس</option>
+                    </select>
+                </div>
+                <div class="form-group" id="purchNewColorGroup">
+                    <label>اللون الأولي</label>
+                    <select id="purchNewColor"></select>
+                </div>
+                <div class="form-group" id="purchNewSizeGroup">
+                    <label>المقاس الأولي</label>
+                    <select id="purchNewSize"></select>
+                </div>
+                <div class="form-group">
+                    <label style="color:#166534;font-weight:700;">سعر شراء الوحدة (التكلفة) ₪ *</label>
+                    <input type="number" id="purchNewCost" min="0" step="0.01" placeholder="مثال: 20.00" style="border-color:#86efac;background:#f0fdf4;">
+                </div>
+                <div class="form-group">
+                    <label style="color:#166534;font-weight:700;">كمية التوريد (العدد) *</label>
+                    <input type="number" id="purchNewQty" min="1" step="1" value="1" placeholder="مثال: 10" style="border-color:#86efac;background:#f0fdf4;">
+                </div>
+                <div class="form-group">
+                    <label>سعر البيع الافتراضي (₪) *</label>
+                    <input type="number" id="purchNewRetail" min="0" step="0.01" placeholder="مثال: 35.00">
+                </div>
+                <div class="form-group">
+                    <label>الحد الأدنى للبيع (₪)</label>
+                    <input type="number" id="purchNewMinPrice" min="0" step="0.01" placeholder="مثال: 28.00">
+                </div>
+            </div>
+            <div class="purch-hint" style="margin-top:14px;">
+                <i class="fas fa-info-circle text-info"></i>
+                <span>بمجرد الإضافة، يمكنك أيضاً إدراج ألوان ومقاسات وتكلفة مخصصة لنفس المنتج مباشرة من جدول الفاتورة.</span>
+            </div>
+            <div class="modal-actions" style="margin-top:16px;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('purchNewProductModal')">إلغاء</button>
+                <button type="button" class="btn btn-primary" onclick="addPurchNewProduct()"><i class="fas fa-check"></i> إضافة إلى الفاتورة</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Modal: تأكيد اعتماد الفاتورة ============ -->
+<div class="modal-overlay" id="purchConfirmModal">
+    <div class="modal-box" style="max-width:500px;">
+        <div class="modal-header">
+            <h5><i class="fas fa-shield-alt text-primary"></i> تأكيد اعتماد فاتورة المشتريات</h5>
+            <button class="modal-close" onclick="closeModal('purchConfirmModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div style="font-size:0.92rem;line-height:1.8;color:var(--dark);">
+                عند الضغط على <strong>تأكيد الاعتماد</strong>، سيتم تنفيذ العمليات التالية في النظام بشكل فوري:
+                <ul style="margin:10px 18px 0;padding:0;">
+                    <li>تحديث كميات المخزون لكافة التركيبات الواردة في الفاتورة.</li>
+                    <li>إعادة احتساب متوسط التكلفة التراكمي لكل منتج.</li>
+                    <li>إضافة أي منتجات جديدة تلقائياً لكاشير المتجر (POS).</li>
+                    <li>تسجيل قيد حساب المورد والمبالغ المدفوعة والمتبقية كذمة دائنة.</li>
+                </ul>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('purchConfirmModal')">العودة للمراجعة</button>
+                <button type="button" class="btn btn-primary" onclick="postPurchInvoice()"><i class="fas fa-check-double"></i> تأكيد الاعتماد النهائي</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Modal: حد النسخة التجريبية ============ -->
+<div class="modal-overlay" id="demoLimitModal">
+    <div class="modal-box" style="max-width:480px;">
+        <div class="modal-body text-center" style="padding:35px 25px;">
+            <div style="width:80px;height:80px;margin:0 auto 18px;border-radius:50%;background:linear-gradient(135deg,#fef3c7,#fde68a);display:flex;align-items:center;justify-content:center;font-size:2.5rem;">🔒</div>
+            <h3 style="font-weight:900;margin-bottom:10px;color:#1e293b;font-size:1.15rem;">هذه نسخة إعلانية تجريبية</h3>
+            <p style="color:#64748b;font-size:.88rem;line-height:1.7;margin-bottom:16px;">
+                النسخة التجريبية للعرض والإعلان فقط.<br>
+                <strong style="color:#ef4444;font-size:1rem;" id="demoLimitMessage">وصلت للحد الأقصى</strong>
+            </p>
+            <div style="background:#f8fafc;border-radius:12px;padding:14px;margin-bottom:18px;text-align:right;">
+                <p style="font-weight:800;color:#1e293b;margin-bottom:8px;font-size:.88rem;">✨ في النسخة الحقيقية:</p>
+                <ul style="list-style:none;padding:0;margin:0;">
+                    <li style="padding:4px 0;font-size:.82rem;color:#475569;"><i class="fas fa-check-circle" style="color:#10b981;margin-left:6px;"></i>إضافات غير محدودة</li>
+                    <li style="padding:4px 0;font-size:.82rem;color:#475569;"><i class="fas fa-check-circle" style="color:#10b981;margin-left:6px;"></i>فروع وموظفون بلا حدود</li>
+                    <li style="padding:4px 0;font-size:.82rem;color:#475569;"><i class="fas fa-check-circle" style="color:#10b981;margin-left:6px;"></i>تقارير مالية متقدمة</li>
+                    <li style="padding:4px 0;font-size:.82rem;color:#475569;"><i class="fas fa-check-circle" style="color:#10b981;margin-left:6px;"></i>دعم فني 24/7</li>
+                </ul>
+            </div>
+            <div style="display:flex;gap:8px;flex-direction:column;">
+                <a href="#" onclick="event.preventDefault();closeModal('demoLimitModal');showToast('سنتواصل معك قريباً','success');" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-radius:12px;text-decoration:none;font-weight:800;font-size:.88rem;">
+                    <i class="fas fa-crown"></i> اطلب النسخة الحقيقية
+                </a>
+                <a href="https://wa.me/970000000000" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:#25D366;color:#fff;border-radius:12px;text-decoration:none;font-weight:700;font-size:.85rem;">
+                    <i class="fab fa-whatsapp"></i> تواصل معنا
+                </a>
+                <button onclick="closeModal('demoLimitModal')" style="padding:11px;background:#f1f5f9;color:#64748b;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.85rem;">
+                    لاحقاً
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+
+    <!-- نافذة إضافة مورد جديد سريع -->
+    <div class="modal-overlay" id="quickSupplierModal">
+        <div class="modal-box" style="max-width:440px;">
+            <div class="modal-header">
+                <h5><i class="fas fa-user-plus text-primary"></i> إضافة مورد جديد</h5>
+                <button class="modal-close" onclick="closeModal('quickSupplierModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label>اسم المورد / الشركة *</label>
+                    <input type="text" id="quickSupplierName" placeholder="مثال: مصنع النور للألبسة">
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label>رقم الهاتف / الواتساب</label>
+                    <input type="text" id="quickSupplierPhone" placeholder="مثال: 0599123456">
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label>العنوان أو الملاحظات</label>
+                    <input type="text" id="quickSupplierNote" placeholder="اختياري">
+                </div>
+                <div class="modal-actions" style="margin-top:16px;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('quickSupplierModal')">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="saveQuickSupplier()">
+                        <i class="fas fa-check"></i> حفظ واختيار المورد
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة تفاصيل فاتورة المشتريات -->
+    <div class="modal-overlay" id="purchInvoiceDetailsModal">
+        <div class="modal-box" style="max-width:720px;">
+            <div class="modal-header">
+                <h5 id="purchModalTitle"><i class="fas fa-file-invoice text-primary"></i> تفاصيل فاتورة المشتريات</h5>
+                <button class="modal-close" onclick="closeModal('purchInvoiceDetailsModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="purchInvoiceDetailsBody">
+                <!-- محتوى الفاتورة الديناميكي -->
+            </div>
+            <div class="modal-actions" style="padding:14px 20px;border-top:1px solid #f1f5f9;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('purchInvoiceDetailsModal')">إغلاق</button>
+                <button type="button" class="btn btn-primary" id="purchPrintBtn" onclick=""><i class="fas fa-print"></i> طباعة الفاتورة</button>
+            </div>
+        </div>
+    </div>
+    <!-- نافذة مراسلة العميل عبر واتساب لطلبات الموقع -->
+    <div class="modal-overlay" id="orderWhatsAppModal">
+        <div class="modal-box" style="max-width:540px;">
+            <div class="modal-header">
+                <h5><i class="fab fa-whatsapp" style="color:#25d366;font-size:1.25rem;"></i> التواصل عبر واتساب للطلب</h5>
+                <button class="modal-close" onclick="closeModal('orderWhatsAppModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.84rem;color:#166534;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-info-circle text-success" style="font-size:1.1rem;"></i>
+                    <span>يمكنك مراجعة رقم هاتف الزبون واختيار قالب الرسالة المناسب قبل بدء المحادثة.</span>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label style="display:block;font-weight:700;font-size:0.82rem;margin-bottom:4px;">معلومات الطلب والزبون:</label>
+                    <div id="waOrderInfo" style="background:#f8fafc;padding:10px 14px;border-radius:8px;border:1px solid #e2e8f0;font-size:0.88rem;color:#1e293b;font-weight:700;"></div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label style="display:block;font-weight:700;font-size:0.82rem;margin-bottom:4px;">رقم هاتف العميل (واتساب):</label>
+                    <div style="position:relative;">
+                        <i class="fas fa-phone-alt" style="position:absolute;right:12px;top:13px;color:var(--gray);"></i>
+                        <input type="tel" id="waOrderPhone" placeholder="مثال: 0599123456" style="width:100%;padding:10px 38px 10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;direction:ltr;text-align:right;">
+                    </div>
+                    <small style="color:var(--gray);font-size:0.75rem;">يقبل الأرقام المحلية (059/056) أو الأرقام الدولية، وسيقوم النظام بتوجيهك فوراً لتطبيق واتساب.</small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <label style="font-weight:700;font-size:0.82rem;margin:0;">نص الرسالة المجهزة:</label>
+                        <div style="display:flex;gap:5px;">
+                            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.72rem;padding:2px 8px;" onclick="setWaTemplate('confirm')">تأكيد الطلب</button>
+                            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.72rem;padding:2px 8px;" onclick="setWaTemplate('ready')">جاهز للاستلام</button>
+                            <button type="button" class="btn btn-sm btn-outline" style="font-size:0.72rem;padding:2px 8px;" onclick="setWaTemplate('delivery')">مع المندوب</button>
+                        </div>
+                    </div>
+                    <textarea id="waOrderMessage" rows="5" style="width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:0.84rem;line-height:1.5;resize:vertical;"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions" style="padding:14px 20px;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('orderWhatsAppModal')">إلغاء</button>
+                <button type="button" class="btn" style="background:#25d366;color:#fff;font-weight:800;display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:10px;" onclick="sendWhatsAppMessageNow()">
+                    <i class="fab fa-whatsapp" style="font-size:1.15rem;"></i> فتح محادثة واتساب
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- نافذة معاينة صورة الصنف بالمشتريات -->
+    <div class="modal-overlay" id="purchImagePreviewModal">
+        <div class="modal-box" style="max-width:440px;text-align:center;padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h6 id="purchImagePreviewTitle" style="margin:0;font-weight:700;"><i class="fas fa-image text-primary"></i> معاينة صورة الصنف</h6>
+                <button class="modal-close" onclick="closeModal('purchImagePreviewModal')">&times;</button>
+            </div>
+            <div style="max-height:400px;overflow:hidden;border-radius:10px;border:1px solid #e2e8f0;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:6px;">
+                <img id="purchImagePreviewImg" src="" alt="صورة الصنف" style="max-width:100%;max-height:380px;object-fit:contain;border-radius:6px;">
+            </div>
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+                <button type="button" class="btn btn-outline" onclick="closeModal('purchImagePreviewModal')">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
