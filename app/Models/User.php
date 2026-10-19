@@ -30,8 +30,8 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-    public function pranch()
+    public function branch(): BelongsTo
     {
-        return  $this->belongsTo(Branch::class);
+        return $this->belongsTo(Branch::class, 'branch_id');
     }
 }
