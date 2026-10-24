@@ -2,37 +2,21 @@
 
 namespace App\Actions\Inventory;
 
-use App\Models\Branch;
+use App\Actions\Inventory\Setup\CorrectInventoryAction;
 use App\Models\Inventory;
-use App\Models\ProductVariant;
-use Illuminate\Validation\ValidationException;
 
 class UpsertInventoryAction
 {
-    public function execute(
-        int $branchId,
-        int $variantId,
-        array $data
-    ): Inventory {
-        Branch::findOrFail($branchId);
+    public function __construct(private CorrectInventoryAction $correct) {}
 
-        $variant = ProductVariant::with('product')->findOrFail($variantId);
+    public function execute(int $branchId, int $variantId, array $data, ?int $actorId = null): Inventory
+    {
+        $inventory = Inventory::with(['productVariant.product' => fn ($query) => $query->withTrashed()])->where('branch_id', $branchId)->where('product_variant_id', $variantId)->firstOrFail();
+        $variant = $inventory->productVariant;
+        $product = $variant->product;
+        $data += ['selling_price' => $variant->selling_price, 'name' => $product->name, 'code' => $product->code,
+            'category_id' => $product->category_id, 'color_id' => $variant->color_id, 'size_id' => $variant->size_id];
 
-        if (!$variant->product || $variant->product->trashed()) {
-            throw ValidationException::withMessages([
-                'variant_id' => 'لا يمكن إدخال مخزون لمنتج محذوف.',
-            ]);
-        }
-
-        return Inventory::query()->updateOrCreate(
-            [
-                'branch_id' => $branchId,
-                'product_variant_id' => $variantId,
-            ],
-            [
-                'quantity' => $data['quantity'],
-                'average_cost' => $data['average_cost'],
-            ]
-        );
+        return $this->correct->update($inventory, $data, $actorId);
     }
 }

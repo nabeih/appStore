@@ -15,7 +15,7 @@ class ColorController extends Controller
         return response()->json([
             'data' => Color::query()
                 ->orderBy('name')
-                ->get(['id', 'name', 'code']),
+                ->get(['id', 'name', 'code', 'hex_code']),
         ]);
     }
 

@@ -2,20 +2,17 @@
 
 namespace App\Http\Requests\Inventory;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Inventory\Setup\UpdateInventoryRequest;
 
-class UpsertInventoryRequest extends FormRequest
+class UpsertInventoryRequest extends UpdateInventoryRequest
 {
-    public function authorize(): bool
-    {
-        return true; // مؤقتًا للتطوير المحلي
-    }
-
     public function rules(): array
     {
-        return [
-            'quantity' => ['required', 'integer', 'min:0'],
-            'average_cost' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
-        ];
+        $rules = parent::rules();
+        foreach (['selling_price', 'name', 'code', 'category_id', 'color_id', 'size_id'] as $field) {
+            $rules[$field][0] = 'sometimes';
+        }
+
+        return $rules;
     }
 }

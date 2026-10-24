@@ -1,0 +1,3 @@
+<label>اسم المورد<input name="name" value="{{ old('name', $supplier?->name ?? '') }}" maxlength="255" required></label>
+<div class="trade-grid"><label>رقم الهاتف<input name="phone1" value="{{ old('phone1', $supplier?->phone1 ?? '') }}" maxlength="30" inputmode="tel"></label><label>هاتف إضافي<input name="phone2" value="{{ old('phone2', $supplier?->phone2 ?? '') }}" maxlength="30" inputmode="tel"></label></div>
+<label>العنوان<input name="address" value="{{ old('address', $supplier?->address ?? '') }}" maxlength="255"></label><label>ملاحظات<textarea name="notes" maxlength="2000" rows="3">{{ old('notes', $supplier?->notes ?? '') }}</textarea></label>

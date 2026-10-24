@@ -1,0 +1,46 @@
+.os-dialog { border:0;border-radius:18px;padding:0;width:min(1280px,96vw);max-width:96vw;max-height:94vh;margin:auto;background:#fff;color:#1e293b;box-shadow:0 24px 90px #0005; }
+.os-dialog::backdrop { background:#0f172a99; }
+.os-dialog-header,.os-dialog-footer { display:flex;gap:12px;align-items:center;justify-content:space-between;padding:18px 22px;background:#f8fafc; }
+.os-dialog-header h2 { font-size:1.2rem;margin:0 0 6px;font-weight:800; }
+.os-dialog-header p { margin:0;color:#64748b;font-size:.85rem; }
+.os-dialog-body { padding:20px;max-height:calc(94vh - 190px);overflow:auto; }
+.os-dialog-footer { border-top:1px solid #e2e8f0;flex-wrap:wrap; }
+.os-dialog-footer [role=status] { margin-inline-end:auto;font-size:.85rem; }
+.os-dialog fieldset { border:0;padding:0;margin:0;min-width:0; }
+.os-fields { display:flex;gap:12px;flex-wrap:wrap;align-items:end; }
+.os-fields label { flex:1;min-width:150px;display:flex;flex-direction:column;gap:6px;font-size:.85rem;font-weight:700; }
+.os-fields .os-grow { flex:2; }
+.os-dialog input:not([type=file]),.os-dialog select,.os-filter-form input,.os-filter-form select { width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#1e293b; }
+.os-dialog input:focus,.os-dialog select:focus { outline:2px solid #a5b4fc;outline-offset:1px; }
+.os-dialog select[multiple] { min-height:100px; }
+.os-notice { padding:12px 14px;margin:14px 0;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:.85rem; }
+.os-section { border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:14px 0; }
+.os-section h3 { font-size:1rem;font-weight:800;margin-bottom:12px; }
+.os-section>label { display:block; }
+.os-defaults { margin-top:14px; }
+.os-toolbar { display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0;font-size:.83rem;color:#64748b; }
+.os-upload { cursor:pointer; }
+.os-table-wrap { overflow:auto;max-height:370px;border:1px solid #e2e8f0;border-radius:10px; }
+.os-entry-table { min-width:1050px;width:100%; }
+.os-entry-table th { position:sticky;top:0;background:#f1f5f9;z-index:1;white-space:nowrap; }
+.os-entry-table td { padding:8px;vertical-align:top; }
+.os-entry-table td:nth-child(3) { min-width:180px; }
+.os-entry-table input { min-width:85px; }
+.os-entry-table input[type=file] { max-width:150px;font-size:.75rem!important; }
+.os-entry-table small { display:block;overflow-wrap:anywhere;max-width:150px; }
+.os-row-error { background:#fff1f2; }
+.os-errors { border:1px solid #fecaca;background:#fff1f2;color:#991b1b;padding:12px;border-radius:10px;margin-bottom:14px;white-space:pre-line; }
+.os-preview { border-color:#86efac;background:#f0fdf4; }
+.os-preview [id=osPreviewTotals] { display:flex;gap:25px;flex-wrap:wrap;font-weight:800;padding:12px 0; }
+.os-search-results { display:flex;gap:6px;flex-direction:column;max-height:190px;overflow:auto;margin:6px 0 12px; }
+.os-search-results button { text-align:start;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc; }
+.os-search-results button:hover { background:#eef2ff; }
+.os-page-title { display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px; }
+.os-page-title h1 { font-size:1.45rem; }
+.os-filter-form,.os-document-meta { display:flex;gap:16px;flex-wrap:wrap;align-items:end;padding:16px; }
+.os-filter-form label { display:flex;flex-direction:column;gap:5px; }
+.os-document tfoot { background:#f0fdf4; }
+.os-dialog [hidden] { display:none!important; }
+@media(max-width:700px) { .os-dialog-header,.os-dialog-footer,.os-dialog-body { padding:12px; }.os-fields label { min-width:130px; }.os-dialog-footer .btn { flex:1; }.os-dialog-footer [role=status] { flex-basis:100%; }.os-dialog-body { max-height:calc(94vh - 220px); } }
+@media print { .sidebar,.app-topbar,.sidebar-overlay,.os-no-print { display:none!important; }.main-content { margin:0!important;padding:0!important;width:100%!important; }.os-document .card { box-shadow:none;border:1px solid #ddd;break-inside:auto; }.os-document .table-responsive { overflow:visible; }.os-document table { font-size:11px;width:100%; }.os-document tr { break-inside:avoid; }.os-document thead { display:table-header-group; }.os-document tfoot { display:table-row-group; } }
+.os-dialog button:disabled { opacity:.5;cursor:not-allowed; }

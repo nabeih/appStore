@@ -1,0 +1,14 @@
+:root{color-scheme:light;--primary:#4f46e5;--text:#1e293b;--muted:#64748b}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:28px 18px;background:radial-gradient(ellipse at top right,#6366f150,transparent 55%),linear-gradient(135deg,#1e293b,#4338ca 65%,#7c3aed);font-family:Tahoma,Arial,sans-serif;color:var(--text);line-height:1.7}
+.login-card{width:100%;max-width:440px;background:#fff;border-radius:24px;padding:36px;box-shadow:0 25px 65px #10162e40}
+.brand-mark{display:grid;place-items:center;background:#eef2ff;color:var(--primary);width:64px;height:64px;border-radius:18px;font-size:32px;font-weight:700;margin:0 auto 10px}
+.brand-name{text-align:center;color:var(--primary);font-weight:700;margin:0 0 24px}
+h1{font-size:26px;margin:0 0 8px;text-align:center}.login-description{color:var(--muted);text-align:center;font-size:14px;margin:0 0 28px}
+label{display:block;font-size:14px;font-weight:700;margin-bottom:8px}
+input{display:block;width:100%;min-height:50px;border:1.5px solid #dbe1ea;border-radius:12px;background:#f8fafc;padding:12px 14px;font:inherit;font-size:16px;color:var(--text);margin-bottom:20px}
+input:focus{outline:3px solid #4f46e525;border-color:var(--primary);background:#fff}input[aria-invalid=true]{border-color:#dc2626}
+.password-field{position:relative}.password-field input{padding-right:75px}.password-toggle{position:absolute;right:9px;top:9px;background:transparent;color:var(--primary);border:0;padding:6px;cursor:pointer;font:inherit;font-size:13px}.password-toggle[hidden]{display:none}
+.login-submit{width:100%;min-height:50px;border:0;border-radius:12px;background:var(--primary);color:#fff;font:inherit;font-weight:700;cursor:pointer;margin-top:2px}.login-submit:hover{background:#4338ca}.login-submit:disabled{opacity:.7;cursor:wait}
+button:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.login-footer{text-align:center;color:var(--muted);font-size:12px;margin:26px 0 0}.message{border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:20px}.message p{margin:0}.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.success{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+@media(max-width:480px){.login-card{padding:28px 22px;border-radius:20px}h1{font-size:24px}}

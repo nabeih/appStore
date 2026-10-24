@@ -1,0 +1,15 @@
+.color-images-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px}
+.color-image-card{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:start;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;min-width:0}
+.color-image-preview{width:64px;height:74px;border-radius:8px;background:#f1f5f9;overflow:hidden;display:grid;place-items:center;border:1px solid #e2e8f0;color:#94a3b8;font-size:11px}
+.color-image-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.color-image-details{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:12px}
+.color-image-details strong{font-weight:700;overflow-wrap:anywhere}
+.color-image-color{font-size:12px;color:#334155}.color-image-details small{font-size:10px;color:#64748b;line-height:1.7;overflow-wrap:anywhere}
+.color-image-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px}
+.color-image-card .color-image-select{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:7px 10px;min-height:36px;border:1px solid #c7d2fe;border-radius:7px;color:#4338ca;background:#eef2ff;font:inherit;font-size:11px;font-weight:600;cursor:pointer;overflow:hidden;margin:0}
+.color-image-select input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;max-width:100%}
+.color-image-select:focus-within{outline:2px solid #818cf8;outline-offset:2px}
+.color-image-clear{border:1px solid #fecaca;border-radius:7px;background:#fff;color:#b91c1c;font:inherit;font-size:11px;min-height:36px;padding:7px 9px;cursor:pointer}
+.color-image-details .color-image-error{color:#b91c1c}.color-image-details .color-image-status{color:#4338ca}.color-image-card button:disabled{opacity:.5;cursor:wait}
+.color-images-help{font-size:11px;color:#64748b;line-height:1.8;margin:6px 0}
+@media(max-width:600px){.color-images-grid{grid-template-columns:minmax(0,1fr)}.color-image-card{padding:10px;gap:10px;grid-template-columns:58px minmax(0,1fr)}.color-image-preview{width:58px;height:70px}}

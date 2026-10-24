@@ -1,0 +1,2 @@
+.catalog-color-dot { display:inline-block;vertical-align:middle;flex-shrink:0;width:19px;height:19px;border-radius:50%;border:1px solid #94a3b8;box-shadow:inset 0 0 0 2px #ffffff66;margin-inline-end:6px; }
+.catalog-color-unknown { background:repeating-linear-gradient(45deg,#e2e8f0 0 4px,#fff 4px 8px); }

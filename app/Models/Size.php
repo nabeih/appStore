@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-
 class Size extends Model
 {
     //
@@ -13,6 +12,7 @@ class Size extends Model
     protected $fillable = [
         'name',
         'code',
+        'sort_order',
     ];
 
     public function variants(): HasMany
