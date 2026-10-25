@@ -19,7 +19,20 @@
 .attribute-color-controls input[type=color] { display:block;width:70px;height:43px;padding:3px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;cursor:pointer; }
 .attribute-color-controls input:not([type=color]) { margin-bottom:0; }.attribute-color-preview { flex-shrink:0;width:38px;height:38px;border-radius:50%;border:1px solid #94a3b8;box-shadow:inset 0 0 0 3px #ffffff66; }
 .attribute-color-message { font-size:.8rem;color:#64748b;min-height:40px;margin:12px 0 8px; }
-.attribute-palette { display:flex;gap:5px;flex-wrap:wrap;margin-top:14px; }.attribute-palette button { border:1px solid transparent;background:transparent;border-radius:50%;width:29px;height:29px;padding:3px;display:grid;place-items:center; }.attribute-palette button:hover,.attribute-palette button:focus-visible { border-color:#6366f1;outline:1px solid #6366f1; }.attribute-palette .catalog-color-dot { margin:0;width:21px;height:21px; }
+.attribute-palette-library{margin-top:16px;border-top:1px solid #e2e8f0;padding-top:14px}
+.attribute-palette-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;font-size:12px}
+.attribute-palette-heading small{font-size:10px;color:#64748b}
+.attribute-palette-filters{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:8px}
+.attribute-palette-filters label{min-width:0;font-size:11px;margin:0}
+.attribute-palette-filters input[type=search],.attribute-palette-filters select{width:100%;min-width:0;border:1px solid #cbd5e1;border-radius:8px;padding:8px;margin:5px 0 0;background:#fff;color:#334155;font:inherit;min-height:38px}
+.attribute-palette-count{font-size:10px;color:#64748b;margin:9px 0}
+.attribute-palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;max-height:250px;overflow-y:auto;overscroll-behavior:contain;padding:2px 2px 6px;margin-bottom:10px;scrollbar-width:thin}
+.attribute-palette button{border:1px solid #e2e8f0;background:#fff;border-radius:9px;min-width:0;min-height:64px;padding:7px 3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font:inherit;cursor:pointer}
+.attribute-palette button>span:last-child{font-size:10px;line-height:1.45;white-space:normal;overflow-wrap:anywhere;color:#475569}
+.attribute-palette button:hover,.attribute-palette button:focus-visible{border-color:#818cf8;outline:1px solid #818cf8}
+.attribute-palette button[aria-pressed=true]{border-color:#6366f1;background:#eef2ff;box-shadow:inset 0 0 0 1px #6366f1}
+.attribute-palette .catalog-color-dot{margin:0;width:24px;height:24px;flex-shrink:0}
+.attribute-palette-empty{font-size:12px;color:#64748b;padding:16px 4px;line-height:1.8}
 .attribute-list-card { margin:0;min-width:0; }.attribute-list-header { display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:18px; }.attribute-list-header h2 { margin:0; }
 #attribute-search-form { display:flex;align-items:center;gap:7px; }#attribute-search { border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;max-width:220px;min-width:0; }
 .attribute-name { display:flex;align-items:center;gap:2px; }.attribute-description { display:block;font-size:.78rem;color:#64748b;max-width:280px;overflow-wrap:anywhere; }.attribute-table td { vertical-align:middle; }.attribute-table button { white-space:nowrap; }.attribute-empty { padding:35px!important;text-align:center;color:#64748b; }
@@ -33,3 +46,29 @@
 @media(max-width:480px) { .attribute-tab { min-width:0;font-size:.82rem;gap:5px;flex-direction:column;padding:10px 5px; }.attribute-count { margin:0; }.attribute-list-header { padding:14px; }#attribute-search-form { width:100%; }#attribute-search { flex:1;max-width:none; }.attribute-form { padding:16px; } }
 #attribute-feedback.attribute-bad-feedback { background:#fff1f2;color:#991b1b;border-color:#fecaca; }
 [aria-invalid=true] { border-color:#ef4444!important; }
+
+.attribute-color-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.attribute-color-actions-cell .attribute-muted{font-size:10px;line-height:1.8;max-width:210px;margin-top:5px}
+.attribute-delete-button{color:#b91c1c!important;border-color:#fecaca!important}
+.attribute-delete-button:disabled{opacity:.45;cursor:not-allowed}
+.attribute-confirm-delete{color:#fff;background:#b91c1c;border:1px solid #b91c1c}
+.attribute-confirm-dialog p{line-height:1.9;overflow-wrap:anywhere}
+.attribute-dialog{max-height:92dvh}.attribute-dialog form{max-height:92dvh}
+@media(max-width:600px){
+    .attribute-color-table{display:block;width:100%;min-width:0}
+    .attribute-color-table thead{display:none}.attribute-color-table tbody{display:block;padding:0 12px 12px}
+    .attribute-color-table tr[data-attribute-id]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;padding:12px;border:1px solid #e2e8f0;border-radius:10px}
+    .attribute-color-table td{display:block;padding:0!important;border:0!important;min-width:0;font-size:12px;overflow-wrap:anywhere}
+    .attribute-color-table td[data-label]::before{content:attr(data-label);display:block;font-size:10px;color:#64748b;margin-bottom:4px}
+    .attribute-color-table td:first-child,.attribute-color-actions-cell{grid-column:1/-1}
+    .attribute-color-table td:first-child::before{display:none}
+    .attribute-color-actions-cell{border-top:1px solid #f1f5f9!important;padding-top:9px!important}
+    .attribute-color-actions .btn{min-height:36px;padding:6px 12px;font-size:11px!important}
+    .attribute-color-actions-cell .attribute-muted{max-width:none}
+    .attribute-form input:not([type=color]),.attribute-form select,.attribute-form textarea,.attribute-dialog input:not([type=color]),.attribute-dialog select,#attribute-search{font-size:16px!important}
+    .attribute-dialog{width:calc(100vw - 20px);max-width:480px;border-radius:12px}
+    .attribute-dialog-body{padding:14px}.attribute-dialog header,.attribute-dialog footer{padding:12px 14px}
+    .attribute-dialog footer{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .attribute-form .attribute-palette-filters input,.attribute-form .attribute-palette-filters select,.attribute-dialog .attribute-palette-filters input,.attribute-dialog .attribute-palette-filters select{font-size:16px!important;padding:7px 6px}
+}
+@media(max-width:350px){.attribute-palette{grid-template-columns:repeat(3,minmax(0,1fr))}.attribute-palette-filters{grid-template-columns:minmax(0,1fr)}}

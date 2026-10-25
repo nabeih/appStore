@@ -19,7 +19,7 @@ class AttributeController extends Controller
         $tab = $filters['tab'] ?? 'categories';
         $search = trim($filters['q'] ?? '');
         $query = match ($tab) {
-            'colors' => Color::query()->withCount('variants')->latest('id'),
+            'colors' => Color::query()->withCount(['variants', 'productImages'])->latest('id'),
             'sizes' => Size::query()->withCount('variants')->orderBy('sort_order')->latest('id'),
             default => Category::query()->with('parent:id,name')->withCount('products')->latest('id'),
         };

@@ -16,13 +16,31 @@
         const name = root.querySelector('[data-color-name]'), hex = root.querySelector('[data-color-hex]');
         const picker = root.querySelector('[data-color-picker]'), preview = root.querySelector('[data-color-preview]');
         const message = root.querySelector('[data-color-message]');
+        const paletteSearch = root.querySelector('[data-palette-search]'), paletteFamily = root.querySelector('[data-palette-family]');
+        const presets = [...root.querySelectorAll('[data-color-preset]')];
+        const searchablePresets = presets.map(button => ({ button, search: normalize(button.dataset.colorSearch) }));
+        function filterPalette() {
+            const query = normalize(paletteSearch.value), family = paletteFamily.value;
+            let visible = 0;
+            searchablePresets.forEach(({ button, search }) => {
+                button.hidden = !!((family && button.dataset.colorFamily !== family) || (query && !search.includes(query)));
+                if (!button.hidden) visible++;
+            });
+            root.querySelector('[data-palette-count]').textContent = `${visible} درجة متاحة`;
+            root.querySelector('[data-palette-empty]').hidden = visible !== 0;
+        }
+        paletteSearch.addEventListener('input', filterPalette);
+        paletteSearch.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
+        paletteFamily.addEventListener('change', filterPalette);
         let manual = false;
         function paint(value, write = false) {
             const color = validHex(value);
             preview.style.backgroundColor = color || '';
             preview.classList.toggle('catalog-color-unknown', !color);
             preview.title = color || 'اختر درجة اللون';
-            if (color) { picker.value = color; if (write) hex.value = color; }
+            picker.value = color || '#808080';
+            if (color && write) hex.value = color;
+            presets.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.colorPreset === color)));
             return color;
         }
         function suggest(force = false) {
@@ -40,12 +58,17 @@
         hex.addEventListener('input', () => { manual = true; const color = paint(hex.value); message.textContent = color ? 'معاينة الدرجة المختارة.' : 'أدخل رمزًا من ست خانات، مثل #2563EB.'; });
         hex.addEventListener('blur', () => { paint(hex.value, true); });
         root.querySelector('[data-color-suggest]').addEventListener('click', () => suggest(true));
-        root.querySelectorAll('[data-color-preset]').forEach(button => button.addEventListener('click', () => {
-            if (!name.value.trim() && !name.readOnly) name.value = button.dataset.colorLabel;
+        presets.forEach(button => button.addEventListener('click', () => {
+            if (!name.readOnly && (root.dataset.presetNames === 'true' || !name.value.trim())) name.value = button.dataset.colorLabel;
             manual = true; hex.value = button.dataset.colorPreset; paint(hex.value);
             message.textContent = 'يمكنك تعديل الدرجة المختارة من منتقي اللون.';
         }));
-        const controller = { reset() { manual = Boolean(validHex(hex.value)); paint(hex.value, true); message.textContent = manual ? 'معاينة الدرجة المختارة.' : 'اكتب اسم لون شائع أو اختر درجة بنفسك.'; } };
+        const controller = { reset() {
+            manual = Boolean(validHex(hex.value)); paint(hex.value, true);
+            paletteSearch.value = ''; paletteFamily.value = ''; filterPalette();
+            root.querySelector('.attribute-palette').scrollTop = 0;
+            message.textContent = manual ? 'معاينة الدرجة المختارة.' : 'اكتب اسم لون شائع أو اختر درجة بنفسك.';
+        } };
         editors.set(root, controller); controller.reset();
         return controller;
     }
@@ -92,13 +115,22 @@
             event.preventDefault(); if (saving) return;
             navigate(link.href).catch(error => { if (error.name !== 'AbortError') notify(error.message, true); });
         }
-        const button = event.target.closest('[data-edit-color]');
-        if (!button || saving) return;
+        const button = event.target.closest('[data-edit-color], [data-delete-color]');
+        if (!button || saving || button.disabled) return;
+        if (button.hasAttribute('data-delete-color')) {
+            const color = JSON.parse(button.dataset.deleteColor), form = el('attribute-delete-color-form');
+            form.action = color.url;
+            form.querySelector('[data-delete-color-name]').textContent = color.name;
+            form.querySelector('[data-form-errors]').hidden = true;
+            el('attribute-delete-color-dialog').showModal();
+            return;
+        }
         const color = JSON.parse(button.dataset.editColor), form = el('attribute-color-form');
         form.action = color.url;
         form.querySelector('[data-color-name]').value = color.name;
         form.querySelector('[data-color-hex]').value = color.hex || '';
         form.querySelector('[data-form-errors]').hidden = true;
+        form.querySelectorAll('[aria-invalid]').forEach(input => input.removeAttribute('aria-invalid'));
         bindEditor(form.querySelector('[data-color-editor]')).reset();
         el('attribute-color-dialog').showModal();
     });
@@ -118,7 +150,7 @@
             navigate(searchUrl(form), { searchFocus: true }).catch(error => { if (error.name !== 'AbortError') notify(error.message, true); });
             return;
         }
-        if (!form.matches('[data-attribute-form], #attribute-color-form')) return;
+        if (!form.matches('[data-attribute-form], #attribute-color-form, #attribute-delete-color-form')) return;
         event.preventDefault(); if (saving) return;
         clearTimeout(searchTimer); navigation?.abort();
         const payload = new FormData(form);
@@ -133,11 +165,15 @@
                 Object.keys(result.errors || {}).forEach(name => form.elements.namedItem(name)?.setAttribute('aria-invalid', 'true'));
                 throw new Error(response.status === 419 ? 'انتهت صلاحية الصفحة. حدّث الصفحة ثم أعد المحاولة.' : Object.values(result.errors || {}).flat().join('\n') || result.message || 'تعذر حفظ البيانات.');
             }
-            const appearance = form.id === 'attribute-color-form';
-            if (appearance) el('attribute-color-dialog').close();
-            captureDrafts(); if (!appearance) drafts.delete(result.tab);
-            const url = appearance ? new URL(location.href) : new URL(settings.indexUrl);
+            const deleting = form.id === 'attribute-delete-color-form';
+            const updating = form.id === 'attribute-color-form' || deleting;
+            if (updating) form.closest('dialog').close();
+            captureDrafts(); if (!updating) drafts.delete(result.tab);
+            const url = updating ? new URL(location.href) : new URL(settings.indexUrl);
             url.searchParams.set('tab', result.tab);
+            if (deleting && document.querySelectorAll('[data-attribute-id]').length === 1 && Number(url.searchParams.get('page')) > 1) {
+                url.searchParams.set('page', Number(url.searchParams.get('page')) - 1);
+            }
             try { await navigate(url, { skipCapture: true }); notify(result.message); }
             catch (error) { if (error.name !== 'AbortError') notify('تم الحفظ، لكن تعذر تحديث القائمة. حدّث الصفحة لعرض النتيجة.', true); }
         } catch (error) {
@@ -149,8 +185,11 @@
             document.querySelectorAll('.attribute-form button[type=submit], .attribute-dialog button').forEach(button => { button.disabled = false; });
         }
     });
-    el('attribute-color-dialog').querySelectorAll('[data-close-color]').forEach(button => button.addEventListener('click', () => { if (!saving) el('attribute-color-dialog').close(); }));
-    el('attribute-color-dialog').addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+    for (const [id, selector] of [['attribute-color-dialog', '[data-close-color]'], ['attribute-delete-color-dialog', '[data-close-delete-color]']]) {
+        const dialog = el(id);
+        dialog.querySelectorAll(selector).forEach(button => button.addEventListener('click', () => { if (!saving) dialog.close(); }));
+        dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+    }
     window.addEventListener('beforeunload', event => { if (saving) { event.preventDefault(); event.returnValue = ''; } });
     initializeEditors();
 })();

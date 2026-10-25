@@ -52,6 +52,8 @@ Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
         Route::get('/', [AttributeController::class, 'index'])->name('index');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::post('/colors', [ColorController::class, 'store'])->name('colors.store');
+        Route::put('/colors/{color}', [ColorController::class, 'update'])->whereNumber('color')->name('colors.update');
+        Route::delete('/colors/{color}', [ColorController::class, 'destroy'])->whereNumber('color')->name('colors.destroy');
         Route::put('/colors/{color}/appearance', [ColorController::class, 'updateAppearance'])->whereNumber('color')->name('colors.appearance');
         Route::post('/sizes', [SizeController::class, 'store'])->name('sizes.store');
     });
