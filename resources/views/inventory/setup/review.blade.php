@@ -15,9 +15,9 @@
 <small>إعادة البناء: {{ $review['reconstructed_value_minor'] === null ? 'الدليل غير مكتمل أو مختلف' : \App\Support\Sales\Money::format($review['reconstructed_value_minor']).' ₪' }}</small>
 <details><summary>المستندات المصدرية ({{ count($review['sources']) }})</summary>@forelse($review['sources'] as $source)<p class="sale-muted">حركة #{{ $source['movement_id'] }} — {{ $source['kind'] }} — كمية {{ $source['quantity'] }} @if($source['url'])<a href="{{ $source['url'] }}">{{ $source['number'] }}</a>@else مصدر {{ class_basename($source['source_type']) }} #{{ $source['source_id'] }}@endif<br>الترحيل المالي: {{ $source['financial_posted'] ? 'قيد مسجل؛ يلزم تطابق الإجمالي' : 'غير مثبت في الدفتر' }} — {{ $source['document_date'] ?? 'تاريخ غير موثق' }}@foreach($source['issues'] as $issue)<br>{{ $issue }}@endforeach</p>@empty<p>لا توجد حركات مصدرية؛ يلزم دليل المالك.</p>@endforelse</details></td>
 <td data-label="الجاهزية / المراجعة">
-@php($labels = ['reviewed'=>'قيمة موثقة','reconstructable'=>'قيمة قابلة لإعادة البناء من المستندات','owner_evidence'=>'تحتاج دليلًا أو قرارًا من المالك','quantity_review'=>'فرق كمية يحتاج مراجعة مستقلة','value_conflict'=>'تعارض قيمة يحتاج مراجعة المصدر'])
+@php($labels = ['history_review'=>'دليل الحركة غير مكتمل','reviewed'=>'قيمة موثقة','reconstructable'=>'قيمة قابلة لإعادة البناء من المستندات','owner_evidence'=>'تحتاج دليلًا أو قرارًا من المالك','quantity_review'=>'فرق كمية يحتاج مراجعة مستقلة','value_conflict'=>'تعارض قيمة يحتاج مراجعة المصدر'])
 <p class="{{ in_array($review['state'],['quantity_review','value_conflict']) ? 'sale-errors' : 'sale-muted' }}">{{ $labels[$review['state']] }}</p>
-@foreach($review['issues'] as $issue)<small>{{ $issue }}</small>@endforeach
+<p>{{ $review['recommended_action'] }}</p>@foreach($review['issues'] as $issue)<small>{{ $issue }}</small>@endforeach
 @if($stock->value_minor === null && $review['difference'] === 0 && $review['reconstructed_value_minor'] !== null)
 <details><summary>إعداد مراجعة واعتماد قيمة</summary><form action="{{ route('inventory.review.baseline',$stock) }}" data-simple-form>@include('sales.partials.feedback')<fieldset>
 <input type="hidden" name="revision" value="{{ \App\Support\Inventory\Setup\InventoryState::revision($stock,$stock->productVariant,$stock->productVariant->product) }}">

@@ -111,7 +111,10 @@ Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
     Route::post('/finance/treasury/{document}/reverse', [TreasuryController::class, 'reverse'])->middleware('can:finance.reverse')->whereNumber('document')->name('finance.treasury.reverse');
     Route::post('/finance/cash-counts', [TreasuryController::class, 'count'])->middleware('can:finance.reconcile')->name('finance.counts.store');
     Route::post('/finance/cash-counts/{count}/settle', [TreasuryController::class, 'settle'])->middleware('can:finance.reconcile')->whereNumber('count')->name('finance.counts.settle');
-    Route::get('/finance/transition', [FinanceReviewController::class, 'index'])->middleware('can:finance.transition_review')->name('finance.transition.index');
+    Route::get('/finance/transition', [FinanceReviewController::class, 'index'])->middleware(['can:finance.transition_review', 'can:sales.view_cost'])->name('finance.transition.index');
+    Route::post('/finance/transition/preview', [FinanceReviewController::class, 'preview'])->middleware(['can:finance.transition_review', 'can:sales.view_cost', 'throttle:30,1'])->name('finance.transition.preview');
+    Route::post('/finance/transition/post', [FinanceReviewController::class, 'post'])->middleware(['can:finance.transition_review', 'can:sales.view_cost', 'throttle:10,1'])->name('finance.transition.post');
+    Route::post('/finance/transition/{entry}/reverse', [FinanceReviewController::class, 'reverseTransition'])->whereNumber('entry')->middleware(['can:finance.transition_review', 'can:finance.reverse', 'throttle:10,1'])->name('finance.transition.reverse');
     Route::get('/finance/suppliers/{supplier}', [FinanceReviewController::class, 'supplier'])->middleware('can:finance.view')->whereNumber('supplier')->name('finance.suppliers.show');
     Route::post('/finance/supplier-payments/{payment}/reverse', [FinanceReviewController::class, 'reversePayment'])->middleware('can:finance.reverse')->whereNumber('payment')->name('finance.supplier-payments.reverse');
     Route::post('/finance/purchases/{invoice}/reverse', [FinanceReviewController::class, 'reversePurchase'])->middleware('can:finance.reverse')->whereNumber('invoice')->name('finance.purchases.reverse');

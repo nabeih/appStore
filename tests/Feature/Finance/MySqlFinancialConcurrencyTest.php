@@ -3,6 +3,7 @@
 namespace Tests\Feature\Finance;
 
 use App\Actions\Finance\Expenses\ManageExpenseAction;
+use App\Actions\Finance\LegacyFinanceTransitionAction;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
 use App\Actions\Finance\Treasury\ManageTreasuryAction;
@@ -18,6 +19,8 @@ use App\Models\Color;
 use App\Models\Customer;
 use App\Models\FinancialAccount;
 use App\Models\Inventory;
+use App\Models\JournalEntry;
+use App\Models\OpeningStockEntry;
 use App\Models\SaleInvoice;
 use App\Models\Size;
 use App\Models\Supplier;
@@ -115,11 +118,13 @@ config(['database.default'=>'finance_race','database.connections.finance_race'=>
 Illuminate\Support\Facades\DB::setDefaultConnection('finance_race');
 $actor=App\Models\User::findOrFail((int)getenv('FINANCE_RACE_ACTOR'));
 $data=json_decode(getenv('FINANCE_RACE_JOB'),true,512,JSON_THROW_ON_ERROR);
+config(['finance.legacy_transition_enabled'=>true]);
 while(microtime(true)<(float)getenv('FINANCE_RACE_START')){usleep(1000);}
 if($data['fail']??false){App\Models\JournalLine::created(function(){throw new RuntimeException('injected journal failure');});}
 if($data['fail_audit']??false){App\Models\AuditEvent::creating(function(){throw new RuntimeException('injected audit failure');});}
 try{
 $document=match($data['operation']??getenv('FINANCE_RACE_OPERATION')){
+'legacy_transition'=>app(App\Actions\Finance\LegacyFinanceTransitionAction::class)->execute($data['payload'],$actor),
 'setup_close'=>tap(App\Models\Branch::findOrFail($data['id']),fn($branch)=>app(App\Actions\Inventory\ReviewInventoryAction::class)->close($branch,$data['payload'],$actor)),
 'baseline'=>app(App\Actions\Inventory\ReviewInventoryAction::class)->baseline(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor),
 'correct_source'=>app(App\Actions\Inventory\Setup\CorrectInventoryAction::class)->update(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor->id),
@@ -154,6 +159,26 @@ PHP;
     private function assertOne(array $results): void
     {
         $this->assertCount(1, array_filter($results, fn (array $row): bool => $row['ok']));
+        $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
+    }
+
+    public function test_mysql_concurrent_legacy_transition_posts_finance_once_without_receiving_stock_again(): void
+    {
+        config(['finance.legacy_transition_enabled' => true]);
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null, 'opening_stock_closed_by' => null]);
+        $source = OpeningStockEntry::firstOrFail();
+        $entry = JournalEntry::where('source_type', $source->getMorphClass())->where('source_id', $source->id)->firstOrFail();
+        $entry->lines()->delete();
+        $entry->delete();
+        $data = ['branch_id' => $this->branchId, 'source_kind' => 'opening', 'source_id' => $source->id,
+            'posting_date' => OperationContext::today(), 'evidence' => 'Isolated source evidence', 'reason' => 'Isolated transition approval', 'confirmed' => true];
+        $data['revision'] = app(LegacyFinanceTransitionAction::class)->preview($data, $this->owner)['revision'];
+        $before = DB::table('stock_movements')->count();
+        $results = $this->race('legacy_transition', [['payload' => $data], ['payload' => $data]]);
+        $this->assertCount(2, array_filter($results, fn ($row) => $row['ok']));
+        $this->assertSame($results[0]['id'], $results[1]['id']);
+        $this->assertSame($before, DB::table('stock_movements')->count());
+        $this->assertSame(1, DB::table('audit_events')->where('action', 'finance.legacy_posted')->count());
         $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
     }
 

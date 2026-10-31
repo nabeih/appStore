@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Sales;
 
+use App\Actions\Finance\FinanceReports;
 use App\Http\Controllers\Controller;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
@@ -23,7 +24,8 @@ class SalesReportController extends Controller
         $filters['to'] ??= OperationContext::today();
         abort_if($filters['from'] > $filters['to'], 422, 'تاريخ البداية يجب ألا يتجاوز النهاية.');
         $report = $reports->summary($filters);
+        $completeness = app(FinanceReports::class)->completeness($branches->when(! empty($filters['branch_id']), fn ($items) => $items->where('id', (int) $filters['branch_id']))->modelKeys());
 
-        return view('sales.reports.index', compact('filters', 'branches', 'report'));
+        return view('sales.reports.index', compact('filters', 'branches', 'report', 'completeness'));
     }
 }

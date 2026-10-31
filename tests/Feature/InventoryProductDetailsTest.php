@@ -23,7 +23,7 @@ class InventoryProductDetailsTest extends SalesTestCase
 {
     protected function setUp(): void
     {
-        if (getenv('DB_CONNECTION') === 'mysql' && getenv('DB_DATABASE') !== 'appstore_fabric_swatch_test') {
+        if (getenv('DB_CONNECTION') === 'mysql' && ! in_array(getenv('DB_DATABASE'), ['appstore_fabric_swatch_test', 'appstore_golive_20261031_tests'], true)) {
             throw new \RuntimeException('Only the approved isolated MySQL database may be used.');
         }
         parent::setUp();

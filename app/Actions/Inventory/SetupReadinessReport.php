@@ -24,7 +24,8 @@ class SetupReadinessReport
         $stocks = app(ReviewInventoryAction::class)->query()->where('inventories.branch_id', $branch->id)->orderBy('inventories.id')->get();
         app(InventoryReadinessReport::class)->annotate($stocks);
         $inventory = $stocks->map(fn ($stock): array => [
-            'id' => $stock->id, 'branch_id' => $stock->branch_id, 'branch' => $stock->branch->name,
+            'id' => $stock->id, 'product_id' => $stock->productVariant?->product_id, 'variant_id' => $stock->product_variant_id,
+            'branch_id' => $stock->branch_id, 'branch' => $stock->branch->name,
             'product' => $stock->productVariant->product?->name, 'color' => $stock->productVariant->color?->name,
             'size' => $stock->productVariant->size?->name, 'sku' => $stock->productVariant->sku,
             'quantity' => (int) $stock->quantity, 'quarantined_quantity' => (int) $stock->quarantined_quantity,
@@ -80,8 +81,10 @@ class SetupReadinessReport
                 $documentMovementIssues[$itemsTable] = $invalid;
             }
         }
-        $purchaseJournals = DB::table('journal_entries')->where('branch_id', $branch->id)->where('source_type', PurchaseInvoice::class)->where('event', 'purchase')->pluck('source_id')->all();
-        $paymentJournals = DB::table('journal_entries')->where('branch_id', $branch->id)->where('source_type', SupplierPayment::class)->where('event', 'supplier_payment')->pluck('source_id')->all();
+        $activeJournals = DB::table('journal_entries')->where('branch_id', $branch->id)
+            ->whereNotIn('id', DB::table('journal_entries')->whereNotNull('reversal_of_id')->select('reversal_of_id'));
+        $purchaseJournals = (clone $activeJournals)->where('source_type', PurchaseInvoice::class)->where('event', 'purchase')->pluck('source_id')->all();
+        $paymentJournals = (clone $activeJournals)->where('source_type', SupplierPayment::class)->where('event', 'supplier_payment')->pluck('source_id')->all();
         $invoiceLedger = [];
         if (FinanceContext::installed()) {
             $invoiceLedger = (clone $lines)->where('accounts.code', 'supplier_payables')->select('lines.purchase_invoice_id')
@@ -124,7 +127,7 @@ class SetupReadinessReport
             $suppliers[] = ['supplier_id' => $id, 'operational_minor' => $operational, 'ledger_minor' => $ledger, 'difference_minor' => $operational - $ledger];
         }
         $accounts = FinancialAccount::where('branch_id', $branch->id)->whereIn('type', ['cash', 'bank', 'wallet'])->orderBy('id')->get();
-        $accountOpenings = DB::table('journal_entries')->where('branch_id', $branch->id)->where('source_type', FinancialAccount::class)->where('event', 'opening')->pluck('source_id')->all();
+        $accountOpenings = (clone $activeJournals)->where('source_type', FinancialAccount::class)->where('event', 'opening')->pluck('source_id')->all();
         $accountRows = $accounts->map(fn ($account): array => [
             'id' => $account->id, 'name' => $account->name, 'type' => $account->type, 'is_active' => (bool) $account->is_active,
             'ledger_minor' => (int) $balances->get($account->code, 0),
@@ -132,7 +135,7 @@ class SetupReadinessReport
         ])->all();
         $unbalanced = DB::table('journal_entries as entries')->join('journal_lines as lines', 'entries.id', '=', 'lines.journal_entry_id')
             ->where('entries.branch_id', $branch->id)->groupBy('entries.id')->havingRaw('SUM(lines.debit_minor) <> SUM(lines.credit_minor)')->pluck('entries.id')->all();
-        $openingPosted = DB::table('journal_entries')->where('branch_id', $branch->id)->where('source_type', OpeningStockEntry::class)
+        $openingPosted = (clone $activeJournals)->where('source_type', OpeningStockEntry::class)
             ->where('event', 'opening')->pluck('source_id')->all();
         $unpostedOpenings = collect($opening)->filter(fn (array $document): bool => $document['status'] === 'approved' && ! in_array($document['id'], $openingPosted, true))->pluck('number')->all();
         $missingSources = collect($inventory)->flatMap(fn (array $row): array => $row['sources'])

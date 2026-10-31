@@ -8,4 +8,5 @@
 @foreach($invoice['payments'] as $payment)<p>دفعة #{{ $payment['id'] }}: {{ \App\Support\Sales\Money::format($payment['amount_minor']) }} ₪ — التاريخ المسجل {{ $payment['recorded_date'] }} — {{ $payment['recorded_method'] }} — {{ $payment['reference'] }}. {{ $payment['reason'] }}</p>@endforeach
 @can('finance.view')<a class="sale-link" href="{{ route('finance.suppliers.show',[$invoice['supplier_id'],'branch_id'=>$invoice['branch_id']]) }}">مطابقة كشف المورد بالدفتر</a>@endcan</section>@endforeach
 <section class="sale-panel"><h2>مساران منفصلان للمراجعة</h2><p><strong>أ. ترحيل تاريخي مضبوط:</strong> {{ $transition['paths']['historical'] }}</p><p><strong>ب. أرصدة عند الانتقال:</strong> {{ $transition['paths']['cutover'] }}</p><h3>ما يحتاج موافقة وأدلة</h3>@foreach($transition['unresolved'] as $issue)<p>{{ $issue }}</p>@endforeach<p>أرصدة البداية المسجلة: {{ count($transition['recorded_account_openings']) }}. لا نعرف إن كانت تشمل هذه الدفعات؛ لا يُستخدم مقابل الافتتاح لإخفاء فرق.</p></section></div>
+@include('finance.review.transition-form')
 @endsection

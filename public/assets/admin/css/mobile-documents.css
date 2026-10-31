@@ -50,6 +50,9 @@
 .trade-full { grid-column: 1 / -1; }
 
 @media screen and (max-width: 767px), screen and (max-width: 1023px) and (pointer: coarse) {
+    body.laravel-admin { overflow-x: clip; }
+    .laravel-admin #appScreen { overflow-x: clip; min-width: 0; }
+    .laravel-admin .toast-container { max-width: calc(100vw - 24px); }
     .laravel-admin .sidebar { transform: translateX(100%); }
     .laravel-admin .sidebar.auth-open { transform: translateX(0); }
     .sidebar-overlay.auth-open { display: block; }

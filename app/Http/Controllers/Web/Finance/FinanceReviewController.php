@@ -4,10 +4,15 @@ namespace App\Http\Controllers\Web\Finance;
 
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\FinanceReports;
+use App\Actions\Finance\LegacyFinanceTransitionAction;
 use App\Actions\Finance\LegacyTransitionReport;
 use App\Actions\Finance\ReversePurchaseAction;
 use App\Actions\Finance\ReverseSupplierPaymentAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Finance\LegacyTransitionRequest;
+use App\Models\AuditEvent;
+use App\Models\FinancialAccount;
+use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\PurchaseInvoice;
 use App\Models\Supplier;
@@ -19,6 +24,26 @@ use Illuminate\View\View;
 
 class FinanceReviewController extends Controller
 {
+    public function preview(LegacyTransitionRequest $request, LegacyFinanceTransitionAction $action): JsonResponse
+    {
+        return response()->json($action->preview($request->validated(), $request->user()));
+    }
+
+    public function post(LegacyTransitionRequest $request, LegacyFinanceTransitionAction $action): JsonResponse
+    {
+        $entry = $action->execute($request->validated(), $request->user());
+
+        return response()->json(['journal_id' => $entry->id, 'message' => 'رحّل المصدر ماليًا فقط دون تغيير الكمية أو إنشاء دفعة أخرى.']);
+    }
+
+    public function reverseTransition(Request $request, JournalEntry $entry, LegacyFinanceTransitionAction $action): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:1000']]);
+        $reversal = $action->reverse($entry, $request->user(), $data['reason']);
+
+        return response()->json(['journal_id' => $reversal->id, 'message' => 'عُكس انتقال المصدر بقيد مستقل محفوظ في السجل؛ يلزم مراجعة الجاهزية مجددًا.']);
+    }
+
     public function index(Request $request): View|JsonResponse
     {
         $branches = SalesReports::branches($request->user(), false);
@@ -27,7 +52,10 @@ class FinanceReviewController extends Controller
             return response()->json($transition, 200, ['Content-Disposition' => 'attachment; filename="financial-transition.json"']);
         }
 
-        return view('finance.review.index', compact('branches', 'transition'));
+        $accounts = FinancialAccount::whereIn('branch_id', $branches->modelKeys())->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get(['id', 'name', 'branch_id']);
+        $transitionAudits = AuditEvent::whereIn('branch_id', $branches->modelKeys())->where('action', 'finance.legacy_posted')->latest('id')->limit(100)->get();
+
+        return view('finance.review.index', compact('branches', 'transition', 'accounts', 'transitionAudits'));
     }
 
     public function supplier(Request $request, Supplier $supplier): View

@@ -10,6 +10,20 @@ use Tests\Feature\Sales\SalesTestCase;
 
 class InventoryReadinessReportTest extends SalesTestCase
 {
+    public function test_a_known_movement_value_does_not_hide_a_missing_source_document(): void
+    {
+        $this->salesFixtureStarted = false;
+        $this->stock();
+        DB::table('opening_stock_items')->delete();
+        $stock = Inventory::firstOrFail();
+        $report = app(InventoryReadinessReport::class)->annotate(collect([$stock]))->first()->readiness;
+        $this->assertSame('history_review', $report['state']);
+        $this->assertFalse($report['history_value_complete']);
+        $this->assertNull($report['reconstructed_value_minor']);
+        $this->assertSame(20000, $stock->fresh()->value_minor);
+        $this->get(route('inventory.review.index'))->assertOk()->assertSee('دليل الحركة غير مكتمل');
+    }
+
     public function test_sources_rebuild_missing_values_without_using_current_prices_or_writing_data(): void
     {
         $this->salesFixtureStarted = false;

@@ -25,7 +25,7 @@ class InventoryReadinessReport
             ->where(function ($query) use ($opening, $purchases): void {
                 $query->where(fn ($nested) => $nested->where('source_type', OpeningStockEntry::class)->whereIn('source_id', $opening->pluck('opening_stock_entry_id')))
                     ->orWhere(fn ($nested) => $nested->where('source_type', PurchaseInvoice::class)->whereIn('source_id', $purchases->pluck('purchase_invoice_id')));
-            })->get()
+            })->whereNotIn('id', DB::table('journal_entries')->whereNotNull('reversal_of_id')->select('reversal_of_id'))->get()
             ->groupBy(fn ($row): string => $row->source_type.':'.$row->source_id);
         $groups = $movements->groupBy(fn (StockMovement $movement): string => $movement->branch_id.':'.$movement->product_variant_id);
         foreach ($stocks as $stock) {
@@ -55,7 +55,7 @@ class InventoryReadinessReport
                     } elseif ($candidate === null) {
                         $candidate = $documentValue;
                     }
-                } elseif ($candidate === null) {
+                } elseif ($candidate === null || in_array($movement->source_type, [OpeningStockItem::class, PurchaseInvoiceItem::class], true)) {
                     $complete = false;
                     $sourceIssues[] = 'قيمة الحركة ومصدرها الداعم غير مكتملين.';
                 }
@@ -83,13 +83,15 @@ class InventoryReadinessReport
             if ($stock->value_minor === null) {
                 $issues[] = 'قيمة المخزون غير معتمدة.';
             }
-            $state = $difference !== 0 ? 'quantity_review'
+            $state = $difference !== 0 ? 'quantity_review' : (! $complete ? 'history_review'
                 : ($stock->value_minor !== null ? ($reconstructed !== null && (int) $stock->value_minor !== $reconstructed ? 'value_conflict' : 'reviewed')
-                : ($reconstructed !== null ? 'reconstructable' : 'owner_evidence'));
+                : ($reconstructed !== null ? 'reconstructable' : 'owner_evidence')));
             if ($state === 'value_conflict') {
                 $issues[] = 'القيمة الحالية تختلف عن القيمة المدعومة بالحركات والمستندات.';
             }
             $stock->setAttribute('readiness', ['state' => $state, 'history_quantity' => $quantity, 'difference' => $difference,
+                'recommended_action' => $difference !== 0 ? 'راجع الجرد ومستند أول المدة أو الشراء المصدر؛ لا تعتمد قيمة أو تحذف فرق الكمية.'
+                    : (! $complete ? 'استكمل المستند المصدر واربط الحركة الصحيحة قبل اعتماد القيمة.' : ($stock->value_minor === null ? 'راجع القيمة المعاد بناؤها وأدلتها ثم اعتمدها بصلاحيتك؛ راجع الترحيل المالي بشكل مستقل.' : 'تحقق من الترحيل المالي والمطابقة قبل إنهاء الإعداد.')),
                 'recorded_value_minor' => $stock->value_minor, 'reconstructed_value_minor' => $reconstructed,
                 'history_value_complete' => $complete, 'issues' => array_values(array_unique($issues)), 'sources' => $sources]);
         }

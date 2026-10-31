@@ -2,7 +2,9 @@
 
 namespace App\Actions\Finance;
 
+use App\Models\FinancialAccount;
 use App\Models\JournalLine;
+use App\Models\OpeningStockEntry;
 use App\Models\PurchaseInvoice;
 use App\Models\SupplierPayment;
 use App\Support\Sales\Money;
@@ -29,11 +31,36 @@ class FinanceReports
         if (! FinanceContext::installed()) {
             return ['complete' => false, 'legacy_invoices' => null, 'legacy_payments' => null, 'message' => 'التحديث المالي لم يُطبق على هذه القاعدة بعد.'];
         }
-        $invoices = PurchaseInvoice::where('status', 'approved')->whereNull('financial_posted_at')->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->count();
-        $payments = SupplierPayment::whereNull('financial_posted_at')->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->count();
+        $unsupported = function ($query, string $table, string $class, string $event): void {
+            $query->selectRaw('1')->from('journal_entries as posted')->whereColumn('posted.source_id', $table.'.id')
+                ->whereColumn('posted.branch_id', $table.'.branch_id')
+                ->where('posted.source_type', $class)->where('posted.event', $event)
+                ->whereNotExists(fn ($reversal) => $reversal->selectRaw('1')->from('journal_entries as reversed')->whereColumn('reversed.reversal_of_id', 'posted.id'));
+        };
+        $invoices = PurchaseInvoice::where('status', 'approved')->where(fn ($q) => $q->whereNull('financial_posted_at')
+            ->orWhereNotExists(fn ($proof) => $unsupported($proof, 'purchase_invoices', PurchaseInvoice::class, 'purchase')))
+            ->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->count();
+        $payments = SupplierPayment::where('status', 'approved')->where(fn ($q) => $q->whereNull('financial_posted_at')
+            ->orWhereNotExists(fn ($proof) => $unsupported($proof, 'supplier_payments', SupplierPayment::class, 'supplier_payment')))
+            ->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->count();
+        $openings = OpeningStockEntry::where('status', 'approved')->whereNotExists(fn ($q) => $unsupported($q, 'opening_stock_entries', OpeningStockEntry::class, 'opening'))
+            ->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->count();
+        $unknownAccounts = FinancialAccount::whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)
+            ->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))
+            ->whereNotExists(fn ($q) => $unsupported($q, 'financial_accounts', FinancialAccount::class, 'opening'))->count();
+        $missingAccounts = array_diff(array_keys(ManageFinancialAccountsAction::SYSTEM), FinancialAccount::where('type', 'system')->pluck('code')->all());
+        $history = DB::table('stock_movements')->where('stock_bucket', 'available')->groupBy('branch_id', 'product_variant_id')
+            ->select('branch_id', 'product_variant_id')->selectRaw('SUM(quantity_change) AS quantity, SUM(value_change_minor) AS value_minor, SUM(value_change_minor IS NULL) AS unknown_values');
+        $unreadyStocks = DB::table('inventories as stock')->leftJoinSub($history, 'history', fn ($join) => $join->on('history.branch_id', '=', 'stock.branch_id')->on('history.product_variant_id', '=', 'stock.product_variant_id'))
+            ->when($branchIds !== null, fn ($q) => $q->whereIn('stock.branch_id', $branchIds))
+            ->where(fn ($q) => $q->whereNull('stock.value_minor')->orWhereRaw('stock.quantity <> COALESCE(history.quantity,0)')
+                ->orWhereRaw('stock.value_minor <> COALESCE(history.value_minor,0)')->orWhere('history.unknown_values', '>', 0))->count();
+        $complete = $invoices === 0 && $payments === 0 && $openings === 0 && $unknownAccounts === 0 && $missingAccounts === [] && $unreadyStocks === 0;
 
-        return ['complete' => $invoices === 0 && $payments === 0, 'legacy_invoices' => $invoices, 'legacy_payments' => $payments,
-            'message' => $invoices || $payments ? 'رصيد الدفتر غير مكتمل: توجد مصادر قديمة خارج الدفتر. لا يعني الرصيد مطابقته للنقد أو كشف البنك.' : 'المصادر المسجلة الجديدة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.'];
+        return ['complete' => $complete, 'legacy_invoices' => $invoices, 'legacy_payments' => $payments,
+            'legacy_openings' => $openings, 'unknown_account_openings' => $unknownAccounts, 'missing_system_accounts' => array_values($missingAccounts),
+            'unready_inventory_positions' => $unreadyStocks,
+            'message' => ! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.'];
     }
 
     public function period(array $filters): array

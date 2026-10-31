@@ -39,7 +39,8 @@ class InventoryReviewController extends Controller
             $search->inventory($review->query(), $request->validated(), $request->user())->chunkById(100, function ($stocks) use (&$first): void {
                 app(InventoryReadinessReport::class)->annotate($stocks);
                 foreach ($stocks as $stock) {
-                    echo ($first ? '' : ',').json_encode(['inventory_id' => $stock->id, 'branch' => $stock->branch->name,
+                    echo ($first ? '' : ',').json_encode(['inventory_id' => $stock->id, 'product_id' => $stock->productVariant?->product_id,
+                        'variant_id' => $stock->product_variant_id, 'branch_id' => $stock->branch_id, 'branch' => $stock->branch->name,
                         'product' => $stock->productVariant->product?->name, 'color' => $stock->productVariant->color?->name, 'size' => $stock->productVariant->size?->name,
                         'sku' => $stock->productVariant->sku, 'quantity' => $stock->quantity] + $stock->readiness, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
                     $first = false;

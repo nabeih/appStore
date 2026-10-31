@@ -348,8 +348,9 @@ class OpeningStockTest extends TestCase
     {
         $this->postJson(route('inventory.opening-stock.store'), $this->payload())->assertCreated();
         $url = route('inventory.opening-stock.index', ['branch_id' => $this->branchId, 'from' => now()->subDay()->toDateString(), 'to' => now()->toDateString()]);
-        $this->get($url)->assertOk()->assertSee('OS-000001');
-        $this->get(route('inventory.opening-stock.index', ['to' => now()->toDateString()]))->assertOk()->assertSee('OS-000001');
+        $number = OpeningStockEntry::latest('id')->firstOrFail()->number;
+        $this->get($url)->assertOk()->assertSee($number);
+        $this->get(route('inventory.opening-stock.index', ['to' => now()->toDateString()]))->assertOk()->assertSee($number);
     }
 
     public function test_malformed_multipart_payloads_fail_validation_without_writing(): void
