@@ -35,7 +35,7 @@ class ProductColorImagesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
         Storage::fake('public');
         $this->category = Category::create(['name' => 'ملابس']);
         $this->black = Color::create(['name' => 'أسود', 'code' => 'BLK']);
@@ -58,7 +58,7 @@ class ProductColorImagesTest extends TestCase
         return Product::latest('id')->firstOrFail();
     }
 
-    public function test_two_color_images_are_shared_by_six_variants_and_store_only_two_files(): void
+    public function test_two_color_images_are_shared_by_six_variants_and_store_two_pairs(): void
     {
         $payload = $this->payload(['images' => [
             ['color_id' => $this->black->id, 'image' => UploadedFile::fake()->image('black.jpg')],
@@ -67,7 +67,7 @@ class ProductColorImagesTest extends TestCase
         $response = $this->withHeader('Accept', 'application/json')->post(route('purchases.products.store'), $payload)->assertCreated()->assertJsonCount(6, 'data');
         $this->assertDatabaseCount('product_variants', 6);
         $this->assertDatabaseCount('product_images', 2);
-        $this->assertCount(2, Storage::disk('public')->allFiles('products/colors'));
+        $this->assertCount(4, Storage::disk('public')->allFiles('products/colors'));
         foreach ([$this->black->id, $this->white->id] as $colorId) {
             $rows = collect($response->json('data'))->where('color_id', $colorId);
             $this->assertCount(3, $rows);
@@ -90,7 +90,7 @@ class ProductColorImagesTest extends TestCase
         $this->assertDatabaseCount('product_images', 1);
         $this->assertSame($original->url, $response->json('data.0.image_url'));
         $this->assertSame($original->url, $response->json('data.1.image_url'));
-        $this->assertCount(1, Storage::disk('public')->allFiles());
+        $this->assertCount(2, Storage::disk('public')->allFiles());
     }
 
     public function test_different_products_can_have_separate_images_for_the_same_color(): void
@@ -103,7 +103,7 @@ class ProductColorImagesTest extends TestCase
             ])->assertOk();
         }
         $this->assertDatabaseCount('product_images', 2);
-        $this->assertCount(2, Storage::disk('public')->allFiles());
+        $this->assertCount(4, Storage::disk('public')->allFiles());
     }
 
     public function test_duplicate_colors_or_replacement_uploads_are_rejected_without_overwriting_files(): void
@@ -124,7 +124,7 @@ class ProductColorImagesTest extends TestCase
             }
         }
         $this->assertDatabaseCount('product_images', 1);
-        $this->assertCount(1, Storage::disk('public')->allFiles());
+        $this->assertCount(2, Storage::disk('public')->allFiles());
     }
 
     public function test_images_cannot_be_attached_to_unselected_or_unrelated_colors(): void
@@ -162,7 +162,7 @@ class ProductColorImagesTest extends TestCase
             'images' => [['color_id' => $this->black->id, 'image' => $upload]],
         ])->assertOk();
         $image = ProductImage::firstOrFail();
-        $this->assertMatchesRegularExpression('#\Aproducts/colors/[A-Za-z0-9]{40}\.(jpg|jpeg|png|webp)\z#', $image->image_path);
+        $this->assertMatchesRegularExpression('#\Aproducts/colors/[a-f0-9-]{36}/optimized\.webp\z#', $image->image_path);
         Storage::disk('public')->assertExists($image->image_path);
     }
 

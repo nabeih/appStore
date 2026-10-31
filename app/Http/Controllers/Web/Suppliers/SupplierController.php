@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Web\Suppliers;
 
+use App\Actions\Search\ModuleSearch;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Search\SearchRequest;
 use App\Http\Requests\Suppliers\SaveSupplierRequest;
 use App\Models\PurchaseInvoice;
 use App\Models\Supplier;
@@ -21,8 +23,8 @@ class SupplierController extends Controller
     {
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:100'], 'archived' => ['nullable', 'boolean']]);
         $entries = Supplier::when($filters['archived'] ?? false, fn ($query) => $query->onlyTrashed())
-            ->when($filters['q'] ?? null, fn ($query, $q) => $query->where(fn ($query) => $query->where('name', 'like', '%'.$q.'%')->orWhere('phone1', 'like', '%'.$q.'%')))
-            ->withCount('invoices')->withSum(['invoices as balance_minor' => fn ($query) => $query->where('status', 'approved')], DB::raw('total_minor - paid_minor'))
+            ->where(fn ($query) => app(ModuleSearch::class)->contacts($query, $filters['q'] ?? '', true))
+            ->withCount(['invoices' => fn ($query) => app(ModuleSearch::class)->branches($query, $request->user())])->withSum(['invoices as balance_minor' => fn ($query) => app(ModuleSearch::class)->branches($query, $request->user())->where('status', 'approved')], DB::raw('total_minor - paid_minor'))
             ->latest('id')->paginate(20)->withQueryString();
 
         return view('suppliers.index', compact('entries', 'filters'));
@@ -53,17 +55,26 @@ class SupplierController extends Controller
         return array_map(fn ($value) => is_string($value) ? trim($value) : $value, $data);
     }
 
-    public function show(Supplier $supplier): View
+    public function show(Request $request, Supplier $supplier): View
     {
-        $entries = $supplier->invoices()->latest('invoice_date')->latest('id')->paginate(20)->withQueryString();
-        $payments = $supplier->payments()->with('invoice:id,invoice_date')->latest('payment_date')->latest('id')->paginate(20, ['*'], 'payments_page')->withQueryString();
-        $totals = $supplier->invoices()->where('status', 'approved')->selectRaw('COALESCE(SUM(total_minor), 0) AS purchases, COALESCE(SUM(paid_minor), 0) AS paid')->first();
+        $filters = $request->validate(SearchRequest::filterRules() + [
+            'invoices_q' => ['nullable', 'string', 'max:100'], 'payments_q' => ['nullable', 'string', 'max:100'],
+            'payments_page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+        ]);
+        $search = app(ModuleSearch::class);
+        $entries = $search->documents($search->branches($supplier->invoices(), $request->user()),
+            array_replace($filters, ['q' => $filters['invoices_q'] ?? '']), 'PI', ['supplier_name', 'supplier_invoice_number', 'notes'])
+            ->latest('invoice_date')->latest('id')->paginate(20)->withQueryString();
+        $payments = $search->receipts($supplier->payments(), array_replace($filters, ['q' => $filters['payments_q'] ?? '']),
+            $request->user(), true)->with('invoice:id,invoice_date')->latest('payment_date')->latest('id')->paginate(20, ['*'], 'payments_page')->withQueryString();
+        $totals = $search->branches($supplier->invoices(), $request->user())->where('status', 'approved')
+            ->selectRaw('COALESCE(SUM(total_minor),0) AS purchases, COALESCE(SUM(paid_minor),0) AS paid')->first();
         $purchases = DecimalAmount::format((int) $totals->purchases);
         $paid = DecimalAmount::format((int) $totals->paid);
         $balance = DecimalAmount::format((int) $totals->purchases - (int) $totals->paid);
         $methods = SupplierPayment::METHODS;
 
-        return view('suppliers.show', compact('supplier', 'entries', 'payments', 'purchases', 'paid', 'balance', 'methods'));
+        return view('suppliers.show', compact('supplier', 'entries', 'payments', 'purchases', 'paid', 'balance', 'methods', 'filters'));
     }
 
     public function archive(Supplier $supplier): RedirectResponse

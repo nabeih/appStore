@@ -2,6 +2,7 @@
 @section('title', 'رصيد افتتاحي '.$entry->number)
 @push('styles')<link rel="stylesheet" href="{{ asset('assets/admin/css/pages/inventory/opening-stock.css') }}">@endpush
 @section('content')
+@include('inventory.opening-stock.partials.draft-edit')
 <article class="screen active os-document">
     <div class="os-page-title"><div><h1 class="section-title">مستند بضاعة افتتاحية {{ $entry->number }}</h1><p>بضاعة موجودة عند بدء العمل — بدون فاتورة شراء</p></div><div class="os-no-print"><button type="button" class="btn btn-primary" onclick="window.print()">طباعة المستند</button><a class="btn btn-outline" href="{{ route('inventory.opening-stock.index') }}">سجل المستندات</a><a class="btn btn-outline" href="{{ route('inventory.index') }}">المخزون</a></div></div>
     <div class="card os-document-meta"><span>الفرع: <strong>{{ $entry->branch->name }}</strong></span><span>تاريخ الرصيد: <strong>{{ $entry->opening_date?->format('Y-m-d') ?? '—' }}</strong></span><span>وقت الاعتماد: {{ $entry->approved_at?->format('Y-m-d H:i') ?? '—' }}</span><span>أدخل بواسطة: {{ $entry->creator?->name ?? 'غير محدد' }}</span><span class="badge {{ $entry->status === 'cancelled' ? 'danger' : 'success' }}">{{ match ($entry->status) { 'approved' => 'معتمد', 'cancelled' => 'ملغى أثناء التجهيز', default => 'مسودة' } }}</span></div>
@@ -11,6 +12,16 @@
             <tr><td data-label="السطر">{{ $loop->iteration }}</td><td class="record-wide" data-label="الكود / SKU"><strong dir="ltr">{{ $item->product_code }}</strong><br><small dir="ltr">{{ $item->sku }}</small></td><td class="record-primary" data-label="المنتج">{{ $item->product_name }}<br><small>{{ $item->category_name }}</small></td><td data-label="اللون">{{ $item->color_name }}</td><td data-label="المقاس">{{ $item->size_name }}</td><td data-label="الكمية">{{ $item->quantity }}</td><td data-label="تكلفة الوحدة ₪">{{ $item->unit_cost }}</td><td data-label="سعر البيع ₪">{{ $item->selling_price }}</td><td class="record-amount" data-label="قيمة البضاعة ₪">{{ $item->line_total }}</td></tr>
         @endforeach
     </tbody><tfoot><tr><th colspan="5">الإجمالي: {{ $entry->items->count() }} صنف</th><th>{{ $entry->total_quantity }} قطعة</th><th colspan="2">قيمة البضاعة الافتتاحية</th><th>{{ $entry->total_cost }} ₪</th></tr></tfoot></table></div></div>
+    @can('inventory.manage_catalog')
+    <details class="card" style="padding:12px"><summary>إدارة صور وعينات المنتجات بعد حفظ المستند</summary>
+        <p>العينة اختيارية ومشتركة بين المقاسات. هذا الرابط يفتح إدارة المظهر دون تعديل المستند أو الكميات.</p>
+        @foreach($entry->items->unique('productVariant.product_id') as $appearanceItem)
+            @if($appearanceItem->productVariant)
+            <a class="btn btn-outline btn-sm" href="{{ route('catalog.swatches.edit', $appearanceItem->productVariant->product_id) }}">{{ $appearanceItem->product_name }}</a>
+            @endif
+        @endforeach
+    </details>
+    @endcan
     <p>هذا المستند يثبت البضاعة الافتتاحية ولا يمثل عملية شراء أو سداد. تظهر تصحيحات الإدخال أدناه عند وجودها.</p>
     @if($entry->setupChanges->isNotEmpty())
         <div class="card" style="padding:16px;">

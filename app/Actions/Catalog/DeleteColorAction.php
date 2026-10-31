@@ -16,7 +16,7 @@ class DeleteColorAction
             DB::transaction(function () use ($color, $message): void {
                 DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
                 $current = Color::whereKey($color->id)->lockForUpdate()->firstOrFail();
-                if ($current->variants()->exists() || $current->productImages()->exists()) {
+                if ($current->variants()->exists() || $current->productImages()->exists() || $current->swatches()->exists()) {
                     throw ValidationException::withMessages(['color' => $message]);
                 }
                 $current->delete();

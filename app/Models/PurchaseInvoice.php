@@ -18,7 +18,7 @@ class PurchaseInvoice extends Model
 
     protected function casts(): array
     {
-        return ['invoice_date' => 'date', 'approved_at' => 'datetime', 'version' => 'integer', 'approved_revision' => 'integer',
+        return ['financial_posted_at' => 'datetime', 'payment_details' => 'array', 'invoice_date' => 'date', 'approved_at' => 'datetime', 'version' => 'integer', 'approved_revision' => 'integer',
             'total_quantity' => 'integer', 'total_minor' => 'integer', 'paid_minor' => 'integer', 'initial_payment_minor' => 'integer'];
     }
 

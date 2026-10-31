@@ -1,11 +1,11 @@
 @extends('layouts.app')
 @section('title', 'البضاعة الافتتاحية')
 @section('content')
-<div class="screen active os-page">
+<div class="screen active os-page" data-search-region="openings">
     <header class="os-page-title"><div><h1 class="section-title">البضاعة الافتتاحية</h1><p class="section-subtitle">بضاعتك الموجودة، بدون فاتورة شراء.</p></div><button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">+ إدخال بضاعة</button></header>
     <details class="card document-filters" @if(array_filter($filters)) open @endif>
         <summary><span><i class="fas fa-sliders-h" aria-hidden="true"></i> تصفية المستندات</span><small>الفرع والتاريخ</small></summary>
-        <form method="get" class="os-filter-form document-filter-grid">
+        <form method="get" data-module-search class="os-filter-form document-filter-grid"><label>بحث<input name="q" type="search" maxlength="100" value="{{ $filters['q'] ?? '' }}" placeholder="رقم المستند أو المنتج أو SKU"></label><label>الحالة<select name="status"><option value="">الكل</option>@foreach(['draft'=>'مسودة','approved'=>'معتمد','cancelled'=>'ملغى'] as $value=>$label)<option value="{{ $value }}" @selected(($filters['status'] ?? '')===$value)>{{ $label }}</option>@endforeach</select></label>
             <label class="filter-wide">الفرع<select name="branch_id"><option value="">كل الفروع</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(($filters['branch_id'] ?? '') == $branch->id)>{{ $branch->name }}</option>@endforeach</select></label>
             <label>من تاريخ<input type="date" name="from" value="{{ $filters['from'] ?? '' }}"></label>
             <label>إلى تاريخ<input type="date" name="to" value="{{ $filters['to'] ?? '' }}"></label>

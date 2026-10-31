@@ -9,8 +9,8 @@
 .attribute-form h2,.attribute-list-header h2,.attribute-dialog h2 { font-size:1.05rem;font-weight:800;margin:0 0 16px; }
 .attribute-form fieldset,.attribute-dialog fieldset { border:0;padding:0;margin:0;min-width:0; }
 .attribute-form label,.attribute-dialog label { display:block;font-size:.85rem;font-weight:700;margin-bottom:6px; }
-.attribute-form input:not([type=color]),.attribute-form select,.attribute-form textarea,.attribute-dialog input:not([type=color]) { width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:10px 12px;background:white;color:#1e293b;margin-bottom:15px; }
-.attribute-form input:focus,.attribute-form select:focus,.attribute-form textarea:focus,.attribute-dialog input:focus { outline:2px solid #a5b4fc;outline-offset:1px; }
+.attribute-form input:not([type=color]),.attribute-form select,.attribute-form textarea,.attribute-dialog input:not([type=color]),.attribute-dialog textarea { width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:10px 12px;background:white;color:#1e293b;margin-bottom:15px; }
+.attribute-form input:focus,.attribute-form select:focus,.attribute-form textarea:focus,.attribute-dialog input:focus,.attribute-dialog textarea:focus { outline:2px solid #a5b4fc;outline-offset:1px; }
 .attribute-form small,.attribute-muted { color:#64748b;font-size:.78rem;display:block; }
 .attribute-submit { width:100%;margin-top:15px; }
 .attribute-optional { margin-top:15px;padding:12px;border:1px dashed #cbd5e1;border-radius:10px;font-size:.83rem; }
@@ -65,7 +65,7 @@
     .attribute-color-actions-cell{border-top:1px solid #f1f5f9!important;padding-top:9px!important}
     .attribute-color-actions .btn{min-height:36px;padding:6px 12px;font-size:11px!important}
     .attribute-color-actions-cell .attribute-muted{max-width:none}
-    .attribute-form input:not([type=color]),.attribute-form select,.attribute-form textarea,.attribute-dialog input:not([type=color]),.attribute-dialog select,#attribute-search{font-size:16px!important}
+    .attribute-form input:not([type=color]),.attribute-form select,.attribute-form textarea,.attribute-dialog input:not([type=color]),.attribute-dialog select,.attribute-dialog textarea,#attribute-search{font-size:16px!important}
     .attribute-dialog{width:calc(100vw - 20px);max-width:480px;border-radius:12px}
     .attribute-dialog-body{padding:14px}.attribute-dialog header,.attribute-dialog footer{padding:12px 14px}
     .attribute-dialog footer{padding-bottom:max(12px,env(safe-area-inset-bottom))}

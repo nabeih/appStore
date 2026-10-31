@@ -19,7 +19,7 @@ class AttributesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
     }
 
     public function test_one_sidebar_entry_and_page_cover_all_three_sections(): void

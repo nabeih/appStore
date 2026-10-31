@@ -31,6 +31,15 @@ return [
 
     'connections' => [
 
+        'ai_database' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'jobs',
+            'queue' => 'ai-indexing',
+            'retry_after' => 120,
+            'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

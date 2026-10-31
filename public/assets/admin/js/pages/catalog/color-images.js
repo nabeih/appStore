@@ -44,6 +44,19 @@
                 }
                 if (group.busy) details.append(element('small', 'color-image-status', 'جارٍ رفع الصورة...'));
                 if (group.error) { const error = element('small', 'color-image-error', group.error); error.setAttribute('role', 'alert'); details.append(error); }
+                if (window.FabricSwatches?.canManage) {
+                    if (group.swatchManageUrl && group.colorId) {
+                        const sample = element('span', 'fabric-current');
+                        if (group.productId) { sample.dataset.fabricProduct = group.productId; sample.dataset.fabricColor = group.colorId; }
+                        const cached = FabricSwatches.cached(group.swatchManageUrl,group.colorId);
+                        sample.append(FabricSwatches.indicator(cached ? cached.swatch?.url : group.swatchUrl, cached ? cached.hex : group.hex,group.color));
+                        const manage = element('button','fabric-manage-button','عينة القماش');
+                        manage.type = 'button'; manage.addEventListener('click',() => FabricSwatches.open(group.swatchManageUrl,group.colorId));
+                        details.append(sample,manage);
+                    } else {
+                        details.append(element('small','','يمكن إضافة عينة القماش بعد حفظ المنتج؛ لا يلزم رفعها لكل مقاس.'));
+                    }
+                }
                 card.append(preview, details); container.append(card);
             });
         },

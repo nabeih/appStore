@@ -2,6 +2,8 @@
 
 namespace App\Actions\Inventory\OpeningStock;
 
+use App\Actions\Catalog\ProcessProductImageAction;
+use App\Actions\Finance\PostJournalAction;
 use App\Models\Branch;
 use App\Models\Inventory;
 use App\Models\OpeningStockEntry;
@@ -10,7 +12,9 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
+use App\Models\User;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
+use App\Support\Sales\OperationContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -21,13 +25,17 @@ class PostOpeningStockAction
 {
     public function __construct(private PrepareOpeningStockAction $prepare) {}
 
-    public function execute(array $data, ?int $actorId = null): OpeningStockEntry
+    public function execute(array $data, ?int $actorId = null, bool $draft = false): OpeningStockEntry
     {
         $savedFiles = [];
         $hash = $this->fingerprint($data);
         try {
-            return DB::transaction(function () use ($data, $actorId, $hash, &$savedFiles): OpeningStockEntry {
+            return DB::transaction(function () use ($data, $actorId, $hash, $draft, &$savedFiles): OpeningStockEntry {
                 // One shared lock protects product identity/code allocation across branches.
+                DB::table('product_code_counters')->where('id', 1)->increment('lock_version');
+                if ($actorId) {
+                    OperationContext::branch(User::findOrFail($actorId), (int) $data['branch_id'], 'inventory.correct_setup');
+                }
                 $counter = DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
                 Branch::whereKey($data['branch_id'])->where('is_active', true)->lockForUpdate()->firstOrFail();
                 $existing = OpeningStockEntry::where('client_uuid', $data['client_uuid'])->first();
@@ -35,6 +43,8 @@ class PostOpeningStockAction
                     if (! hash_equals((string) $existing->request_hash, $hash)) {
                         abort(409, 'معرّف العملية مستخدم لبيانات مختلفة. افتح مستندًا جديدًا.');
                     }
+
+                    abort_unless($draft || $existing->status !== 'draft', 409, 'المستند محفوظ كمسودة. افتحه وراجعه ثم اعتمده من صفحة المستند.');
 
                     return $existing;
                 }
@@ -55,8 +65,8 @@ class PostOpeningStockAction
                 $entry = OpeningStockEntry::create([
                     'client_uuid' => $data['client_uuid'], 'request_hash' => $hash,
                     'branch_id' => $data['branch_id'], 'opening_date' => $data['opening_date'],
-                    'created_by' => $actorId, 'approved_by' => $actorId, 'approved_at' => now(),
-                    'status' => 'approved', 'notes' => $data['notes'] ?? null,
+                    'created_by' => $actorId, 'approved_by' => $draft ? null : $actorId, 'approved_at' => $draft ? null : now(),
+                    'status' => $draft ? 'draft' : 'approved', 'version' => 1, 'notes' => $data['notes'] ?? null,
                     'total_quantity' => $plan['total_quantity'], 'total_cost' => $plan['total_cost'],
                 ]);
                 $inventories = $movements = [];
@@ -75,21 +85,27 @@ class PostOpeningStockAction
                         'sku' => $variant->sku, 'quantity' => $row['quantity'], 'unit_cost' => $row['unit_cost'],
                         'selling_price' => $variant->selling_price, 'line_total' => $row['line_total'],
                     ]);
-                    $inventories[] = ['branch_id' => $data['branch_id'], 'product_variant_id' => $variant->id, 'quantity' => $row['quantity'], 'average_cost' => $row['unit_cost'], 'created_at' => $timestamp, 'updated_at' => $timestamp];
+                    $inventories[] = ['branch_id' => $data['branch_id'], 'product_variant_id' => $variant->id, 'quantity' => $row['quantity'], 'average_cost' => $row['unit_cost'], 'value_minor' => $row['quantity'] * DecimalAmount::minorUnits($row['unit_cost']), 'created_at' => $timestamp, 'updated_at' => $timestamp];
                     $movements[] = ['branch_id' => $data['branch_id'], 'product_variant_id' => $variant->id, 'user_id' => $actorId,
                         'movement_type' => 'opening_stock', 'quantity_change' => $row['quantity'], 'unit_cost' => $row['unit_cost'],
+                        'value_change_minor' => $row['quantity'] * DecimalAmount::minorUnits($row['unit_cost']), 'stock_bucket' => 'available', 'effective_date' => $data['opening_date'],
                         'source_type' => $item->getMorphClass(), 'source_id' => $item->id, 'note' => $entry->number, 'created_at' => $timestamp];
                     if ($row['image']) {
-                        $path = $row['image']->store('products/colors', 'public');
-                        if (! $path) {
-                            throw new \RuntimeException('تعذر تخزين صورة المنتج.');
-                        }
-                        $savedFiles[] = $path;
-                        ProductImage::create(['product_id' => $product->id, 'color_id' => $row['color']->id, 'image_path' => $path]);
+                        $paths = app(ProcessProductImageAction::class)->upload($row['image']);
+                        array_push($savedFiles, ...array_values($paths));
+                        ProductImage::create(['product_id' => $product->id, 'color_id' => $row['color']->id] + $paths);
                     }
                 }
-                Inventory::insert($inventories);
-                StockMovement::insert($movements);
+                if (! $draft) {
+                    Inventory::insert($inventories);
+                    StockMovement::insert($movements);
+                    if ($actorId && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
+                        $amount = DecimalAmount::minorUnits($entry->total_cost);
+                        app(PostJournalAction::class)->execute($entry, 'opening', $entry->branch_id, User::findOrFail($actorId), $data['opening_date'], [
+                            ['account' => 'inventory', 'amount' => $amount], ['account' => 'opening_equity', 'amount' => -$amount],
+                        ], $entry->number);
+                    }
+                }
 
                 return $entry;
             });

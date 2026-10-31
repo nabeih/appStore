@@ -38,7 +38,7 @@ class OpeningStockTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
         Model::preventLazyLoading();
         Storage::fake('public');
         $this->branchId = DB::table('branches')->insertGetId(['name' => 'الفرع الأول']);
@@ -237,7 +237,7 @@ class OpeningStockTest extends TestCase
         $this->withHeader('Accept', 'application/json')->post(route('inventory.opening-stock.store'), $request)->assertOk();
         $this->assertDatabaseCount('product_images', 1);
         Storage::disk('public')->assertExists(ProductImage::firstOrFail()->image_path);
-        $this->assertCount(1, Storage::disk('public')->allFiles());
+        $this->assertCount(2, Storage::disk('public')->allFiles());
     }
 
     public function test_a_failure_after_upload_rolls_back_everything_and_removes_the_image(): void
@@ -288,7 +288,7 @@ class OpeningStockTest extends TestCase
         }
         $batch = $selectCount($rows);
         $this->assertLessThanOrEqual($single + 2, $batch);
-        $this->assertLessThanOrEqual(15, $batch);
+        $this->assertLessThanOrEqual(21, $batch);
     }
 
     public function test_catalog_options_quick_add_and_product_search_are_available(): void

@@ -8,7 +8,7 @@ class InvoiceRevisionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return ($this->user()?->can('purchases.manage') ?? false) && $this->user()->can('sales.view_cost');
     }
 
     public function rules(): array

@@ -2,10 +2,10 @@
 @section('title', 'فواتير الشراء')
 @push('styles')<link rel="stylesheet" href="{{ asset('assets/admin/css/pages/purchases/invoices.css') }}">@endpush
 @section('content')
-<div class="screen active trade-page">
-    <header class="trade-heading"><div><h1 class="section-title"><i class="fas fa-file-invoice text-primary" aria-hidden="true"></i> فواتير الشراء</h1><p class="section-subtitle">المشتريات ودفعات الموردين.</p></div><a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">+ فاتورة جديدة</a></header>
-    <form method="get" class="card document-search-card">
-        <div class="document-search-bar"><label>البحث<input name="q" maxlength="100" value="{{ $filters['q'] ?? '' }}" placeholder="المورد أو رقم الفاتورة"></label><button class="btn btn-primary" type="submit">بحث</button></div>
+<div class="screen active trade-page" data-search-region="purchases">
+    <header class="trade-heading"><div><h1 class="section-title"><i class="fas fa-file-invoice text-primary" aria-hidden="true"></i> فواتير الشراء</h1><p class="section-subtitle">المشتريات ودفعات الموردين.</p></div>@can('purchases.manage')<a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">+ فاتورة جديدة</a>@endcan</header>
+    <form method="get" data-module-search class="card document-search-card">
+        <div class="document-search-bar"><label>البحث<input name="q" maxlength="100" value="{{ $filters['q'] ?? '' }}" placeholder="المورد أو رقم الفاتورة أو المنتج أو SKU"></label><button class="btn btn-primary" type="submit">بحث</button><button type="button" class="btn btn-outline" data-search-clear>مسح البحث</button></div>
         <details class="document-filters" @if(array_filter(\Illuminate\Support\Arr::except($filters,'q'))) open @endif>
             <summary><span><i class="fas fa-sliders-h" aria-hidden="true"></i> خيارات التصفية</span><small>الحالة، الفرع، التاريخ</small></summary>
             <div class="document-filter-grid">
@@ -31,7 +31,7 @@
             <td class="record-action"><a class="btn btn-outline btn-sm" href="{{ route('purchases.invoices.show',$entry) }}">عرض الفاتورة</a></td>
         </tr>
     @empty
-        <tr class="record-empty"><td colspan="9" class="trade-empty"><strong>لا توجد فواتير مطابقة</strong><p>ابدأ بإضافة فاتورة شراء.</p><a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة جديدة</a></td></tr>
+        <tr class="record-empty"><td colspan="9" class="trade-empty"><strong>لا توجد فواتير مطابقة</strong><p>ابدأ بإضافة فاتورة شراء.</p>@can('purchases.manage')<a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة جديدة</a>@endcan</td></tr>
     @endforelse
     </tbody></table></div><x-pagination :paginator="$entries" /></section>
 </div>

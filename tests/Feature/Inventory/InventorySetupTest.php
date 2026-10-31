@@ -36,7 +36,7 @@ class InventorySetupTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
         config(['inventory.allow_setup_changes' => true]);
         $this->branchId = DB::table('branches')->insertGetId(['name' => 'الفرع الأول']);
         $this->category = Category::create(['name' => 'ملابس']);
@@ -44,12 +44,19 @@ class InventorySetupTest extends TestCase
         $this->size = Size::create(['name' => 'L', 'code' => 'L']);
     }
 
-    private function legacyInventory(): Inventory
+    private function undocumentedInventory(): Inventory
     {
         $product = Product::create(['name' => 'قميص', 'code' => 'SHIRT', 'category_id' => $this->category->id]);
         $variant = $product->variants()->create(['color_id' => $this->color->id, 'size_id' => $this->size->id, 'sku' => 'SHIRT-BLK-L', 'selling_price' => '10.00']);
 
         return Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $variant->id, 'quantity' => 5, 'average_cost' => '2.50']);
+    }
+
+    private function setupInventory(): Inventory
+    {
+        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+
+        return Inventory::firstOrFail();
     }
 
     private function openingPayload(bool $twoRows = false): array
@@ -77,19 +84,13 @@ class InventorySetupTest extends TestCase
         return array_replace(['revision' => $this->revision($inventory), 'name' => $inventory->productVariant->product->name, 'code' => $inventory->productVariant->product->code, 'category_id' => $inventory->productVariant->product->category_id, 'color_id' => $inventory->productVariant->color_id, 'size_id' => $inventory->productVariant->size_id, 'quantity' => 4, 'average_cost' => '0.10', 'selling_price' => '11.25', 'reason' => 'تصحيح الإدخال'], $overrides);
     }
 
-    public function test_legacy_stock_can_be_corrected_with_a_before_and_after_record(): void
+    public function test_undocumented_legacy_stock_cannot_be_corrected_as_independent_numbers(): void
     {
-        $inventory = $this->legacyInventory();
-        $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory))->assertOk();
-        $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'quantity' => 4, 'average_cost' => '0.10']);
-        $this->assertDatabaseHas('product_variants', ['id' => $inventory->product_variant_id, 'selling_price' => '11.25']);
-        $change = InventorySetupChange::firstOrFail();
-        $this->assertSame(auth()->id(), $change->user_id);
-        $this->assertSame(5, $change->before_state['quantity']);
-        $this->assertSame('2.50', $change->before_state['average_cost']);
-        $this->assertSame(4, $change->after_state['quantity']);
-        $this->assertSame('0.10', $change->after_state['average_cost']);
-        $this->assertSame('تصحيح الإدخال', $change->reason);
+        $inventory = $this->undocumentedInventory();
+        $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory))->assertUnprocessable()->assertJsonValidationErrors('inventory');
+        $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'quantity' => 5, 'average_cost' => '2.50']);
+        $this->assertDatabaseHas('product_variants', ['id' => $inventory->product_variant_id, 'selling_price' => '10.00']);
+        $this->assertDatabaseCount('inventory_setup_changes', 0);
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
@@ -109,21 +110,17 @@ class InventorySetupTest extends TestCase
         $this->get(route('inventory.opening-stock.show', $entry))->assertOk()->assertSee('تصحيحات إدخال البضاعة')->assertSee('تصحيح الإدخال');
     }
 
-    public function test_deleting_legacy_stock_preserves_the_product_variant_and_other_branches(): void
+    public function test_undocumented_legacy_stock_cannot_be_deleted_without_source_review(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->undocumentedInventory();
         $other = DB::table('branches')->insertGetId(['name' => 'فرع آخر']);
         Inventory::create(['branch_id' => $other, 'product_variant_id' => $inventory->product_variant_id, 'quantity' => 20, 'average_cost' => '2.00']);
-        $this->deleteJson(route('inventory.destroy', $inventory), ['revision' => $this->revision($inventory)])->assertOk();
-        $this->assertDatabaseMissing('inventories', ['id' => $inventory->id]);
+        $this->deleteJson(route('inventory.destroy', $inventory), ['revision' => $this->revision($inventory)])->assertUnprocessable();
+        $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'quantity' => 5]);
         $this->assertDatabaseHas('inventories', ['branch_id' => $other, 'quantity' => 20]);
         $this->assertDatabaseCount('products', 1);
         $this->assertDatabaseCount('product_variants', 1);
-        $change = InventorySetupChange::firstOrFail();
-        $this->assertSame(auth()->id(), $change->user_id);
-        $this->assertSame('deleted', $change->operation);
-        $this->assertNull($change->after_state);
-        $this->assertSame('قميص', $change->before_state['product_name']);
+        $this->assertDatabaseCount('inventory_setup_changes', 0);
     }
 
     public function test_deleting_one_opening_row_recalculates_totals_and_keeps_the_document(): void
@@ -181,7 +178,7 @@ class InventorySetupTest extends TestCase
 
     public function test_legacy_stock_with_a_non_opening_movement_is_also_protected(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->undocumentedInventory();
         StockMovement::create(['branch_id' => $this->branchId, 'product_variant_id' => $inventory->product_variant_id,
             'movement_type' => 'purchase', 'quantity_change' => 5, 'source_type' => 'purchase', 'source_id' => 1]);
         $this->deleteJson(route('inventory.destroy', $inventory), ['revision' => $this->revision($inventory)])->assertUnprocessable();
@@ -190,7 +187,7 @@ class InventorySetupTest extends TestCase
 
     public function test_stale_requests_cannot_overwrite_or_delete_newer_data(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $data = $this->updateData($inventory);
         $this->putJson(route('inventory.update', $inventory), $data)->assertOk();
         $data['quantity'] = 99;
@@ -202,7 +199,7 @@ class InventorySetupTest extends TestCase
 
     public function test_changing_the_global_price_invalidates_an_already_opened_row(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $data = $this->updateData($inventory);
         $inventory->productVariant->update(['selling_price' => '19.00']);
         $this->putJson(route('inventory.update', $inventory), $data)->assertConflict();
@@ -210,7 +207,7 @@ class InventorySetupTest extends TestCase
 
     public function test_disabling_setup_changes_hides_the_actions_and_blocks_web_and_api_writes(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $data = $this->updateData($inventory);
         config(['inventory.allow_setup_changes' => false]);
         $this->get(route('inventory.index'))->assertOk()->assertDontSee('data-inventory-action', false)->assertDontSee('inventory-setup-config');
@@ -222,7 +219,7 @@ class InventorySetupTest extends TestCase
 
     public function test_invalid_quantities_prices_and_precision_are_rejected(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         foreach ([['quantity' => -1], ['quantity' => '1.5'], ['quantity' => 1000001], ['average_cost' => '0.001'], ['selling_price' => '-5']] as $invalid) {
             $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, $invalid))->assertUnprocessable();
         }
@@ -275,7 +272,7 @@ class InventorySetupTest extends TestCase
 
     public function test_stock_rows_include_action_buttons_and_revision(): void
     {
-        $this->legacyInventory();
+        $this->setupInventory();
         $this->get(route('inventory.index'))->assertOk()->assertSee('data-inventory-action="edit"', false)->assertSee('data-inventory-action="delete"', false)->assertSee('inventorySetupDialog');
     }
 
@@ -301,7 +298,7 @@ class InventorySetupTest extends TestCase
 
     public function test_color_or_size_cannot_change_when_the_same_variant_is_stocked_elsewhere(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $other = DB::table('branches')->insertGetId(['name' => 'فرع آخر']);
         Inventory::create(['branch_id' => $other, 'product_variant_id' => $inventory->product_variant_id, 'quantity' => 5, 'average_cost' => '2.00']);
         $color = Color::create(['name' => 'أحمر', 'code' => 'RED']);
@@ -334,7 +331,7 @@ class InventorySetupTest extends TestCase
 
     public function test_global_price_changes_are_blocked_when_another_branch_has_later_movements(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $other = DB::table('branches')->insertGetId(['name' => 'فرع آخر']);
         StockMovement::create(['branch_id' => $other, 'product_variant_id' => $inventory->product_variant_id,
             'movement_type' => 'sale', 'quantity_change' => -1, 'source_type' => 'sale', 'source_id' => 200]);
@@ -343,7 +340,7 @@ class InventorySetupTest extends TestCase
 
     public function test_a_product_change_invalidates_an_already_opened_inventory_dialog(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $data = $this->updateData($inventory);
         $inventory->productVariant->product->update(['name' => 'تغير من شاشة أخرى']);
         $this->putJson(route('inventory.update', $inventory), $data)->assertConflict();
@@ -351,7 +348,7 @@ class InventorySetupTest extends TestCase
 
     public function test_minimum_price_and_unknown_attributes_are_validated_before_writes(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $inventory->productVariant()->update(['minimum_selling_price' => '6.00']);
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, ['selling_price' => '5.99']))->assertUnprocessable()->assertJsonValidationErrors('selling_price');
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, ['color_id' => 99999]))->assertUnprocessable();
@@ -360,7 +357,7 @@ class InventorySetupTest extends TestCase
 
     public function test_an_unchanged_submission_does_not_create_a_false_correction(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, ['quantity' => 5, 'average_cost' => '2.50', 'selling_price' => '10.00']))->assertOk();
         $this->assertDatabaseCount('inventory_setup_changes', 0);
     }
@@ -389,7 +386,7 @@ class InventorySetupTest extends TestCase
 
     public function test_inventory_actions_do_not_add_per_row_queries(): void
     {
-        $inventory = $this->legacyInventory();
+        $inventory = $this->setupInventory();
         $selectCount = function (): int {
             DB::flushQueryLog();
             DB::enableQueryLog();

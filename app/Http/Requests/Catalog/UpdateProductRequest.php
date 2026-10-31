@@ -10,7 +10,7 @@ class UpdateProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // مؤقتًا أثناء التطوير
+        return $this->user()?->can('inventory.manage_catalog') ?? false;
     }
 
     public function rules(): array
@@ -30,6 +30,8 @@ class UpdateProductRequest extends FormRequest
             ],
 
             'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'image' => ['sometimes', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'image_color_id' => ['required_with:image', 'integer', 'min:1'],
             'description' => ['sometimes', 'nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
 
@@ -80,12 +82,12 @@ class UpdateProductRequest extends FormRequest
                 $pairs = [];
                 $ids = [];
 
-                if (!is_array($variants)) {
+                if (! is_array($variants)) {
                     return;
                 }
 
                 foreach ($variants as $index => $variant) {
-                    if (!is_array($variant)) {
+                    if (! is_array($variant)) {
                         continue;
                     }
 
@@ -100,11 +102,11 @@ class UpdateProductRequest extends FormRequest
                         $ids[] = $variant['id'];
                     }
 
-                    if (!isset($variant['color_id'], $variant['size_id'])) {
+                    if (! isset($variant['color_id'], $variant['size_id'])) {
                         continue;
                     }
 
-                    $key = $variant['color_id'] . '-' . $variant['size_id'];
+                    $key = $variant['color_id'].'-'.$variant['size_id'];
 
                     if (in_array($key, $pairs)) {
                         $validator->errors()->add(

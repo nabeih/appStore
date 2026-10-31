@@ -20,15 +20,19 @@
             <header class="attribute-list-header"><h2>{{ match($tab) { 'colors' => 'الألوان المتاحة', 'sizes' => 'المقاسات المتاحة', default => 'التصنيفات المتاحة' } }}</h2>
                 <form method="get" action="{{ route('catalog.attributes.index') }}" id="attribute-search-form"><input type="hidden" name="tab" value="{{ $tab }}"><input name="q" id="attribute-search" type="search" maxlength="100" value="{{ $search }}" placeholder="بحث بالاسم{{ $tab !== 'categories' ? ' أو الرمز' : '' }}..." aria-label="بحث في القائمة"><button class="btn btn-outline btn-sm" type="submit">بحث</button></form>
             </header>
-            <div class="table-responsive"><table class="attribute-table {{ $tab === 'colors' ? 'attribute-color-table' : '' }}"><thead><tr>
+            <div class="table-responsive"><table class="attribute-table attribute-color-table"><thead><tr>
                 <th>{{ $tab === 'colors' ? 'اللون' : 'الاسم' }}</th>
-                @if($tab === 'categories')<th>التصنيف الرئيسي</th><th>المنتجات</th>@elseif($tab === 'colors')<th>الدرجة</th><th>الرمز</th><th>الأصناف</th><th>الإجراءات</th>@else<th>الرمز</th><th>الترتيب</th><th>الأصناف</th>@endif
+                @if($tab === 'categories')<th>التصنيف الرئيسي</th><th>المنتجات</th><th>الإجراءات</th>@elseif($tab === 'colors')<th>الدرجة</th><th>الرمز</th><th>الأصناف</th><th>الإجراءات</th>@else<th>الرمز</th><th>الترتيب</th><th>الأصناف</th><th>الإجراءات</th>@endif
             </tr></thead><tbody>
                 @forelse($entries as $entry)
                     <tr data-attribute-id="{{ $entry->id }}">
                         <td data-label="اللون"><div class="attribute-name">@if($tab === 'colors')<x-catalog.color-dot :hex="$entry->display_hex" :label="$entry->name" />@endif<strong>{{ $entry->name }}</strong></div>@unless($entry->is_active)<small class="attribute-muted">غير فعال</small>@endunless @if($tab === 'categories' && $entry->description)<small class="attribute-description">{{ $entry->description }}</small>@endif</td>
                         @if($tab === 'categories')
-                            <td>{{ $entry->parent?->name ?? 'تصنيف رئيسي' }}</td><td>{{ $entry->products_count }}</td>
+                            <td data-label="التصنيف الرئيسي">{{ $entry->parent?->name ?? 'تصنيف رئيسي' }}</td><td data-label="المنتجات">{{ $entry->products_count }}</td>
+                            <td class="attribute-color-actions-cell"><div class="attribute-color-actions">
+                                <button type="button" class="btn btn-outline btn-sm" data-edit-attribute="{{ json_encode(['type'=>'category','name'=>$entry->name,'description'=>$entry->description,'url'=>route('catalog.attributes.categories.update',$entry)]) }}" aria-label="تعديل {{ $entry->name }}">تعديل</button>
+                                <button type="button" class="btn btn-outline btn-sm attribute-delete-button" data-delete-attribute="{{ json_encode(['type'=>'category','name'=>$entry->name,'url'=>route('catalog.attributes.categories.destroy',$entry)]) }}" @disabled($entry->products_count > 0 || $entry->children_count > 0) aria-label="حذف {{ $entry->name }}">حذف</button>
+                            </div>@if($entry->products_count > 0 || $entry->children_count > 0)<small class="attribute-muted">مرتبط بمنتجات أو تصنيفات فرعية؛ لا يُحذف.</small>@endif</td>
                         @elseif($tab === 'colors')
                             <td data-label="الدرجة"><span dir="ltr">{{ $entry->display_hex ?? 'لم تحدد' }}</span>@if(!$entry->hex_code && $entry->display_hex)<small class="attribute-muted">مقترح من الاسم</small>@endif</td><td data-label="الرمز"><span dir="ltr">{{ $entry->code }}</span></td><td data-label="الأصناف">{{ $entry->variants_count }}</td>
                             <td class="attribute-color-actions-cell"><div class="attribute-color-actions">
@@ -36,11 +40,15 @@
                                 <button type="button" class="btn btn-outline btn-sm attribute-delete-button" data-delete-color="{{ json_encode(['name' => $entry->name, 'url' => route('catalog.attributes.colors.destroy', $entry)]) }}" @disabled($entry->variants_count > 0 || $entry->product_images_count > 0) aria-label="حذف {{ $entry->name }}" @if($entry->variants_count > 0 || $entry->product_images_count > 0) aria-describedby="color-delete-reason-{{ $entry->id }}" @endif>حذف</button>
                             </div>@if($entry->variants_count > 0 || $entry->product_images_count > 0)<small class="attribute-muted" id="color-delete-reason-{{ $entry->id }}">مستخدم في أصناف أو صور؛ لا يُحذف.</small>@endif</td>
                         @else
-                            <td dir="ltr">{{ $entry->code }}</td><td>{{ $entry->sort_order }}</td><td>{{ $entry->variants_count }}</td>
+                            <td data-label="الرمز"><span dir="ltr">{{ $entry->code }}</span></td><td data-label="الترتيب">{{ $entry->sort_order }}</td><td data-label="الأصناف">{{ $entry->variants_count }}</td>
+                            <td class="attribute-color-actions-cell"><div class="attribute-color-actions">
+                                <button type="button" class="btn btn-outline btn-sm" data-edit-attribute="{{ json_encode(['type'=>'size','name'=>$entry->name,'sort_order'=>$entry->sort_order,'url'=>route('catalog.attributes.sizes.update',$entry)]) }}" aria-label="تعديل {{ $entry->name }}">تعديل</button>
+                                <button type="button" class="btn btn-outline btn-sm attribute-delete-button" data-delete-attribute="{{ json_encode(['type'=>'size','name'=>$entry->name,'url'=>route('catalog.attributes.sizes.destroy',$entry)]) }}" @disabled($entry->variants_count > 0) aria-label="حذف {{ $entry->name }}">حذف</button>
+                            </div>@if($entry->variants_count > 0)<small class="attribute-muted">مستخدم في أصناف؛ لا يُحذف.</small>@endif</td>
                         @endif
                     </tr>
                 @empty
-                    <tr><td colspan="{{ match($tab) { 'colors' => 5, 'sizes' => 4, default => 3 } }}" class="attribute-empty">{{ $search !== '' ? 'لا توجد نتائج مطابقة للبحث.' : 'القائمة فارغة حاليًا. أضف أول عنصر من النموذج.' }}</td></tr>
+                    <tr><td colspan="{{ match($tab) { 'categories' => 4, default => 5 } }}" class="attribute-empty">{{ $search !== '' ? 'لا توجد نتائج مطابقة للبحث.' : 'القائمة فارغة حاليًا. أضف أول عنصر من النموذج.' }}</td></tr>
                 @endforelse
             </tbody></table></div>
             @include('catalog.attributes.partials.pagination')
@@ -62,6 +70,7 @@
         <footer><button type="button" class="btn btn-outline" data-close-delete-color>إلغاء</button><button type="submit" class="btn attribute-confirm-delete">حذف اللون</button></footer>
     </form>
 </dialog>
+@include('catalog.attributes.partials.manage-dialogs')
 <div id="attribute-feedback" role="status" hidden></div>
 <div id="attribute-loading" role="status" hidden>جاري تحديث القائمة...</div>
 @endsection

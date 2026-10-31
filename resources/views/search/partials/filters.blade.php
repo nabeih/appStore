@@ -1,0 +1,12 @@
+@php($searchFilters = $filters ?? [])
+<form method="get" class="module-search-form" data-module-search>
+<label>بحث<input name="q" type="search" maxlength="100" value="{{ $searchFilters['q'] ?? '' }}" placeholder="{{ $placeholder ?? 'اسم، كود أو رقم مستند' }}"></label>
+@if(isset($branches))<label>الفرع<select name="branch_id"><option value="">الفروع المسموحة</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(($searchFilters['branch_id'] ?? '')==$branch->id)>{{ $branch->name }}</option>@endforeach</select></label>@endif
+@foreach(['categories'=>'التصنيف','colors'=>'اللون','sizes'=>'المقاس'] as $collection=>$label)
+@if(isset($$collection))@php($field = ['categories'=>'category_id','colors'=>'color_id','sizes'=>'size_id'][$collection])<label>{{ $label }}<select name="{{ $field }}"><option value="">الكل</option>@foreach($$collection as $item)<option value="{{ $item->id }}" @selected(($searchFilters[$field] ?? '')==$item->id)>{{ $item->name }}</option>@endforeach</select></label>@endif
+@endforeach
+@if(($searchKind ?? '') === 'inventory')<label>الكمية<select name="quantity"><option value="all">كل الكميات</option><option value="available" @selected(($searchFilters['quantity'] ?? '')==='available')>متوفر</option><option value="empty" @selected(($searchFilters['quantity'] ?? '')==='empty')>الكمية صفر</option></select></label>@endif
+@if(in_array($searchKind ?? '',['inventory','accounts'],true))<label>الحالة<select name="active"><option value="all">الكل</option><option value="active" @selected(($searchFilters['active'] ?? '')==='active')>فعال</option><option value="inactive" @selected(($searchFilters['active'] ?? '')==='inactive')>غير فعال</option></select></label>@endif
+@if(($searchKind ?? '') === 'readiness')<label>المراجعة<select name="valuation"><option value="">الكل</option>@foreach(['missing'=>'قيمة بحاجة لمراجعة','reviewed'=>'قيمة موثقة','mismatch'=>'فرق مع سجل الحركات'] as $value=>$label)<option value="{{ $value }}" @selected(($searchFilters['valuation'] ?? '')===$value)>{{ $label }}</option>@endforeach</select></label>@endif
+@if(($searchKind ?? '') === 'accounts')<label>النوع<select name="account_type"><option value="">الكل</option>@foreach(['cash'=>'درج نقدي','bank'=>'بنك','wallet'=>'محفظة'] as $value=>$label)<option value="{{ $value }}" @selected(($searchFilters['account_type'] ?? '')===$value)>{{ $label }}</option>@endforeach</select></label>@endif
+<button type="submit" class="btn btn-outline">بحث</button><button type="button" class="btn btn-outline" data-search-clear>مسح البحث</button></form>

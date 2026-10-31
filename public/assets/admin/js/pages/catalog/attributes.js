@@ -134,6 +134,32 @@
         bindEditor(form.querySelector('[data-color-editor]')).reset();
         el('attribute-color-dialog').showModal();
     });
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-edit-attribute], [data-delete-attribute]');
+        if (!button || saving || button.disabled) return;
+        const deleting = button.hasAttribute('data-delete-attribute');
+        const item = JSON.parse(deleting ? button.dataset.deleteAttribute : button.dataset.editAttribute);
+        const title = item.type === 'size' ? 'المقاس' : 'التصنيف';
+        const form = el(deleting ? 'attribute-delete-form' : 'attribute-edit-form');
+        form.action = item.url;
+        form.querySelector('[data-form-errors]').hidden = true;
+        form.querySelectorAll('[aria-invalid]').forEach(input => input.removeAttribute('aria-invalid'));
+        if (deleting) {
+            el('attribute-delete-title').textContent = 'حذف '+title;
+            form.querySelector('[data-delete-attribute-name]').textContent = item.name;
+            el('attribute-delete-dialog').showModal();
+            return;
+        }
+        el('attribute-edit-title').textContent = 'تعديل '+title;
+        form.elements.name.value = item.name;
+        form.querySelector('[data-size-edit-field]').hidden = item.type !== 'size';
+        form.querySelector('[data-category-edit-field]').hidden = item.type !== 'category';
+        form.elements.sort_order.disabled = item.type !== 'size';
+        form.elements.description.disabled = item.type !== 'category';
+        form.elements.sort_order.value = item.sort_order ?? 0;
+        form.elements.description.value = item.description || '';
+        el('attribute-edit-dialog').showModal();
+    });
     function searchUrl(form) {
         const url = new URL(settings.indexUrl); url.search = new URLSearchParams(new FormData(form)).toString(); return url;
     }
@@ -150,7 +176,7 @@
             navigate(searchUrl(form), { searchFocus: true }).catch(error => { if (error.name !== 'AbortError') notify(error.message, true); });
             return;
         }
-        if (!form.matches('[data-attribute-form], #attribute-color-form, #attribute-delete-color-form')) return;
+        if (!form.matches('[data-attribute-form], #attribute-color-form, #attribute-delete-color-form, [data-attribute-update-form], [data-attribute-delete-form]')) return;
         event.preventDefault(); if (saving) return;
         clearTimeout(searchTimer); navigation?.abort();
         const payload = new FormData(form);
@@ -165,8 +191,8 @@
                 Object.keys(result.errors || {}).forEach(name => form.elements.namedItem(name)?.setAttribute('aria-invalid', 'true'));
                 throw new Error(response.status === 419 ? 'انتهت صلاحية الصفحة. حدّث الصفحة ثم أعد المحاولة.' : Object.values(result.errors || {}).flat().join('\n') || result.message || 'تعذر حفظ البيانات.');
             }
-            const deleting = form.id === 'attribute-delete-color-form';
-            const updating = form.id === 'attribute-color-form' || deleting;
+            const deleting = form.id === 'attribute-delete-color-form' || form.hasAttribute('data-attribute-delete-form');
+            const updating = form.id === 'attribute-color-form' || form.hasAttribute('data-attribute-update-form') || deleting;
             if (updating) form.closest('dialog').close();
             captureDrafts(); if (!updating) drafts.delete(result.tab);
             const url = updating ? new URL(location.href) : new URL(settings.indexUrl);
@@ -185,7 +211,7 @@
             document.querySelectorAll('.attribute-form button[type=submit], .attribute-dialog button').forEach(button => { button.disabled = false; });
         }
     });
-    for (const [id, selector] of [['attribute-color-dialog', '[data-close-color]'], ['attribute-delete-color-dialog', '[data-close-delete-color]']]) {
+    for (const [id, selector] of [['attribute-color-dialog', '[data-close-color]'], ['attribute-delete-color-dialog', '[data-close-delete-color]'], ['attribute-edit-dialog', '[data-close-attribute-edit]'], ['attribute-delete-dialog', '[data-close-attribute-delete]']]) {
         const dialog = el(id);
         dialog.querySelectorAll(selector).forEach(button => button.addEventListener('click', () => { if (!saving) dialog.close(); }));
         dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Purchases;
 
+use App\Actions\Finance\FinanceContext;
 use App\Models\Branch;
 use App\Models\PurchaseInvoice;
 use App\Models\Supplier;
@@ -13,6 +14,8 @@ class SavePurchaseInvoiceAction
 
     public function execute(array $data, int $actorId, ?PurchaseInvoice $invoice = null): PurchaseInvoice
     {
+        FinanceContext::ready();
+
         return DB::transaction(function () use ($data, $actorId, $invoice): PurchaseInvoice {
             DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
             Branch::whereKey($data['branch_id'])->lockForUpdate()->first();

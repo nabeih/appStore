@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="can-manage-catalog" content="{{ auth()->user()?->can('inventory.manage_catalog') ? '1' : '0' }}">
     <title>@yield('title', 'نظام إدارة المتجر')</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
@@ -19,6 +20,9 @@
     <link rel="stylesheet" href="{{ asset('assets/admin/css/catalog/color-dot.css') }}">
 
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/session.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/search.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/catalog/fabric-swatches.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/search/products.css') }}">
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/css/mobile-documents.css') }}">
 </head>
@@ -41,10 +45,17 @@
         </main>
     </div>
 
+    @include('search.partials.scanner')
+    @include('search.partials.visual-scanner')
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="{{ asset('assets/admin/js/pages/auth/session.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/layout.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/search.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/pages/catalog/fabric-swatches.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/pages/search/recognition.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/pages/search/products.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/pages/search/visual.js') }}" defer></script>
     @stack('scripts')
 </body>
 

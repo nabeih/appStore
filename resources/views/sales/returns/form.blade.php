@@ -1,0 +1,11 @@
+@extends('layouts.app')
+@section('title','مرتجع '.$invoice->number)
+@include('sales.partials.assets')
+@section('content')
+<div class="sale-page"><header class="sale-header"><h1>مرتجع بيع — {{ $invoice->number }}</h1><a class="btn btn-outline" href="{{ route('sales.invoices.show',$invoice) }}">الفاتورة الأصلية</a></header>
+<form id="adjustment-form">@include('sales.partials.feedback')<fieldset id="adjustment-fields"><section class="sale-panel"><h2>1. القطع المستلمة وحالتها</h2>@include('sales.returns.rows')<p class="sale-muted">القيمة تُحسب من صافي البيع الأصلي بعد الخصومات. القطعة التي تحتاج فحصًا والتالفة لا تعودان إلى الرصيد المتاح للبيع.</p><label>سبب المرتجع<textarea id="adjustment-reason" required minlength="3" maxlength="1000" rows="2"></textarea></label></section>
+<section class="sale-panel"><h2>2. تسوية المستحق</h2><p class="sale-muted">يُخفض مستحق الفاتورة الأصلية أولًا، وما يزيد يصبح مبلغًا لصالح العميل.</p>@include('sales.returns.customer')
+<label>تسوية المبلغ الزائد<select id="adjustment-refund-mode"><option value="credit" @selected($invoice->customer_id)>الاحتفاظ برصيد موثّق للعميل</option><option value="refund" @selected(!$invoice->customer_id)>رد أموال كلي أو جزئي</option></select></label><div id="adjustment-refunds"></div><button type="button" class="btn btn-outline btn-sm" id="adjustment-add-refund">+ حساب رد أموال</button><p class="sale-muted">يمكن رد جزء والاحتفاظ بالباقي لعميل معرف. المبلغ الفارغ لوسيلة واحدة يعني كامل الزائد المستحق للعميل.</p>
+<div class="sale-summary" id="adjustment-summary" aria-live="polite"></div><p id="adjustment-preview-status" class="sale-muted">حدد الكميات ثم راجع التسوية.</p><button class="btn btn-success" id="adjustment-submit" type="submit" disabled>تأكيد استلام القطع واعتماد المرتجع</button></section></fieldset></form></div>
+@endsection
+@push('scripts')<script type="application/json" id="adjustment-config">{!! json_encode(['mode'=>'return','branchId'=>$invoice->branch_id,'customerId'=>$invoice->customer_id,'accounts'=>$accounts,'previewUrl'=>route('sales.returns.preview',$invoice),'storeUrl'=>route('sales.returns.store',$invoice),'customersUrl'=>route('customers.index')],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!}</script><script src="{{ asset('assets/admin/js/pages/sales/adjustment.js') }}" defer></script>@endpush

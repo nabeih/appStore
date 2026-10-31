@@ -5,6 +5,7 @@
             <span class="topbar-date">{{ now()->format('Y/m/d') }}</span>
         </div>
     </div>
+    <div id="global-search-desktop">@include('search.partials.header')</div>
     <div class="topbar-left">
         <div class="topbar-user-pill" title="الحساب الحالي">
             <div class="user-avatar-sm">{{ mb_substr(auth()->user()->name, 0, 1) }}</div>
@@ -24,3 +25,4 @@
         <button type="submit" class="auth-logout-button">خروج</button>
     </form>
 </header>
+<div id="global-search-mobile" class="global-search-mobile-slot"></div>

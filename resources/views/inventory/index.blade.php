@@ -1,12 +1,15 @@
 @extends('layouts.app')
 @section('title', 'إدارة المخزون')
+@include('sales.partials.assets')
+@push('styles')<link rel="stylesheet" href="{{ asset('assets/admin/css/pages/inventory/product-show.css') }}">@endpush
 @section('content')
     <div id="screen-inventory" class="screen active">
         <header style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;">
-            <div><h1 class="section-title"><i class="fas fa-boxes text-primary"></i> إدارة المخزون</h1><p class="section-subtitle">الكميات الحالية وتكلفة الأصناف حسب الفرع.</p></div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;"><a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة شراء جديدة</a><a class="btn btn-outline" href="{{ route('purchases.invoices.index') }}">سجل فواتير الشراء</a></div>
+            <div><h1 class="section-title"><i class="fas fa-boxes text-primary"></i> إدارة المخزون</h1><p class="section-subtitle">الكميات الحالية للأصناف حسب الفرع.</p></div>
+            @can('purchases.view')<div style="display:flex;gap:10px;flex-wrap:wrap;">@can('purchases.manage')<a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة شراء جديدة</a>@endcan<a class="btn btn-outline" href="{{ route('purchases.invoices.index') }}">سجل فواتير الشراء</a></div>@endcan
         </header>
-        <div id="purchSubtab-stock" style="display:block;">
+        @include('search.partials.product-search', ['inputId' => 'inventory-product-query'])
+        <div id="purchSubtab-stock" data-search-region="inventory" style="display:block;">
 
             <div class="card">
 
@@ -17,32 +20,13 @@
                         قائمة المنتجات والكميات الحالية
                     </h3>
 
-                    {{-- البحث الأصلي: حقل واحد فقط --}}
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-
-                        <input type="search" id="inventorySearch" placeholder="بحث بالاسم أو الكود..." autocomplete="off">
-                    </div>
-                    <button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
+                    @can('inventory.correct_setup')<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
                         style="background:linear-gradient(135deg,#4f46e5,#4338ca);font-weight:700;">
                         <i class="fas fa-boxes"></i> إدخال بضاعة أول المدة
-                    </button>
+                    </button>@endcan
                 </div>
 
-                {{-- فلترة الكميات --}}
-                <div class="d-flex flex-wrap gap-2 mb-3" style="padding:0 16px;align-items:center;">
-
-                    <select id="inventoryQuantityFilter" class="form-select" style="max-width:200px;">
-                        <option value="all">كل المنتجات</option>
-                        <option value="available">متوفر بالمخزون</option>
-                        <option value="empty">الكمية صفر</option>
-                    </select>
-
-                    <span id="inventoryVisibleCount" style="font-size:0.85rem;color:var(--gray);">
-                    </span>
-
-                </div>
-
+                <div style="padding:0 16px">@include('search.partials.filters',['searchKind'=>'inventory','placeholder'=>'اسم المنتج أو كوده أو SKU'])<p class="module-search-help">نتائج البحث في جميع السجلات: {{ $inventories->total() }}</p></div>
                 {{-- جدول المخزون الحقيقي --}}
                 <div class="table-responsive">
 
@@ -56,9 +40,9 @@
                                 <th>التصنيف</th>
                                 <th>المقاس</th>
                                 <th>اللون</th>
-                                <th>متوسط التكلفة</th>
+                                @can('sales.view_cost')<th>متوسط التكلفة</th>@endcan
                                 <th>سعر البيع</th>
-                                <th>الكمية المتاحة</th>@if($setupChangesEnabled)<th>إجراءات</th>@endif
+                                <th>الكمية المتاحة</th><th>إجراءات</th>
                             </tr>
                         </thead>
 
@@ -76,10 +60,12 @@
 
                                     <td>
                                         @php($colorImage = $inventory->productVariant?->product?->images->firstWhere('color_id', $inventory->productVariant?->color_id))
+                                        <a class="inventory-product-link" href="{{ route('inventory.products.show', ['product' => $inventory->productVariant->product_id, 'list' => array_intersect_key($filters, array_flip(['q','page','branch_id','category_id','color_id','size_id','active','quantity','match','sort']))]) }}">
                                         @if($colorImage)
-                                            <img src="{{ asset('storage/'.$colorImage->image_path) }}" alt="{{ $inventory->productVariant?->product?->name }}" width="40" height="40" loading="lazy" style="object-fit:cover;border-radius:6px;margin-inline-end:6px;">
+                                            <img src="{{ $colorImage->thumbnail_url }}" alt="{{ $inventory->productVariant?->product?->name }}" width="40" height="40" loading="lazy" style="object-fit:cover;border-radius:6px;margin-inline-end:6px;">
                                         @endif
                                         {{ $inventory->productVariant?->product?->name ?? '—' }}
+                                        </a>
                                     </td>
 
                                     <td>
@@ -91,13 +77,13 @@
                                     </td>
 
                                     <td>
-                                        <x-catalog.color-dot :hex="$inventory->productVariant?->color?->display_hex" :label="$inventory->productVariant?->color?->name ?? ''" />
+                                        <span data-fabric-product="{{ $inventory->productVariant->product_id }}" data-fabric-color="{{ $inventory->productVariant->color_id }}"><x-catalog.color-dot :swatch-url="$inventory->productVariant?->product?->swatches->firstWhere('color_id', $inventory->productVariant?->color_id)?->url" :hex="$inventory->productVariant?->color?->display_hex" :label="$inventory->productVariant?->color?->name ?? ''" /></span>
                                         {{ $inventory->productVariant?->color?->name ?? '—' }}
                                     </td>
 
-                                    <td>
+                                    @can('sales.view_cost')<td>
                                         {{ number_format($inventory->average_cost, 2) }}
-                                    </td>
+                                    </td>@endcan
 
                                     <td>
                                         {{ number_format($inventory->productVariant?->selling_price ?? 0, 2) }}
@@ -107,15 +93,13 @@
                                         {{ $inventory->quantity }}
                                     </td>
 
-                                    @if($setupChangesEnabled)
-                                        @include('inventory.setup.partials.actions')
-                                    @endif
+                                    @include('inventory.setup.partials.actions')
                                 </tr>
 
                             @empty
 
                                 <tr>
-                                    <td colspan="{{ $setupChangesEnabled ? 10 : 9 }}" class="text-center" style="padding:24px;">
+                                    <td colspan="10" class="text-center" style="padding:24px;">
                                         لا توجد بيانات مخزون حاليًا
                                     </td>
                                 </tr>
@@ -139,8 +123,9 @@
 
 
     </div>
-    @include('inventory.opening-stock.partials.form')
-    @if($setupChangesEnabled)
+    @can('inventory.correct_setup')@include('inventory.opening-stock.partials.form')@endcan
+    @can('inventory.manage_catalog')@include('inventory.setup.partials.product-details')@endcan
+    @if($setupChangesEnabled && auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))
         @include('inventory.setup.partials.dialog')
     @endif
 @endsection

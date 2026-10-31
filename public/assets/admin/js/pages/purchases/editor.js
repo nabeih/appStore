@@ -2,6 +2,17 @@
     'use strict';
     const config = JSON.parse(document.getElementById('purchase-config').textContent);
     const state = config.state;
+    function filterPaymentAccounts() {
+        const branch = document.getElementById('purchase-branch').value;
+        const select = document.getElementById('payment-account');
+        [...select.options].forEach(option => {
+            const permitted = !option.value || option.dataset.branch === branch;
+            option.hidden = !permitted; option.disabled = !permitted;
+        });
+        if (select.selectedOptions[0]?.disabled) select.value = '';
+    }
+    document.getElementById('purchase-branch').addEventListener('change', filterPaymentAccounts);
+    filterPaymentAccounts();
     const form = document.getElementById('purchase-form');
     const rowsElement = document.getElementById('purchase-rows');
     const errors = document.getElementById('purchase-errors');
@@ -58,7 +69,7 @@
         state.rows.forEach(row => {
             if (!row.product_id || !row.color_id) return;
             const key = `${row.product_id}:${row.color_id}`;
-            if (!groups.has(key)) groups.set(key, { key, name: row.name, color: row.color, url: row.image_url, uploadUrl: row.image_upload_url, colorId: row.color_id, productId: row.product_id });
+            if (!groups.has(key)) groups.set(key, { key, name: row.name, color: row.color, url: row.image_url, swatchManageUrl: row.swatch_manage_url, swatchUrl: row.swatch_url, hex: row.hex, uploadUrl: row.image_upload_url, colorId: row.color_id, productId: row.product_id });
             if (row.image_url) groups.get(key).url = row.image_url;
         });
         rowUploads.forEach((upload, key) => {
@@ -113,6 +124,7 @@
     const payload = () => ({ client_uuid: state.client_uuid, version: state.version, supplier_id: state.supplier_id,
         branch_id: document.getElementById('purchase-branch').value, invoice_date: document.getElementById('purchase-date').value,
         supplier_invoice_number: document.getElementById('supplier-invoice-number').value, notes: document.getElementById('purchase-notes').value,
+        payment_details: document.getElementById('payment-account').value ? {account_id:Number(document.getElementById('payment-account').value),confirmed:document.getElementById('payment-confirmed').checked} : null,
         initial_payment: document.getElementById('initial-payment').value, payment_method: document.getElementById('payment-method').value,
         rows: state.rows.map(row => ({ product_variant_id: row.product_variant_id, quantity: row.quantity, unit_cost: row.unit_cost })) });
     const jsonOptions = (body, method = 'POST') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -17,7 +17,7 @@ class SupplierTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
     }
 
     public function test_suppliers_can_be_created_edited_and_searched_with_escaped_output(): void

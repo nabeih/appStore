@@ -1,18 +1,36 @@
 <?php
 
+use App\Http\Controllers\Web\Access\AccessController;
 use App\Http\Controllers\Web\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Web\Catalog\Attributes\AttributeController;
 use App\Http\Controllers\Web\Catalog\Attributes\CategoryController;
 use App\Http\Controllers\Web\Catalog\Attributes\ColorController;
 use App\Http\Controllers\Web\Catalog\Attributes\SizeController;
+use App\Http\Controllers\Web\Catalog\FabricSwatchController;
 use App\Http\Controllers\Web\Catalog\ProductColorImageController;
+use App\Http\Controllers\Web\Customers\CustomerController;
+use App\Http\Controllers\Web\Customers\CustomerReceiptController;
+use App\Http\Controllers\Web\Finance\ExpenseController;
+use App\Http\Controllers\Web\Finance\FinanceReviewController;
+use App\Http\Controllers\Web\Finance\FinancialAccountController;
+use App\Http\Controllers\Web\Finance\TreasuryController;
 use App\Http\Controllers\Web\Inventory\InventoryController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockCatalogController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockController;
+use App\Http\Controllers\Web\Inventory\ProductDetailsController;
+use App\Http\Controllers\Web\Inventory\Setup\InventoryReviewController;
 use App\Http\Controllers\Web\Inventory\Setup\InventorySetupController;
 use App\Http\Controllers\Web\Purchases\PurchaseCatalogController;
 use App\Http\Controllers\Web\Purchases\PurchaseInvoiceController;
 use App\Http\Controllers\Web\Purchases\SupplierPaymentController;
+use App\Http\Controllers\Web\Sales\CashierController;
+use App\Http\Controllers\Web\Sales\SaleExchangeController;
+use App\Http\Controllers\Web\Sales\SaleInvoiceController;
+use App\Http\Controllers\Web\Sales\SaleReturnController;
+use App\Http\Controllers\Web\Sales\SalesReportController;
+use App\Http\Controllers\Web\Search\ProductSearchController;
+use App\Http\Controllers\Web\Search\SearchController;
+use App\Http\Controllers\Web\Search\VisualIndexController;
 use App\Http\Controllers\Web\Suppliers\SupplierController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,46 +40,140 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
-    Route::get('catalog/products/{product}/color-images', [ProductColorImageController::class, 'index'])->whereNumber('product')->name('catalog.product-images.index');
-    Route::post('catalog/products/{product}/color-images', [ProductColorImageController::class, 'store'])->whereNumber('product')->name('catalog.product-images.store');
-    Route::prefix('suppliers')->name('suppliers.')->group(function () {
-        Route::get('/', [SupplierController::class, 'index'])->name('index');
-        Route::post('/', [SupplierController::class, 'store'])->name('store');
-        Route::get('/{supplier}', [SupplierController::class, 'show'])->whereNumber('supplier')->withTrashed()->name('show');
-        Route::put('/{supplier}', [SupplierController::class, 'update'])->whereNumber('supplier')->name('update');
-        Route::delete('/{supplier}', [SupplierController::class, 'archive'])->whereNumber('supplier')->name('archive');
-        Route::post('/{supplier}/restore', [SupplierController::class, 'restore'])->whereNumber('supplier')->name('restore');
+    Route::prefix('access')->name('access.')->group(function (): void {
+        Route::get('/roles', [AccessController::class, 'roles'])->middleware('can:access.roles.manage')->name('roles.index');
+        Route::get('/roles/{role}/edit', [AccessController::class, 'roles'])->whereNumber('role')->middleware('can:access.roles.manage')->name('roles.edit');
+        Route::post('/roles', [AccessController::class, 'store'])->middleware(['can:access.roles.manage', 'throttle:30,1'])->name('roles.store');
+        Route::put('/roles/{role}', [AccessController::class, 'update'])->whereNumber('role')->middleware(['can:access.roles.manage', 'throttle:30,1'])->name('roles.update');
+        Route::get('/users/create', [AccessController::class, 'createEmployee'])->middleware('can:access.users.manage')->name('users.create');
+        Route::post('/users', [AccessController::class, 'storeEmployee'])->middleware(['can:access.users.manage', 'throttle:20,1'])->name('users.store');
+        Route::get('/users/{user}/edit', [AccessController::class, 'editEmployee'])->whereNumber('user')->middleware('can:access.users.manage')->name('users.edit');
+        Route::put('/users/{user}', [AccessController::class, 'updateEmployee'])->whereNumber('user')->middleware(['can:access.users.manage', 'throttle:30,1'])->name('users.update');
+        Route::put('/users/{user}/password', [AccessController::class, 'resetEmployeePassword'])->whereNumber('user')->middleware(['can:access.users.manage', 'throttle:10,1'])->name('users.password');
+        Route::get('/users', [AccessController::class, 'users'])->middleware('can:access.users.manage')->name('users.index');
+        Route::put('/users/{user}/role', [AccessController::class, 'assign'])->whereNumber('user')->middleware(['can:access.users.manage', 'throttle:30,1'])->name('users.assign');
     });
-    Route::prefix('purchases')->name('purchases.')->group(function () {
+    Route::post('/search/products/codes', [ProductSearchController::class, 'codes'])->middleware(['can:catalog.search', 'can:inventory.view', 'throttle:60,1'])->name('search.products.codes');
+    Route::post('/search/products/visual', [ProductSearchController::class, 'visual'])->middleware(['can:catalog.search', 'can:inventory.view', 'throttle:5,1'])->name('search.products.visual');
+    Route::get('/search/visual-index', [VisualIndexController::class, 'index'])->middleware(['can:catalog.search', 'can:inventory.view', 'can:inventory.manage_catalog'])->name('search.visual-index');
+    Route::post('/search/visual-index/{embedding}/retry', [VisualIndexController::class, 'retry'])->whereNumber('embedding')->middleware(['can:catalog.search', 'can:inventory.view', 'can:inventory.manage_catalog', 'throttle:10,1'])->name('search.visual-index.retry');
+    Route::get('/search/products', [ProductSearchController::class, 'index'])->middleware(['can:catalog.search', 'can:inventory.view', 'throttle:120,1'])->name('search.products');
+    Route::get('/search/products/labels', [ProductSearchController::class, 'labels'])->middleware(['can:catalog.search', 'can:inventory.view', 'throttle:30,1'])->name('search.products.labels');
+    Route::get('/search', [SearchController::class, 'index'])->name('search.index');
+    Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->middleware('throttle:120,1')->name('search.suggestions');
+    Route::prefix('sales')->name('sales.')->middleware('can:sales.view')->group(function (): void {
+        Route::get('/cashier', [CashierController::class, 'index'])->middleware('can:sales.sell')->name('cashier');
+        Route::get('/catalog', [CashierController::class, 'catalog'])->middleware(['can:sales.sell', 'can:catalog.search', 'can:inventory.view'])->name('catalog');
+        Route::post('/preview', [CashierController::class, 'preview'])->name('preview');
+        Route::get('/reports', [SalesReportController::class, 'index'])->middleware(['can:sales.reports', 'can:sales.view_cost'])->name('reports');
+        Route::get('/', [SaleInvoiceController::class, 'index'])->name('invoices.index');
+        Route::post('/', [SaleInvoiceController::class, 'store'])->name('invoices.store');
+        Route::post('/complete', [SaleInvoiceController::class, 'complete'])->name('invoices.complete');
+        Route::get('/returns/{saleReturn}', [SaleReturnController::class, 'show'])->whereNumber('saleReturn')->name('returns.show');
+        Route::post('/returns/{saleReturn}/reverse', [SaleReturnController::class, 'reverse'])->whereNumber('saleReturn')->name('returns.reverse');
+        Route::get('/exchanges/{exchange}', [SaleExchangeController::class, 'show'])->whereNumber('exchange')->name('exchanges.show');
+        Route::post('/exchanges/{exchange}/reverse', [SaleExchangeController::class, 'reverse'])->whereNumber('exchange')->name('exchanges.reverse');
+        Route::get('/{invoice}/edit', [CashierController::class, 'index'])->whereNumber('invoice')->name('invoices.edit');
+        Route::get('/{invoice}/print', [SaleInvoiceController::class, 'print'])->whereNumber('invoice')->name('invoices.print');
+        Route::put('/{invoice}', [SaleInvoiceController::class, 'update'])->whereNumber('invoice')->name('invoices.update');
+        Route::post('/{invoice}/complete', [SaleInvoiceController::class, 'complete'])->whereNumber('invoice')->name('invoices.complete-existing');
+        Route::post('/{invoice}/approve', [SaleInvoiceController::class, 'approve'])->whereNumber('invoice')->middleware('can:sales.sell')->name('invoices.approve');
+        Route::post('/{invoice}/cancel', [SaleInvoiceController::class, 'cancel'])->whereNumber('invoice')->middleware('can:sales.sell')->name('invoices.cancel');
+        Route::post('/{invoice}/reverse', [SaleInvoiceController::class, 'reverse'])->whereNumber('invoice')->name('invoices.reverse');
+        Route::get('/{invoice}/returns/create', [SaleReturnController::class, 'create'])->whereNumber('invoice')->name('returns.create');
+        Route::post('/{invoice}/returns/preview', [SaleReturnController::class, 'preview'])->whereNumber('invoice')->name('returns.preview');
+        Route::post('/{invoice}/returns', [SaleReturnController::class, 'store'])->whereNumber('invoice')->name('returns.store');
+        Route::get('/{invoice}/exchanges/create', [SaleExchangeController::class, 'create'])->whereNumber('invoice')->name('exchanges.create');
+        Route::post('/{invoice}/exchanges/preview', [SaleExchangeController::class, 'preview'])->whereNumber('invoice')->name('exchanges.preview');
+        Route::post('/{invoice}/exchanges', [SaleExchangeController::class, 'store'])->whereNumber('invoice')->name('exchanges.store');
+        Route::get('/{invoice}', [SaleInvoiceController::class, 'show'])->whereNumber('invoice')->name('invoices.show');
+    });
+    Route::prefix('customers')->name('customers.')->middleware('can:sales.customers')->group(function (): void {
+        Route::get('/', [CustomerController::class, 'index'])->name('index');
+        Route::post('/', [CustomerController::class, 'store'])->name('store');
+        Route::post('/receipts', [CustomerReceiptController::class, 'store'])->name('receipts.store');
+        Route::post('/receipts/preview', [CustomerReceiptController::class, 'preview'])->middleware('can:sales.collect')->name('receipts.preview');
+        Route::get('/receipts/{receipt}', [CustomerReceiptController::class, 'show'])->whereNumber('receipt')->name('receipts.show');
+        Route::post('/receipts/{receipt}/reverse', [CustomerReceiptController::class, 'reverse'])->whereNumber('receipt')->name('receipts.reverse');
+        Route::get('/{customer}', [CustomerController::class, 'show'])->whereNumber('customer')->withTrashed()->name('show');
+        Route::put('/{customer}', [CustomerController::class, 'update'])->whereNumber('customer')->name('update');
+        Route::post('/{customer}/archive', [CustomerController::class, 'archive'])->whereNumber('customer')->name('archive');
+    });
+    Route::get('/finance/expenses', [ExpenseController::class, 'index'])->middleware('can:finance.view')->name('finance.expenses.index');
+    Route::post('/finance/expenses', [ExpenseController::class, 'store'])->middleware('can:finance.expenses.manage')->name('finance.expenses.store');
+    Route::get('/finance/expenses/{expense}', [ExpenseController::class, 'show'])->middleware('can:finance.view')->whereNumber('expense')->name('finance.expenses.show');
+    Route::post('/finance/expenses/{expense}/approve', [ExpenseController::class, 'approve'])->middleware('can:finance.expenses.approve')->whereNumber('expense')->name('finance.expenses.approve');
+    Route::post('/finance/expenses/{expense}/payments', [ExpenseController::class, 'pay'])->middleware('can:finance.expenses.pay')->whereNumber('expense')->name('finance.expenses.pay');
+    Route::post('/finance/expenses/{expense}/reverse', [ExpenseController::class, 'reverse'])->middleware('can:finance.reverse')->whereNumber('expense')->name('finance.expenses.reverse');
+    Route::post('/finance/expense-payments/{payment}/reverse', [ExpenseController::class, 'reversePayment'])->middleware('can:finance.reverse')->whereNumber('payment')->name('finance.expense-payments.reverse');
+    Route::get('/finance/treasury', [TreasuryController::class, 'index'])->middleware('can:finance.view')->name('finance.treasury.index');
+    Route::post('/finance/treasury', [TreasuryController::class, 'store'])->middleware('can:finance.treasury.manage')->name('finance.treasury.store');
+    Route::post('/finance/treasury/{document}/reverse', [TreasuryController::class, 'reverse'])->middleware('can:finance.reverse')->whereNumber('document')->name('finance.treasury.reverse');
+    Route::post('/finance/cash-counts', [TreasuryController::class, 'count'])->middleware('can:finance.reconcile')->name('finance.counts.store');
+    Route::post('/finance/cash-counts/{count}/settle', [TreasuryController::class, 'settle'])->middleware('can:finance.reconcile')->whereNumber('count')->name('finance.counts.settle');
+    Route::get('/finance/transition', [FinanceReviewController::class, 'index'])->middleware('can:finance.transition_review')->name('finance.transition.index');
+    Route::get('/finance/suppliers/{supplier}', [FinanceReviewController::class, 'supplier'])->middleware('can:finance.view')->whereNumber('supplier')->name('finance.suppliers.show');
+    Route::post('/finance/supplier-payments/{payment}/reverse', [FinanceReviewController::class, 'reversePayment'])->middleware('can:finance.reverse')->whereNumber('payment')->name('finance.supplier-payments.reverse');
+    Route::post('/finance/purchases/{invoice}/reverse', [FinanceReviewController::class, 'reversePurchase'])->middleware('can:finance.reverse')->whereNumber('invoice')->name('finance.purchases.reverse');
+    Route::get('/finance/accounts', [FinancialAccountController::class, 'index'])->middleware('can:sales.manage_accounts')->name('finance.accounts.index');
+    Route::post('/finance/accounts/{account}/opening', [FinancialAccountController::class, 'opening'])->whereNumber('account')->middleware('can:sales.manage_accounts')->name('finance.accounts.opening');
+    Route::post('/finance/accounts', [FinancialAccountController::class, 'store'])->name('finance.accounts.store');
+    Route::get('/inventory/readiness/export', [InventoryReviewController::class, 'export'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.export');
+    Route::get('/inventory/readiness', [InventoryReviewController::class, 'index'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.index');
+    Route::post('/inventory/{inventory}/baseline', [InventoryReviewController::class, 'baseline'])->whereNumber('inventory')->name('inventory.review.baseline');
+    Route::post('/inventory/branches/{branch}/close-setup', [InventoryReviewController::class, 'close'])->whereNumber('branch')->middleware('can:inventory.close_setup')->name('inventory.review.close');
+    Route::get('/catalog/products/{product}/swatches', [FabricSwatchController::class, 'index'])->whereNumber('product')->name('catalog.swatches.index');
+    Route::get('/catalog/products/{product}/appearance', [FabricSwatchController::class, 'edit'])->whereNumber('product')->middleware('can:inventory.manage_catalog')->name('catalog.swatches.edit');
+    Route::post('/catalog/products/{product}/swatches/{color}', [FabricSwatchController::class, 'store'])->whereNumber(['product', 'color'])->name('catalog.swatches.store');
+    Route::delete('/catalog/products/{product}/swatches/{color}', [FabricSwatchController::class, 'destroy'])->whereNumber(['product', 'color'])->name('catalog.swatches.destroy');
+    Route::get('catalog/products/{product}/color-images', [ProductColorImageController::class, 'index'])->whereNumber('product')->name('catalog.product-images.index');
+    Route::post('catalog/products/{product}/color-images', [ProductColorImageController::class, 'store'])->middleware('can:inventory.manage_catalog')->whereNumber('product')->name('catalog.product-images.store');
+    Route::prefix('suppliers')->name('suppliers.')->middleware(['can:sales.view_cost', 'can:purchases.view'])->group(function () {
+        Route::get('/', [SupplierController::class, 'index'])->name('index');
+        Route::post('/', [SupplierController::class, 'store'])->middleware('can:purchases.manage')->name('store');
+        Route::get('/{supplier}', [SupplierController::class, 'show'])->whereNumber('supplier')->withTrashed()->name('show');
+        Route::put('/{supplier}', [SupplierController::class, 'update'])->middleware('can:purchases.manage')->whereNumber('supplier')->name('update');
+        Route::delete('/{supplier}', [SupplierController::class, 'archive'])->middleware('can:purchases.manage')->whereNumber('supplier')->name('archive');
+        Route::post('/{supplier}/restore', [SupplierController::class, 'restore'])->middleware('can:purchases.manage')->whereNumber('supplier')->name('restore');
+    });
+    Route::prefix('purchases')->name('purchases.')->middleware(['can:sales.view_cost', 'can:purchases.view'])->group(function () {
         Route::get('/', [PurchaseInvoiceController::class, 'index'])->name('invoices.index');
-        Route::get('/create', [PurchaseInvoiceController::class, 'create'])->name('invoices.create');
+        Route::get('/create', [PurchaseInvoiceController::class, 'create'])->middleware('can:purchases.manage')->name('invoices.create');
         Route::get('/products', [PurchaseCatalogController::class, 'products'])->name('products.index');
-        Route::post('/products', [PurchaseCatalogController::class, 'storeProduct'])->name('products.store');
+        Route::post('/products', [PurchaseCatalogController::class, 'storeProduct'])->middleware('can:purchases.manage')->name('products.store');
         Route::get('/suppliers', [PurchaseCatalogController::class, 'suppliers'])->name('suppliers.search');
         Route::post('/preview', [PurchaseInvoiceController::class, 'preview'])->name('invoices.preview');
         Route::post('/', [PurchaseInvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/{invoice}', [PurchaseInvoiceController::class, 'show'])->whereNumber('invoice')->name('invoices.show');
-        Route::get('/{invoice}/edit', [PurchaseInvoiceController::class, 'edit'])->whereNumber('invoice')->name('invoices.edit');
+        Route::get('/{invoice}/edit', [PurchaseInvoiceController::class, 'edit'])->middleware('can:purchases.manage')->whereNumber('invoice')->name('invoices.edit');
         Route::put('/{invoice}', [PurchaseInvoiceController::class, 'update'])->whereNumber('invoice')->name('invoices.update');
         Route::post('/{invoice}/approve', [PurchaseInvoiceController::class, 'approve'])->whereNumber('invoice')->name('invoices.approve');
         Route::post('/{invoice}/discard', [PurchaseInvoiceController::class, 'discard'])->whereNumber('invoice')->name('invoices.discard');
         Route::post('/{invoice}/payments', [SupplierPaymentController::class, 'store'])->whereNumber('invoice')->name('payments.store');
     });
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::prefix('catalog/attributes')->name('catalog.attributes.')->group(function () {
+    Route::prefix('catalog/attributes')->name('catalog.attributes.')->middleware('can:inventory.manage_catalog')->group(function () {
         Route::get('/', [AttributeController::class, 'index'])->name('index');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::put('/categories/{category}', [CategoryController::class, 'update'])->whereNumber('category')->name('categories.update');
+        Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->whereNumber('category')->name('categories.destroy');
         Route::post('/colors', [ColorController::class, 'store'])->name('colors.store');
         Route::put('/colors/{color}', [ColorController::class, 'update'])->whereNumber('color')->name('colors.update');
         Route::delete('/colors/{color}', [ColorController::class, 'destroy'])->whereNumber('color')->name('colors.destroy');
         Route::put('/colors/{color}/appearance', [ColorController::class, 'updateAppearance'])->whereNumber('color')->name('colors.appearance');
         Route::post('/sizes', [SizeController::class, 'store'])->name('sizes.store');
+        Route::put('/sizes/{size}', [SizeController::class, 'update'])->whereNumber('size')->name('sizes.update');
+        Route::delete('/sizes/{size}', [SizeController::class, 'destroy'])->whereNumber('size')->name('sizes.destroy');
     });
 
-    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::prefix('inventory/opening-stock')->name('inventory.opening-stock.')->group(function () {
+    Route::get('/inventory', [InventoryController::class, 'index'])->middleware('can:inventory.view')->name('inventory.index');
+    Route::get('/inventory/products/{product}', [ProductDetailsController::class, 'show'])->whereNumber('product')->middleware('can:inventory.view')->name('inventory.products.show');
+    Route::prefix('inventory/opening-stock')->name('inventory.opening-stock.')->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->group(function () {
         Route::get('/', [OpeningStockController::class, 'index'])->name('index');
         Route::post('/images/resolve', [OpeningStockCatalogController::class, 'images'])->name('images.resolve');
+        Route::post('/drafts', [OpeningStockController::class, 'storeDraft'])->name('drafts.store');
+        Route::put('/{entry}/draft', [OpeningStockController::class, 'updateDraft'])->whereNumber('entry')->name('drafts.update');
+        Route::post('/{entry}/approve', [OpeningStockController::class, 'approveDraft'])->whereNumber('entry')->name('drafts.approve');
         Route::get('/options', [OpeningStockCatalogController::class, 'options'])->name('options');
         Route::post('/options', [OpeningStockCatalogController::class, 'store'])->name('options.store');
         Route::get('/products', [OpeningStockCatalogController::class, 'products'])->name('products');
@@ -69,8 +181,8 @@ Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
         Route::post('/', [OpeningStockController::class, 'store'])->name('store');
         Route::get('/{entry}', [OpeningStockController::class, 'show'])->whereNumber('entry')->name('show');
     });
-    Route::put('/inventory/{inventory}', [InventorySetupController::class, 'update'])->whereNumber('inventory')->name('inventory.update');
-    Route::delete('/inventory/{inventory}', [InventorySetupController::class, 'destroy'])->whereNumber('inventory')->name('inventory.destroy');
+    Route::put('/inventory/{inventory}', [InventorySetupController::class, 'update'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.update');
+    Route::delete('/inventory/{inventory}', [InventorySetupController::class, 'destroy'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.destroy');
     Route::redirect('/', '/dashboard')->name('home');
     Route::view('/design-preview', 'index')->name('design.preview');
     Route::view('dashboard', 'dashboard.index')->name('dashboard.index');

@@ -75,8 +75,6 @@
     window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
 
     async function refreshTable() {
-        const search = el('inventorySearch')?.value || '';
-        const quantity = el('inventoryQuantityFilter')?.value || 'all';
         const url = new URL(window.location.href);
         let panel;
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -89,8 +87,6 @@
             else break;
         }
         el('purchSubtab-stock').replaceWith(panel);
-        el('inventorySearch').value = search;
-        el('inventoryQuantityFilter').value = quantity;
         window.history.replaceState(null, '', url);
         document.dispatchEvent(new Event('inventory:refreshed'));
     }

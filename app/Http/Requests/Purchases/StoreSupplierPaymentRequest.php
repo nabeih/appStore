@@ -10,13 +10,13 @@ class StoreSupplierPaymentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->can('finance.supplier_pay') ?? false;
     }
 
     public function rules(): array
     {
-        return ['client_uuid' => ['required', 'uuid'], 'amount' => ['required', 'numeric', 'gt:0', 'regex:/\A\d{1,16}(\.\d{1,2})?\z/'],
-            'method' => ['required', Rule::in(array_keys(SupplierPayment::METHODS))],
+        return ['account_id' => ['required', 'integer', 'min:1'], 'confirmed' => ['sometimes', 'boolean'], 'client_uuid' => ['required', 'uuid'], 'amount' => ['required', 'numeric', 'gt:0', 'regex:/\A\d{1,16}(\.\d{1,2})?\z/'],
+            'method' => ['nullable', Rule::in(array_keys(SupplierPayment::METHODS))],
             'payment_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:100'], 'notes' => ['nullable', 'string', 'max:500']];
     }

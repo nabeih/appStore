@@ -42,6 +42,6 @@ class ProductColorImageController extends Controller
 
     private function images(Product $product): JsonResponse
     {
-        return response()->json(['data' => $product->images()->orderBy('color_id')->get()->map(fn ($image): array => ['color_id' => $image->color_id, 'url' => $image->url])]);
+        return response()->json(['data' => $product->images()->orderBy('color_id')->get()->map(fn ($image): array => ['color_id' => $image->color_id, 'url' => $image->thumbnail_url, 'thumbnail_url' => $image->thumbnail_url, 'optimized_url' => $image->optimized_url])]);
     }
 }

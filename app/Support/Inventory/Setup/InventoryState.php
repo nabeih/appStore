@@ -13,6 +13,7 @@ class InventoryState
     {
         return [
             'quantity' => (int) $inventory->quantity,
+            'value_minor' => $inventory->value_minor === null ? null : (int) $inventory->value_minor,
             'average_cost' => DecimalAmount::format(DecimalAmount::minorUnits((string) $inventory->average_cost)),
             'selling_price' => $variant->selling_price,
             'sku' => $variant->sku,

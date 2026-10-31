@@ -56,7 +56,7 @@ class AuthenticationTest extends TestCase
         $this->assertNotSame($previousId, session()->getId());
         $this->get(route('dashboard.index'))->assertOk()->assertSee($user->name)->assertSee($user->username);
         $this->getJson('/api/user')->assertOk()->assertJsonPath('id', $user->id)->assertJsonMissingPath('password')->assertJsonMissingPath('remember_token');
-        $this->getJson('/api/colors')->assertOk();
+        $this->getJson('/api/colors')->assertForbidden();
     }
 
     public function test_invalid_unknown_inactive_and_deleted_accounts_receive_the_same_message(): void
@@ -192,7 +192,7 @@ class AuthenticationTest extends TestCase
         $response = $this->get(route('login'))->assertHeader('X-Content-Type-Options', 'nosniff')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         $this->assertTrue($response->getCookie(config('session.cookie'), false)->isHttpOnly());
-        $response = $this->actingAs(User::factory()->create())->get(route('inventory.index'))->assertOk();
+        $response = $this->actingAs(User::factory()->salesOwner()->create())->get(route('inventory.index'))->assertOk();
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         $this->assertSame('json', config('session.serialization'));
         $this->assertSame('lax', config('session.same_site'));
@@ -214,7 +214,7 @@ class AuthenticationTest extends TestCase
 
     public function test_a_valid_csrf_token_allows_a_session_authenticated_api_mutation(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
         $this->get(route('dashboard.index'));
         $token = session()->token();
         $this->app['env'] = 'local';

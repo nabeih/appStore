@@ -6,7 +6,7 @@
             <p id="inventorySetupScope" class="inventory-setup-hint"></p>
             <div id="inventorySetupErrors" class="inventory-setup-errors" role="alert" tabindex="-1" hidden></div>
             <fieldset id="inventorySetupFields">
-                <div id="inventorySetupEditFields">
+                <div id="inventorySetupEditFields"><p class="inventory-setup-hint">تنبيه الملصقات: حفظ بيانات التركيبة قد يعيد حساب SKU وفق كود المنتج واللون والمقاس؛ ستحتاج الملصقات السابقة إلى إعادة طباعة إذا تغير. لا تُغيّر الأكواد لمجرد الطباعة.</p>
                     <div class="inventory-setup-product-fields">
                         <label>اسم المنتج <input id="inventorySetupName" maxlength="200" required></label>
                         <label>كود المنتج <input id="inventorySetupCode" maxlength="50" dir="ltr" required></label>

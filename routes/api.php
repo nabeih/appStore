@@ -13,22 +13,22 @@ Route::middleware(['web', 'auth:web', 'auth.session', 'active.user'])->group(fun
         return $request->user();
     });
 
-    Route::get('/products', [ProductController::class, 'index']);
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::get('/products/{id}', [ProductController::class, 'show']);
-    Route::put('/products/{id}', [ProductController::class, 'update'])->whereNumber('id');
-    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->whereNumber('id');
+    Route::get('/products', [ProductController::class, 'index'])->middleware('can:catalog.search');
+    Route::post('/products', [ProductController::class, 'store'])->middleware('can:inventory.manage_catalog');
+    Route::get('/products/{id}', [ProductController::class, 'show'])->middleware('can:catalog.search')->whereNumber('id');
+    Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('can:inventory.manage_catalog')->whereNumber('id');
+    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware('can:inventory.manage_catalog')->whereNumber('id');
 
-    Route::get('/categories', [CategoryController::class, 'index']);
-    Route::post('/categories', [CategoryController::class, 'store']);
+    Route::get('/categories', [CategoryController::class, 'index'])->middleware('can:catalog.search');
+    Route::post('/categories', [CategoryController::class, 'store'])->middleware('can:inventory.manage_catalog');
 
-    Route::get('/colors', [ColorController::class, 'index']);
-    Route::post('/colors', [ColorController::class, 'store']);
+    Route::get('/colors', [ColorController::class, 'index'])->middleware('can:catalog.search');
+    Route::post('/colors', [ColorController::class, 'store'])->middleware('can:inventory.manage_catalog');
 
-    Route::get('/sizes', [SizeController::class, 'index']);
-    Route::post('/sizes', [SizeController::class, 'store']);
+    Route::get('/sizes', [SizeController::class, 'index'])->middleware('can:catalog.search');
+    Route::post('/sizes', [SizeController::class, 'store'])->middleware('can:inventory.manage_catalog');
 
-    Route::get('/inventories', [InventoryController::class, 'index']);
-    Route::put('/inventories/{branchId}/{variantId}', [InventoryController::class, 'upsert'])->whereNumber(['branchId', 'variantId']);
+    Route::get('/inventories', [InventoryController::class, 'index'])->middleware('can:inventory.view');
+    Route::put('/inventories/{branchId}/{variantId}', [InventoryController::class, 'upsert'])->whereNumber(['branchId', 'variantId'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost']);
 
 });

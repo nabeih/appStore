@@ -22,7 +22,7 @@ class ManageColorsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
     }
 
     private function product(): Product

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory\OpeningStock;
 
+use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Inventory;
@@ -9,6 +10,7 @@ use App\Models\Product;
 use App\Models\Size;
 use App\Models\StockMovement;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
+use App\Support\Sales\OperationContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +19,11 @@ class PrepareOpeningStockAction
     /** @return array{groups: array, rows: array, total_quantity: int, total_cost: string, line_count: int} */
     public function execute(array $data, bool $lock = false): array
     {
+        $branch = Branch::findOrFail($data['branch_id']);
+        if ($branch->opening_stock_closed_at) {
+            throw ValidationException::withMessages(['branch_id' => 'أُغلق إعداد أول المدة لهذا الفرع. استخدم مستند الشراء أو مستند التسوية المناسب.']);
+        }
+        OperationContext::date($branch, $data['opening_date'], false);
         $input = collect($data['rows']);
         $categories = Category::whereIn('id', $input->pluck('category_id')->unique())->where('is_active', true)->get()->keyBy('id');
         $colors = Color::whereIn('id', $input->pluck('color_id')->unique())->where('is_active', true)->get()->keyBy('id');

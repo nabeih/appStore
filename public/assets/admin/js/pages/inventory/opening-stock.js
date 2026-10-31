@@ -50,7 +50,7 @@
             const key = `${identity}:color:${row.color_id}`;
             const url = current?.image_url || known?.images?.find(image => String(image.color_id) === String(row.color_id))?.url || null;
             nextKeys.set(row.id, key);
-            if (!groups.has(key)) groups.set(key, { key, name: row.name, color: catalog.colors.find(color => String(color.id) === String(row.color_id))?.name || '', url, sizes: new Set(), sources: new Set() });
+            if (!groups.has(key)) groups.set(key, { key, productId, colorId: row.color_id, swatchManageUrl: current?.swatch_manage_url || known?.swatch_manage_url, swatchUrl: current?.swatch_url || known?.swatches?.find(sample => String(sample.color_id) === String(row.color_id))?.url, hex: catalog.colors.find(color => String(color.id) === String(row.color_id))?.hex, name: row.name, color: catalog.colors.find(color => String(color.id) === String(row.color_id))?.name || '', url, sizes: new Set(), sources: new Set() });
             const group = groups.get(key);
             group.url ||= url;
             group.sizes.add(String(row.size_id));
@@ -127,6 +127,7 @@
         el('osReview').disabled = value;
         el('osSave').disabled = value || !preview;
         el('osClose').disabled = value;
+        el('osSaveDraft').disabled = value;
         el('osCancel').disabled = value;
         el('osStatus').textContent = message;
     }
@@ -366,5 +367,13 @@
             const result = await json(config.saveUrl, { method: 'POST', body: payload() });
             dirty = false; window.location.assign(result.url);
         } catch (error) { report(error); setBusy(false, 'يمكن إعادة المحاولة بنفس المستند دون تكرار الرصيد.'); }
+    });
+    el('osSaveDraft').addEventListener('click', async () => {
+        if (busy) return;
+        setBusy(true, 'جاري حفظ المسودة دون ترحيل المخزون...'); errors([]);
+        try {
+            const result = await json(config.draftUrl, { method: 'POST', body: payload() });
+            dirty = false; window.location.assign(result.url);
+        } catch (error) { report(error); setBusy(false, 'لم تحفظ المسودة؛ صحح البيانات ثم أعد المحاولة.'); }
     });
 })();

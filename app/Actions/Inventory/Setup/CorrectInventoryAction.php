@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory\Setup;
 
+use App\Actions\Finance\PostJournalAction;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Color;
@@ -13,10 +14,13 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Size;
 use App\Models\StockMovement;
+use App\Models\User;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
 use App\Support\Inventory\Setup\InventoryState;
+use App\Support\Sales\OperationContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -34,13 +38,23 @@ class CorrectInventoryAction
 
     private function mutate(Inventory $inventory, array $data, bool $delete, ?int $actorId): ?Inventory
     {
+        if ($actorId) {
+            Gate::forUser(User::findOrFail($actorId))->authorize('inventory.correct_setup');
+        }
         abort_unless(config('inventory.allow_setup_changes'), 403, 'انتهت مرحلة تصحيح إدخال البضاعة.');
 
         try {
             return DB::transaction(function () use ($inventory, $data, $delete, $actorId): ?Inventory {
                 // Use the same lock order as opening-stock posting.
-                DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
-                Branch::whereKey($inventory->branch_id)->lockForUpdate()->firstOrFail();
+                DB::table('product_code_counters')->where('id', 1)->increment('lock_version');
+                if ($actorId) {
+                    OperationContext::branch(User::findOrFail($actorId), (int) $inventory->branch_id, 'inventory.correct_setup');
+                }
+                $branch = Branch::whereKey($inventory->branch_id)->lockForUpdate()->firstOrFail();
+                if ($branch->opening_stock_closed_at) {
+                    $this->fail('أُغلق إعداد أول المدة لهذا الفرع.');
+                }
+                OperationContext::date($branch);
                 $variant = ProductVariant::findOrFail($inventory->product_variant_id);
                 $product = Product::withTrashed()->whereKey($variant->product_id)->lockForUpdate()->firstOrFail();
                 $variants = ProductVariant::where('product_id', $product->id)->with(['color', 'size'])->lockForUpdate()->get();
@@ -58,6 +72,13 @@ class CorrectInventoryAction
                     ->whereHas('entry', fn ($query) => $query->where('branch_id', $current->branch_id))
                     ->lockForUpdate()->get();
                 $item = $items->first();
+                if (! $item) {
+                    $this->fail('هذا رصيد قديم بلا مستند افتتاحي موثّق. راجع جاهزية المخزون؛ لا تُعدّل الكمية والتكلفة كأرقام مستقلة.');
+                }
+                if ($current->value_minor === null && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
+                    $this->fail('اعتمد مراجعة قيمة الرصيد القديم قبل تصحيح مستنده.');
+                }
+                $oldValue = $current->value_minor === null ? (int) $current->quantity * DecimalAmount::minorUnits((string) $current->average_cost) : (int) $current->value_minor;
                 $entry = null;
                 if ($movements->isNotEmpty() || $items->isNotEmpty()) {
                     if ($items->count() !== 1 || $movements->count() !== 1 || ! $item) {
@@ -68,6 +89,11 @@ class CorrectInventoryAction
                         $this->fail('لا يمكن تعديل أو حذف صنف عليه حركة بيع أو شراء أو حركة مخزون لاحقة.');
                     }
                     $entry = OpeningStockEntry::whereKey($item->opening_stock_entry_id)->lockForUpdate()->firstOrFail();
+                    if (DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()
+                        && ! DB::table('journal_entries')->where('source_type', $entry->getMorphClass())->where('source_id', $entry->id)->where('event', 'opening')->exists()) {
+                        $this->fail('المستند الافتتاحي لم يُرحّل ماليًا. أكمل مراجعة انتقاله أولًا؛ لا يُثبت فرق تصحيح قبل إثبات أصل الرصيد.');
+                    }
+                    OperationContext::date($branch, $entry->opening_date?->toDateString() ?? substr((string) $entry->created_at, 0, 10), false);
                     if ($entry->status !== 'approved' || (int) $current->quantity !== $item->quantity
                         || DecimalAmount::minorUnits((string) $current->average_cost) !== DecimalAmount::minorUnits($item->unit_cost)
                         || $movement->quantity_change !== $item->quantity
@@ -142,14 +168,14 @@ class CorrectInventoryAction
                     foreach ($skus as $variantId => $sku) {
                         $variants->firstWhere('id', $variantId)->update(['sku' => $sku]);
                     }
-                    $current->update(['quantity' => $quantity, 'average_cost' => $cost]);
+                    $current->update(['quantity' => $quantity, 'average_cost' => $cost, 'value_minor' => $quantity * DecimalAmount::minorUnits($cost)]);
                     $variant->update(['color_id' => $color->id, 'size_id' => $size->id, 'selling_price' => $price]);
                     if ($item) {
                         $item->update(['quantity' => $quantity, 'unit_cost' => $cost, 'selling_price' => $price,
                             'product_name' => $product->name, 'product_code' => $product->code, 'category_name' => $category->name,
                             'color_name' => $color->name, 'size_name' => $size->name, 'sku' => $variant->sku,
                             'line_total' => DecimalAmount::format($quantity * DecimalAmount::minorUnits($cost))]);
-                        $movements->first()->update(['quantity_change' => $quantity, 'unit_cost' => $cost]);
+                        $movements->first()->update(['quantity_change' => $quantity, 'unit_cost' => $cost, 'value_change_minor' => $quantity * DecimalAmount::minorUnits($cost)]);
                     }
                     $after = InventoryState::snapshot($current, $variant, $product) + ['category_name' => $category->name, 'color_name' => $color->name, 'size_name' => $size->name];
                 } else {
@@ -167,7 +193,7 @@ class CorrectInventoryAction
                     }
                     $entry->update(['total_quantity' => $totalQuantity, 'total_cost' => DecimalAmount::format($totalMinor), 'status' => $remaining->isEmpty() ? 'cancelled' : 'approved']);
                 }
-                InventorySetupChange::create([
+                $change = InventorySetupChange::create([
                     'inventory_id' => $inventory->id, 'branch_id' => $current->branch_id,
                     'product_variant_id' => $variant->id, 'opening_stock_entry_id' => $entry?->id,
                     'opening_stock_item_id' => $item?->id, 'user_id' => $actorId,
@@ -175,6 +201,13 @@ class CorrectInventoryAction
                     'reason' => filled($data['reason'] ?? null) ? trim($data['reason']) : 'تصحيح إدخال البضاعة أثناء التجهيز',
                     'before_state' => $before, 'after_state' => $after,
                 ]);
+
+                if ($actorId && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
+                    $delta = ($delete ? 0 : (int) $current->value_minor) - $oldValue;
+                    app(PostJournalAction::class)->execute($change, 'opening_correction', $branch->id, User::findOrFail($actorId), OperationContext::today(), [
+                        ['account' => 'inventory', 'amount' => $delta], ['account' => 'opening_equity', 'amount' => -$delta],
+                    ], $change->reason);
+                }
 
                 return $delete ? null : $current;
             });

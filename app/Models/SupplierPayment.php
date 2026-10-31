@@ -32,6 +32,11 @@ class SupplierPayment extends Model
         return $this->belongsTo(PurchaseInvoice::class, 'purchase_invoice_id');
     }
 
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(FinancialAccount::class, 'financial_account_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

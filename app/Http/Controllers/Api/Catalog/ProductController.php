@@ -1,32 +1,60 @@
 <?php
 
-
 namespace App\Http\Controllers\Api\Catalog;
 
-use App\Http\Controllers\Controller;
 use App\Actions\Catalog\CreateProductAction;
 use App\Actions\Catalog\UpdateProductAction;
+use App\Actions\Catalog\VisibleProductsQuery;
+use App\Actions\Search\ModuleSearch;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreProductRequest;
 use App\Http\Requests\Catalog\UpdateProductRequest;
+use App\Http\Requests\Search\SearchRequest;
+use App\Models\OpeningStockItem;
 use App\Models\Product;
+use App\Models\PurchaseInvoiceItem;
+use App\Models\SaleItem;
+use App\Models\StockMovement;
+use App\Models\User;
+use App\Support\Sales\OperationContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
-
+use Illuminate\Support\Facades\Gate;
 
 class ProductController extends Controller
 {
-    public function index()
+    public function index(SearchRequest $request, ModuleSearch $search): JsonResponse
     {
-        $products = Product::query()
-            ->with([
-                'category:id,name',
-                'variants.color:id,name,code',
-                'variants.size:id,name,code',
-            ])
-            ->latest()
-            ->paginate(15);
+        $filters = $request->validated();
+        Gate::authorize('catalog.search');
+        $query = $search->products($this->visibleProducts($request->user()), $filters)->with([
+            'category:id,name', 'images', 'swatches', 'variants' => fn ($query) => $search->variants($query, $filters),
+            'variants.color:id,name,code', 'variants.size:id,name,code',
+        ]);
+
+        $search->rankProducts($query, $filters['q'] ?? '');
+        $products = $search->sort($query, $filters, 'name')->paginate(15)->withQueryString();
+        if (! $request->user()->can('sales.view_cost')) {
+            $products->each(fn (Product $product) => $product->variants->each->makeHidden('minimum_selling_price'));
+        }
 
         return response()->json($products);
     }
+
+    private function present(Product $product): Product
+    {
+        if (! auth()->user()->can('sales.view_cost')) {
+            $product->variants->each->makeHidden('minimum_selling_price');
+        }
+
+        return $product;
+    }
+
+    private function visibleProducts(User $actor): Builder
+    {
+        return app(VisibleProductsQuery::class)->execute($actor);
+    }
+
     public function store(
         StoreProductRequest $request,
         CreateProductAction $createProduct
@@ -37,17 +65,24 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'تمت إضافة المنتج بنجاح',
-            'data' => $product,
+            'appearance_url' => route('catalog.swatches.edit', $product),
+            'data' => $this->present($product),
         ], 201);
     }
 
-    function show($id)
+    public function show(int $id): JsonResponse
     {
-        $product = Product::with([
+        Gate::authorize('catalog.search');
+        $product = $this->visibleProducts(auth()->user())->with([
             'category:id,name',
+            'images', 'swatches',
             'variants.color:id,name,code',
             'variants.size:id,name,code',
         ])->findOrFail($id);
+
+        if (! auth()->user()->can('sales.view_cost')) {
+            $product->variants->each->makeHidden('minimum_selling_price');
+        }
 
         return response()->json($product);
     }
@@ -58,7 +93,7 @@ class ProductController extends Controller
         UpdateProductAction $updateProduct
     ): JsonResponse {
 
-        $product = Product::findOrFail($id);
+        $product = $this->visibleProducts($request->user())->findOrFail($id);
 
         $updatedProduct = $updateProduct->execute(
             $product,
@@ -67,17 +102,31 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'تم تعديل المنتج بنجاح',
-            'data' => $updatedProduct,
+            'data' => $this->present($updatedProduct),
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(int $id): JsonResponse
     {
-        $product = Product::findOrfail($id);
-        $product->delete();
+        Gate::authorize('inventory.manage_catalog');
+        $message = OperationContext::run(function () use ($id): string {
+            $product = $this->visibleProducts(auth()->user())->whereKey($id)->lockForUpdate()->firstOrFail();
+            $ids = $product->variants()->pluck('id');
+            $documented = StockMovement::whereIn('product_variant_id', $ids)->exists()
+                || OpeningStockItem::whereIn('product_variant_id', $ids)->exists()
+                || PurchaseInvoiceItem::whereIn('product_variant_id', $ids)->exists()
+                || SaleItem::whereIn('product_variant_id', $ids)->exists();
+            if ($documented) {
+                $product->update(['is_active' => false]);
+                OperationContext::audit($product, auth()->user(), 'product.disabled');
 
-        return response()->json([
-            'message' => 'تم حذف المنتج بنجاح',
-        ]);
+                return 'عُطل المنتج مع الاحتفاظ بمستنداته ومخزونه.';
+            }
+            $product->delete();
+
+            return 'أُرشف المنتج غير المرتبط بمستندات.';
+        });
+
+        return response()->json(['message' => $message]);
     }
 }

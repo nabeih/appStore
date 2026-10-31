@@ -7,7 +7,6 @@ use App\Models\ProductImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 use Throwable;
 
 class StoreProductColorImagesAction
@@ -40,12 +39,9 @@ class StoreProductColorImagesAction
         $saved = [];
         try {
             foreach ($images as $image) {
-                $path = $image['image']->store('products/colors', 'public');
-                if (! $path) {
-                    throw new RuntimeException('تعذر تخزين صورة اللون.');
-                }
-                $saved[] = $path;
-                ProductImage::create(['product_id' => $product->id, 'color_id' => (int) $image['color_id'], 'image_path' => $path]);
+                $paths = app(ProcessProductImageAction::class)->upload($image['image']);
+                array_push($saved, ...array_values($paths));
+                ProductImage::create(['product_id' => $product->id, 'color_id' => (int) $image['color_id']] + $paths);
             }
 
             return $saved;

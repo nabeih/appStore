@@ -81,7 +81,7 @@ class SavePurchaseProductAction
                 }
                 $savedFiles = $this->images->execute($product, $uploads);
 
-                return $product->variants()->whereIn('color_id', $colors->keys())->whereIn('size_id', $sizes->keys())->with(['product.images', 'color', 'size'])->get()->all();
+                return $product->variants()->whereIn('color_id', $colors->keys())->whereIn('size_id', $sizes->keys())->with(['product.images', 'product.swatches', 'color', 'size'])->get()->all();
             });
         } catch (Throwable $exception) {
             Storage::disk('public')->delete($savedFiles);

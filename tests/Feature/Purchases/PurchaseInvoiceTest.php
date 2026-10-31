@@ -2,14 +2,17 @@
 
 namespace Tests\Feature\Purchases;
 
+use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Purchases\ApprovePurchaseInvoiceAction;
 use App\Models\Category;
 use App\Models\Color;
+use App\Models\FinancialAccount;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\PurchaseInvoice;
 use App\Models\Size;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\User;
@@ -27,6 +30,8 @@ class PurchaseInvoiceTest extends TestCase
 
     private int $branchId;
 
+    private FinancialAccount $paymentAccount;
+
     private Supplier $supplier;
 
     private ProductVariant $variant;
@@ -34,9 +39,12 @@ class PurchaseInvoiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->salesOwner()->create());
         Model::preventLazyLoading();
         $this->branchId = DB::table('branches')->insertGetId(['name' => 'الرئيسي']);
+        $this->paymentAccount = FinancialAccount::factory()->create(['branch_id' => $this->branchId]);
+        ManageFinancialAccountsAction::provision();
+        app(ManageFinancialAccountsAction::class)->opening($this->paymentAccount, ['opening_balance' => '10000', 'reason' => 'رصيد اختبار مشتريات'], auth()->user());
         $this->supplier = Supplier::factory()->create();
         $category = Category::create(['name' => 'ملابس']);
         $color = Color::create(['name' => 'أسود', 'code' => 'BLK']);
@@ -48,7 +56,7 @@ class PurchaseInvoiceTest extends TestCase
     private function payload(array $changes = []): array
     {
         return array_replace(['client_uuid' => (string) Str::uuid(), 'supplier_id' => $this->supplier->id, 'branch_id' => $this->branchId,
-            'invoice_date' => now()->toDateString(), 'supplier_invoice_number' => 'SUP-123', 'initial_payment' => '0.00', 'payment_method' => 'cash',
+            'payment_details' => ['account_id' => $this->paymentAccount->id], 'invoice_date' => now()->toDateString(), 'supplier_invoice_number' => 'SUP-123', 'initial_payment' => '0.00', 'payment_method' => 'cash',
             'rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 3, 'unit_cost' => '10.00']]], $changes);
     }
 
@@ -149,27 +157,32 @@ class PurchaseInvoiceTest extends TestCase
 
     public function test_weighted_average_includes_existing_stock_and_does_not_change_other_branches(): void
     {
-        Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'quantity' => 2, 'average_cost' => '5.00']);
+        Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'quantity' => 2, 'average_cost' => '5.00', 'value_minor' => 1000]);
+        StockMovement::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'user_id' => auth()->id(), 'source_type' => ProductVariant::class, 'source_id' => $this->variant->id, 'movement_type' => 'opening_stock', 'quantity_change' => 2, 'unit_cost' => '5.00', 'value_change_minor' => 1000, 'stock_bucket' => 'available', 'effective_date' => now()->toDateString()]);
         $other = DB::table('branches')->insertGetId(['name' => 'فرع آخر']);
-        Inventory::create(['branch_id' => $other, 'product_variant_id' => $this->variant->id, 'quantity' => 7, 'average_cost' => '9.00']);
+        Inventory::create(['branch_id' => $other, 'product_variant_id' => $this->variant->id, 'quantity' => 7, 'average_cost' => '9.00', 'value_minor' => 6300]);
         $this->approve($this->draft());
         $this->assertDatabaseHas('inventories', ['branch_id' => $this->branchId, 'quantity' => 5, 'average_cost' => '8.00']);
-        $this->assertDatabaseHas('inventories', ['branch_id' => $other, 'quantity' => 7, 'average_cost' => '9.00']);
+        $this->assertDatabaseHas('inventories', ['branch_id' => $other, 'quantity' => 7, 'average_cost' => '9.00', 'value_minor' => 6300]);
     }
 
     public function test_weighted_average_rounds_half_up_without_floating_point_arithmetic(): void
     {
-        Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'quantity' => 1, 'average_cost' => '0.10']);
+        Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'quantity' => 1, 'average_cost' => '0.10', 'value_minor' => 10]);
+        StockMovement::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'user_id' => auth()->id(), 'source_type' => ProductVariant::class, 'source_id' => $this->variant->id, 'movement_type' => 'opening_stock', 'quantity_change' => 1, 'unit_cost' => '0.10', 'value_change_minor' => 10, 'stock_bucket' => 'available', 'effective_date' => now()->toDateString()]);
         $invoice = $this->draft(['rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 1, 'unit_cost' => '0.11']]]);
         $this->approve($invoice);
         $this->assertDatabaseHas('inventories', ['quantity' => 2, 'average_cost' => '0.11']);
     }
 
-    public function test_large_old_inventory_values_do_not_overflow_native_integer_products(): void
+    public function test_unreviewed_large_legacy_values_are_not_silently_converted_or_overflowed(): void
     {
         Inventory::create(['branch_id' => $this->branchId, 'product_variant_id' => $this->variant->id, 'quantity' => 2000000000, 'average_cost' => '9999999999.99']);
-        $this->approve($this->draft());
-        $this->assertDatabaseHas('inventories', ['quantity' => 2000000003]);
+        $invoice = $this->draft();
+        $this->postJson(route('purchases.invoices.approve', $invoice), ['version' => 1])->assertUnprocessable()->assertJsonValidationErrors('rows');
+        $this->assertSame('draft', $invoice->fresh()->status);
+        $this->assertDatabaseHas('inventories', ['quantity' => 2000000000, 'value_minor' => null]);
+        $this->assertDatabaseCount('stock_movements', 0);
     }
 
     public function test_inventory_overflow_rolls_back_approval(): void
@@ -185,12 +198,12 @@ class PurchaseInvoiceTest extends TestCase
     {
         $invoice = $this->draft(['initial_payment' => '5.00']);
         $this->approve($invoice);
-        $data = ['client_uuid' => (string) Str::uuid(), 'amount' => '10.00', 'method' => 'bank', 'payment_date' => now()->toDateString(), 'reference' => 'BANK-1'];
+        $data = ['account_id' => $this->paymentAccount->id, 'client_uuid' => (string) Str::uuid(), 'amount' => '10.00', 'method' => 'bank', 'payment_date' => now()->toDateString(), 'reference' => 'BANK-1'];
         $this->postJson(route('purchases.payments.store', $invoice), $data)->assertOk();
         $this->postJson(route('purchases.payments.store', $invoice), $data)->assertOk();
         $this->assertSame('15.00', $invoice->fresh()->remaining_amount);
         $this->postJson(route('purchases.payments.store', $invoice), array_replace($data, ['amount' => '9.00']))->assertConflict();
-        $this->postJson(route('purchases.payments.store', $invoice), array_replace($data, ['client_uuid' => (string) Str::uuid(), 'amount' => '15.01']))->assertUnprocessable();
+        $this->postJson(route('purchases.payments.store', $invoice), array_replace($data, ['account_id' => $this->paymentAccount->id, 'client_uuid' => (string) Str::uuid(), 'amount' => '15.01']))->assertUnprocessable();
         $this->assertDatabaseCount('supplier_payments', 2);
         $this->assertSame(1500, $invoice->fresh()->paid_minor);
     }
@@ -198,7 +211,7 @@ class PurchaseInvoiceTest extends TestCase
     public function test_payments_require_an_approved_invoice_a_valid_date_method_and_positive_amount(): void
     {
         $invoice = $this->draft();
-        $data = ['client_uuid' => (string) Str::uuid(), 'amount' => '1.00', 'method' => 'cash', 'payment_date' => now()->toDateString()];
+        $data = ['account_id' => $this->paymentAccount->id, 'client_uuid' => (string) Str::uuid(), 'amount' => '1.00', 'method' => 'cash', 'payment_date' => now()->toDateString()];
         $this->postJson(route('purchases.payments.store', $invoice), $data)->assertConflict();
         $this->approve($invoice);
         foreach ([['amount' => '0'], ['amount' => '-1'], ['amount' => '1.001'], ['method' => '../../.env'], ['payment_date' => now()->subDay()->toDateString()], ['payment_date' => now()->addDay()->toDateString()]] as $change) {
@@ -211,7 +224,7 @@ class PurchaseInvoiceTest extends TestCase
     {
         $invoice = $this->draft();
         $this->approve($invoice);
-        $this->postJson(route('purchases.payments.store', $invoice), ['client_uuid' => (string) Str::uuid(), 'amount' => '30', 'method' => 'cash', 'payment_date' => now()->toDateString()])->assertOk();
+        $this->postJson(route('purchases.payments.store', $invoice), ['account_id' => $this->paymentAccount->id, 'client_uuid' => (string) Str::uuid(), 'amount' => '30', 'method' => 'cash', 'payment_date' => now()->toDateString()])->assertOk();
         $this->assertSame('0.00', $invoice->fresh()->remaining_amount);
         $this->get(route('purchases.invoices.show', $invoice))->assertOk()->assertDontSee('تسجيل دفعة للمورد');
     }

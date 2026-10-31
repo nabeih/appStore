@@ -21,6 +21,11 @@ class Color extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    public function swatches(): HasMany
+    {
+        return $this->hasMany(ProductColorSwatch::class);
+    }
+
     public function productImages(): HasMany
     {
         return $this->hasMany(ProductImage::class);

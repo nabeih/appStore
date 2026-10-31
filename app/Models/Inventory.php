@@ -11,8 +11,11 @@ class Inventory extends Model
         'product_variant_id',
         'quantity',
         'average_cost',
+        'value_minor',
+        'quarantined_quantity',
+        'quarantined_value_minor',
+        'damaged_quantity',
     ];
-
 
     public function branch()
     {
@@ -23,6 +26,4 @@ class Inventory extends Model
     {
         return $this->belongsTo(ProductVariant::class);
     }
-
-    
 }

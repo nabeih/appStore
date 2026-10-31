@@ -8,7 +8,7 @@ class DeleteInventoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) config('inventory.allow_setup_changes');
+        return (bool) config('inventory.allow_setup_changes') && ($this->user()?->can('inventory.correct_setup') ?? false) && $this->user()->can('sales.view_cost');
     }
 
     public function rules(): array

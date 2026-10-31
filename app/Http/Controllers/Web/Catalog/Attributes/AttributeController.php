@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Catalog\Attributes;
 
+use App\Actions\Search\SearchTerm;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Color;
@@ -21,16 +22,9 @@ class AttributeController extends Controller
         $query = match ($tab) {
             'colors' => Color::query()->withCount(['variants', 'productImages'])->latest('id'),
             'sizes' => Size::query()->withCount('variants')->orderBy('sort_order')->latest('id'),
-            default => Category::query()->with('parent:id,name')->withCount('products')->latest('id'),
+            default => Category::query()->with('parent:id,name')->withCount(['products' => fn ($query) => $query->withTrashed(), 'children'])->latest('id'),
         };
-        if ($search !== '') {
-            $query->where(function ($query) use ($tab, $search) {
-                $query->where('name', 'like', '%'.$search.'%');
-                if ($tab !== 'categories') {
-                    $query->orWhere('code', 'like', '%'.$search.'%');
-                }
-            });
-        }
+        SearchTerm::apply($query, $search, ['name'], $tab === 'categories' ? [] : ['code']);
         $entries = $query->paginate(20)->withQueryString();
         $counts = ['categories' => Category::count(), 'colors' => Color::count(), 'sizes' => Size::count()];
         $parents = $tab === 'categories' ? Category::with('parent:id,name')->where('is_active', true)->orderBy('name')->get(['id', 'name', 'parent_id']) : collect();

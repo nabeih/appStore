@@ -79,7 +79,7 @@
     <footer class="os-dialog-footer">
         <span id="osStatus" role="status"></span>
         <button type="button" class="btn btn-outline" id="osCancel">إغلاق</button>
-        <button type="button" class="btn btn-primary" id="osReview">مراجعة الرصيد</button>
+        <button type="button" class="btn btn-outline" id="osSaveDraft">حفظ مسودة</button><button type="button" class="btn btn-primary" id="osReview">مراجعة الرصيد</button>
         <button type="button" class="btn btn-success" id="osSave" disabled>اعتماد البضاعة</button>
     </footer>
 </dialog>

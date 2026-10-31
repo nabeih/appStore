@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OpeningStockEntry extends Model
 {
-    protected $fillable = ['client_uuid', 'branch_id', 'created_by', 'approved_by', 'status', 'notes', 'approved_at', 'opening_date', 'request_hash', 'total_quantity', 'total_cost'];
+    protected $fillable = ['client_uuid', 'branch_id', 'created_by', 'approved_by', 'status', 'notes', 'approved_at', 'opening_date', 'request_hash', 'total_quantity', 'total_cost', 'version'];
 
     protected function casts(): array
     {

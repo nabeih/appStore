@@ -101,7 +101,7 @@ class StoreProductRequest extends FormRequest
 
             'images.*' => [
                 'required',
-                'array:color_id,image_path',
+                'array:color_id,image',
             ],
 
             'images.*.color_id' => [
@@ -111,13 +111,11 @@ class StoreProductRequest extends FormRequest
                 'distinct',
             ],
 
-            'images.*.image_path' => [
-                'required',
-                'string',
-                'max:255',
-            ],
+            'images.*.image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'image_path' => ['prohibited'],
         ];
     }
+
     public function after(): array
     {
         return [
@@ -137,7 +135,7 @@ class StoreProductRequest extends FormRequest
                     $colorId = (int) $variant['color_id'];
                     $sizeId = (int) $variant['size_id'];
 
-                    $key = $colorId . ':' . $sizeId;
+                    $key = $colorId.':'.$sizeId;
 
                     if (isset($combinations[$key])) {
                         $validator->errors()->add(
@@ -168,20 +166,15 @@ class StoreProductRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'code.regex' =>
-            'كود المنتج يجب أن يحتوي على أحرف إنجليزية أو أرقام أو - أو _ فقط.',
+            'code.regex' => 'كود المنتج يجب أن يحتوي على أحرف إنجليزية أو أرقام أو - أو _ فقط.',
 
-            'code.unique' =>
-            'كود المنتج مستخدم مسبقًا.',
+            'code.unique' => 'كود المنتج مستخدم مسبقًا.',
 
-            'variants.required' =>
-            'يجب إضافة لون ومقاس واحد على الأقل.',
+            'variants.required' => 'يجب إضافة لون ومقاس واحد على الأقل.',
 
-            'variants.min' =>
-            'يجب إضافة Variant واحد على الأقل.',
+            'variants.min' => 'يجب إضافة Variant واحد على الأقل.',
 
-            'images.*.color_id.distinct' =>
-            'لا يمكن إضافة أكثر من صورة للون نفسه.',
+            'images.*.color_id.distinct' => 'لا يمكن إضافة أكثر من صورة للون نفسه.',
         ];
     }
 }
