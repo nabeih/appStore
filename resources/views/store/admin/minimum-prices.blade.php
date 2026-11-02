@@ -1,0 +1,8 @@
+@extends('layouts.app')
+@section('title','ضبط الحد الأدنى — '.$entry->name)
+@section('content')
+<div class="screen active commerce-page"><header class="commerce-header"><div><h1>الحد الأدنى لسعر البيع</h1><p>{{ $entry->name }} · لا يتغير سعر البيع أو SKU أو التكلفة من هذه الشاشة.</p></div><a class="btn btn-outline" href="{{ route('inventory.products.show',$entry) }}">رجوع للمنتج</a></header>@include('store.admin.feedback')
+<form method="POST" action="{{ route('catalog.minimum.update',$entry) }}" class="commerce-card commerce-form">@csrf @method('PUT')
+<label class="commerce-check"><input type="checkbox" name="apply_all" value="1"> تطبيق قيمة واحدة على جميع ألوان ومقاسات المنتج</label><label>القيمة المشتركة<input name="minimum" inputmode="decimal" placeholder="اتركها فارغة لإلغاء الحد عند تطبيقها للجميع"></label>
+<div class="table-responsive"><table><thead><tr><th>اللون</th><th>المقاس</th><th>SKU</th><th>سعر البيع</th><th>الحد الأدنى</th></tr></thead><tbody>@foreach($entry->variants as $variant)<tr><td>{{ $variant->color->name }}</td><td>{{ $variant->size->name }}</td><td><bdi>{{ $variant->sku }}</bdi></td><td>{{ $variant->selling_price }}</td><td><input type="hidden" name="variants[{{ $loop->index }}][id]" value="{{ $variant->id }}"><input name="variants[{{ $loop->index }}][minimum]" inputmode="decimal" value="{{ old('variants.'.$loop->index.'.minimum',$variant->minimum_selling_price) }}"></td></tr>@endforeach</tbody></table></div><button class="btn btn-primary">حفظ الحدود الدنيا</button></form></div>
+@endsection

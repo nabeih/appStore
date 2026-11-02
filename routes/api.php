@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\Inventory\InventoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['web', 'auth:web', 'auth.session', 'active.user'])->group(function () {
+require __DIR__.'/mobile.php';
+
+Route::middleware(['web', 'auth:web', 'auth.session', 'active.user', 'first.branch'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });

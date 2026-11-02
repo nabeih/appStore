@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Store\StoreContext;
 use App\Models\Branch;
 use App\Models\Inventory;
 use App\Models\StockMovement;
@@ -30,10 +31,14 @@ class StockLedger
             ->selectRaw('SUM(value_change_minor) AS readiness_value')->selectRaw('SUM(CASE WHEN value_change_minor IS NULL THEN 1 ELSE 0 END) AS readiness_unknown')
             ->groupBy('branch_id', 'product_variant_id');
 
+        $reserved = app(StoreContext::class)->reserved($branchId, $variantIds);
+
         return $query->leftJoinSub($history, 'readiness_history', fn ($join) => $join->on('inventories.branch_id', '=', 'readiness_history.branch_id')->on('inventories.product_variant_id', '=', 'readiness_history.product_variant_id'))
             ->select('inventories.*', 'readiness_history.readiness_quantity', 'readiness_history.readiness_value', 'readiness_history.readiness_unknown')->get()
-            ->each(function (Inventory $stock): void {
+            ->each(function (Inventory $stock) use ($reserved): void {
                 $this->value($stock);
+                $stock->setAttribute('reserved_quantity', $reserved[$stock->product_variant_id] ?? 0);
+                $stock->syncOriginalAttribute('reserved_quantity');
                 foreach (['readiness_quantity', 'readiness_value', 'readiness_unknown'] as $field) {
                     $stock->offsetUnset($field);
                 }
@@ -76,7 +81,7 @@ class StockLedger
 
     public function cost(Inventory $stock, int $quantity): int
     {
-        if ($quantity <= 0 || $quantity > (int) $stock->quantity) {
+        if ($quantity <= 0 || $quantity > (int) $stock->quantity - (int) ($stock->reserved_quantity ?? 0)) {
             throw ValidationException::withMessages(['rows' => 'الكمية المطلوبة غير متاحة. حدّث المخزون ثم أعد المحاولة.']);
         }
 
@@ -101,7 +106,8 @@ class StockLedger
         $oldValue = $bucket === 'available' ? $this->value($stock) : (int) $stock->$valueField;
         $newQuantity = (int) $stock->$quantityField + $quantity;
         $newValue = Money::add($oldValue, $value);
-        if ($newQuantity < 0 || $newQuantity > 4294967295 || $newValue < 0 || ($newQuantity === 0 && $newValue !== 0 && $bucket !== 'damaged')) {
+        if ($newQuantity < 0 || ($bucket === 'available' && $newQuantity < (int) ($stock->reserved_quantity ?? 0))
+            || $newQuantity > 4294967295 || $newValue < 0 || ($newQuantity === 0 && $newValue !== 0 && $bucket !== 'damaged')) {
             throw ValidationException::withMessages(['rows' => 'لا يمكن ترحيل حركة تجعل كمية أو قيمة المخزون غير صحيحة.']);
         }
         $changes = [$quantityField => $newQuantity];

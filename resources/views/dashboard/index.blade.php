@@ -1,36 +1,9 @@
 @extends('layouts.app')
-@section('title', 'لوحة التحكم')
+@section('title','لوحة التحكم')
 @section('content')
-
-<!-- ============ لوحة التحكم ============ -->
-<div id="screen-dashboard" class="screen active">
-    <h1 class="section-title"><i class="fas fa-chart-pie text-primary"></i> لوحة التحكم</h1>
-    <p class="section-subtitle">نظرة شاملة على أداء متجرك</p>
-    <div class="stats-grid" id="dashboardStats"></div>
-    <div class="card">
-        <div class="card-header">
-            <h3><i class="fas fa-clock text-primary"></i> آخر المبيعات</h3>
-            <button class="btn btn-sm btn-outline" onclick="switchScreen('sales-record')">عرض الكل</button>
-        </div>
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>العميل</th>
-                        <th>المبلغ</th>
-                        <th>التاريخ</th>
-                    </tr>
-                </thead>
-                <tbody id="recentSalesTable"></tbody>
-            </table>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header">
-            <h3><i class="fas fa-exclamation-triangle text-warning"></i> تنبيهات</h3>
-        </div>
-        <div id="inventoryAlerts"></div>
-    </div>
+<div id="screen-dashboard" class="screen active commerce-page"><header class="commerce-header"><div><p class="commerce-eyebrow">أهلًا {{ auth()->user()->name }}</p><h1><i class="fas fa-chart-pie text-primary"></i> لوحة التحكم</h1><p>نظرة من بيانات متجرك الفعلية، ضمن الفروع والصلاحيات المسموحة.</p></div><div class="commerce-actions">@if(auth()->user()->can('sales.sell') && auth()->user()->can('sales.view'))<a class="btn btn-primary" href="{{ route('sales.cashier') }}">فتح الكاشير</a>@endif @can('store.orders.view')<a class="btn btn-outline" href="{{ route('store.orders.index') }}">طلبات الموقع</a>@endcan</div></header>
+<div class="commerce-grid dashboard-live-stats">@forelse($stats as $stat)<article class="commerce-card"><i class="fas {{ $stat['icon'] }} text-primary"></i><p class="commerce-muted">{{ $stat['label'] }}</p><strong class="dashboard-live-number">{{ number_format($stat['value']) }}</strong></article>@empty<p class="commerce-notice">استخدم القائمة للوصول إلى المهام المسموحة لحسابك.</p>@endforelse</div>
+@can('sales.view')<section class="commerce-card dashboard-live-recent"><header class="commerce-header"><h2>آخر فواتير المبيعات المعتمدة</h2><a class="btn btn-outline btn-sm" href="{{ route('sales.invoices.index') }}">عرض الكل</a></header><div class="table-responsive"><table><thead><tr><th>الفاتورة</th><th>العميل</th><th>قيمة الفاتورة قبل المرتجعات</th><th>التاريخ</th></tr></thead><tbody>@forelse($recent as $invoice)<tr><td><a href="{{ route('sales.invoices.show',$invoice) }}">{{ $invoice->number }}</a></td><td>{{ $invoice->customer_name }}</td><td>{{ \App\Support\Sales\Money::format($invoice->total_minor) }} ₪</td><td>{{ $invoice->invoice_date->format('Y-m-d') }}</td></tr>@empty<tr><td colspan="4" class="commerce-empty">لا توجد مبيعات معتمدة بعد.</td></tr>@endforelse</tbody></table></div></section>@endcan
+<section class="commerce-card dashboard-live-recent"><h2>تنبيهات المتجر</h2><p class="commerce-muted">جرس الإشعارات يعرض الطلبات الجديدة وتجاوزات الحد الأدنى التي يحق لك مراجعتها. مراجعة الأرصدة والدفتر تبقى من شاشاتها المخصصة.</p>@can('inventory.valuation_review')<a href="{{ route('inventory.review.index') }}">مراجعة جاهزية المخزون ←</a>@endcan</section>
 </div>
 @endsection

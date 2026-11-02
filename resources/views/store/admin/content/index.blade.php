@@ -1,0 +1,8 @@
+@extends('layouts.app')
+@section('title',$title)
+@section('content')
+<div class="screen active commerce-page"><header class="commerce-header"><div><p class="commerce-eyebrow">لوحة إدارة الموقع</p><h1>{{ $title }}</h1><p>محتوى مرتبط ببيانات المتجر الفعلية، دون نسخ المخزون.</p></div><a class="btn btn-primary" href="{{ route('store.admin.content.create',$type) }}">{{ $type==='settings'?'إعداد الموقع':'إضافة جديد' }}</a></header>
+@include('store.admin.feedback')
+<form class="commerce-filter" method="GET"><label>البحث<input name="q" value="{{ request('q') }}" maxlength="100"></label><button class="btn btn-outline">بحث</button></form>
+<div class="commerce-grid">@forelse($entries as $entry)<article class="commerce-card"><span class="commerce-badge">{{ $entry->is_published ?? $entry->is_open ?? $entry->is_active ? 'فعال / منشور' : 'مخفي / متوقف' }}</span><h2>{{ $entry->product?->name ?? $entry->name ?? $entry->title }}</h2>@if($type==='products')<p><bdi>{{ $entry->product?->code }}</bdi> · /{{ $entry->slug }}</p>@endif @if($type==='zones')<p>رسوم الزبون: {{ \App\Support\Sales\Money::format($entry->fee_minor) }}</p><p>أجرة المزوّد عند التسليم: {{ $entry->courier_delivery_minor===null?'غير محددة':\App\Support\Sales\Money::format($entry->courier_delivery_minor) }}</p>@endif<p>{{ \Illuminate\Support\Str::limit($entry->description,120) }}</p><a class="btn btn-outline" href="{{ route('store.admin.content.edit',[$type,$entry->id]) }}">تعديل</a></article>@empty<div class="commerce-empty">لا توجد بيانات بعد. أضف بيانات المتجر الحقيقية من الزر أعلاه.</div>@endforelse</div>{{ $entries->links() }}</div>
+@endsection

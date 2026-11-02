@@ -1,0 +1,4 @@
+@extends('store.public.layout')
+@section('title','تم استلام طلبك')
+@section('meta')<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">@endsection
+@section('content')<section class="live-order-success"><div class="live-success-icon">✓</div><p>شكرًا لاختيارك {{ $settings->name }}</p><h1>استلمنا طلبك بنجاح</h1><strong>WEB-{{ $entry->id }}</strong><p>سنتواصل لتأكيد التوفر والتوصيل. الطلب لا يعتبر بيعًا أو قبضًا قبل التسليم.</p><p>{{ $entry->customer_name }} · <bdi>{{ $entry->phone }}</bdi></p>@foreach($entry->items as $item)<p>{{ $item->product_name }} — {{ $item->color_name }} / {{ $item->size_name }} × {{ $item->quantity }}</p>@endforeach<a class="live-button" href="{{ route('store.home') }}">العودة للتشكيلة</a></section>@endsection

@@ -1,0 +1,22 @@
+# Merge into the existing aaPanel HTTPS vhost after review; do not overwrite it.
+# Replace root and verify PHP 8.5's actual FPM socket. Preserve SSL/ACME settings.
+root /www/wwwroot/REPLACE_RELEASE_PATH/public;
+index index.php;
+client_max_body_size 16m;
+location / {
+    try_files $uri $uri/ /index.php?$query_string;
+}
+# Use either an equivalent aaPanel PHP include or this handler, not duplicates.
+location = /index.php {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+    fastcgi_pass unix:/tmp/php-cgi-85.sock;
+}
+location ~ \.php$ { return 404; }
+location ~ /\. { deny all; }
+location ~* \.(?:sql|sqlite|env|ini|log|bak|token)$ { deny all; }
+# PREVIEW: restrict the entire vhost to approved IPs/VPN, then deny everyone else.
+# This preserves Authorization: Bearer for Flutter; Basic Auth shares that header.
+# PREVIEW ONLY: add_header X-Robots-Tag "noindex, nofollow" always;
+# Preserve aaPanel ACME /.well-known handling; run nginx -t before any reload.
+# Redact/disable logs for reset/verification URL paths, not only their queries.

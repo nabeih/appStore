@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Inventory;
 
 use App\Actions\Search\ModuleSearch;
+use App\Actions\Store\StoreContext;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Search\SearchRequest;
 use App\Models\Category;
@@ -33,6 +34,8 @@ class InventoryController extends Controller
         $sizes = Size::orderBy('sort_order')->get(['id', 'name']);
         $setupChangesEnabled = (bool) config('inventory.allow_setup_changes');
 
-        return view('inventory.index', compact('inventories', 'openingStockBranches', 'setupChangesEnabled', 'filters', 'branches', 'categories', 'colors', 'sizes'));
+        $transitQuantities = app(StoreContext::class)->transitQuantities($inventories->getCollection());
+
+        return view('inventory.index', compact('inventories', 'openingStockBranches', 'setupChangesEnabled', 'filters', 'branches', 'categories', 'colors', 'sizes', 'transitQuantities'));
     }
 }

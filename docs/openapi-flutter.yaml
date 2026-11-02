@@ -1,0 +1,2621 @@
+openapi: 3.1.0
+info:
+  title: 'appStore Flutter API'
+  version: 1.0.0
+  description: 'Backend implemented locally. Do not enable on app_store until migrations are approved. Full protocol and permission matrix: flutter-api-contract.md. Existing web search findings are separate; use only /api/v1 for this client.'
+servers:
+  -
+    url: 'http://127.0.0.1:8000/api/v1'
+    description: 'Local example; no customer database prepared automatically.'
+  -
+    url: 'https://api.your-store.example/api/v1'
+    description: 'Deployment placeholder; no deployment performed.'
+security:
+  -
+    bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      operationId: mobileLogin
+      summary: 'Password login and device registration; rotates token for existing device.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+      responses:
+        200:
+          description: 'Token issued.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResult'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/me:
+    get:
+      operationId: mobileMe
+      summary: 'Live permissions and allowed branches.'
+      responses:
+        200:
+          description: 'Authenticated user.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+                required:
+                  - data
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/logout:
+    post:
+      operationId: mobileLogout
+      summary: 'Revoke this token; retain device identity and receipts.'
+      responses:
+        200:
+          description: 'Logged out.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /devices:
+    get:
+      operationId: mobileDevices
+      summary: "List only this user's registered devices."
+      responses:
+        200:
+          description: 'Device list.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                required:
+                  - data
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  '/devices/{device}':
+    delete:
+      operationId: mobileRevokeDevice
+      summary: 'Permanently revoke one owned device.'
+      parameters:
+        -
+          name: device
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: 'Device revoked.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  '/data/{entity}':
+    get:
+      operationId: mobileDataList
+      summary: 'Allowlisted branch-scoped data; keyset pagination; not a sync cursor.'
+      parameters:
+        -
+          name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - branches
+              - categories
+              - colors
+              - sizes
+              - products
+              - variants
+              - images
+              - swatches
+              - stocks
+              - customers
+              - customer_balances
+              - sales
+              - receipts
+              - accounts
+              - suppliers
+              - purchases
+              - openings
+        -
+          name: branch_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        -
+          name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        -
+          name: match
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - contains
+              - exact
+              - prefix
+        -
+          name: after_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        -
+          name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        200:
+          description: 'Scoped records. Supported q entities: products, variants, customers, suppliers, sales.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schema_version:
+                    const: 1
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MobileRecord'
+                  next_after_id:
+                    type:
+                      - integer
+                      - 'null'
+                    format: int64
+                  server_timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - schema_version
+                  - data
+                  - next_after_id
+                  - server_timestamp
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  '/data/{entity}/{id}':
+    get:
+      operationId: mobileDataShow
+      summary: 'Direct ID lookup uses identical permissions and branch scope.'
+      parameters:
+        -
+          name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - branches
+              - categories
+              - colors
+              - sizes
+              - products
+              - variants
+              - images
+              - swatches
+              - stocks
+              - customers
+              - customer_balances
+              - sales
+              - receipts
+              - accounts
+              - suppliers
+              - purchases
+              - openings
+        -
+          name: branch_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        -
+          name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        200:
+          description: 'One allowed DTO.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MobileRecord'
+                required:
+                  - data
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /sync/bootstrap:
+    post:
+      operationId: mobileBootstrap
+      summary: 'Start/retry a device-bound initial sync with stable opaque cursor.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bootstrap'
+      responses:
+        200:
+          description: 'First page; continue with /sync/pull while has_more.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /sync/pull:
+    post:
+      operationId: mobilePull
+      summary: 'Resume a page or fetch incremental changes; no updated_at cutoff.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pull'
+      responses:
+        200:
+          description: 'Latest-state upserts and scoped tombstones. Persist cursor with page atomically.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResult'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /sync/push:
+    post:
+      operationId: mobilePush
+      summary: 'Topologically ordered batch; atomic per operation, not per batch.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Push'
+      responses:
+        200:
+          description: 'Match by operation_uuid. HTTP200 does not mean every operation accepted.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResult'
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  '/sync/operations/{operation}':
+    get:
+      operationId: mobileOperationStatus
+      summary: 'Resolve a lost network response without creating another operation.'
+      parameters:
+        -
+          name: operation
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: 'Persisted operation receipt.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_uuid:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum:
+                      - accepted
+                      - retryable
+                      - conflict_requires_review
+                      - validation_failed
+                      - dependency_blocked
+                  result:
+                    type: object
+                required:
+                  - operation_uuid
+                  - status
+                  - result
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /product-images:
+    post:
+      operationId: mobileUploadProductImage
+      summary: 'Upload one product-color image; two WebP derivatives only. No implicit replacement.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                operation_uuid:
+                  type: string
+                  format: uuid
+                schema_version:
+                  type: integer
+                  const: 1
+                branch_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                product_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                color_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                image:
+                  type: string
+                  format: binary
+                  description: 'JPEG/PNG/WebP, max4MiB, dimensions max6000; processor enforces pixel budget.'
+              required:
+                - operation_uuid
+                - schema_version
+                - branch_id
+                - product_id
+                - color_id
+                - image
+              additionalProperties: false
+      responses:
+        200:
+          description: 'Image receipt; retry same accepted bytes/UUID without duplicate files.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - accepted
+                      - already_applied
+                  result:
+                    $ref: '#/components/schemas/ImageReceipt'
+                required:
+                  - status
+                  - result
+        401:
+          description: 'Token missing, expired, revoked or account unavailable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: 'Permission or branch denied.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: 'Record unavailable in this scope.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        409:
+          description: 'Cursor scope changed or upload UUID conflict.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        422:
+          description: 'Invalid envelope, fields or cursor.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        429:
+          description: 'Rate limit. Respect Retry-After.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: 'Seconds to wait'
+        503:
+          description: 'Schema/tracking unavailable or temporary failure. Never discard outbox.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: 'Sanctum personal access token'
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required:
+        - message
+        - errors
+    Branch:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        name:
+          type: string
+        is_active:
+          type: boolean
+      required:
+        - id
+        - name
+        - is_active
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        name:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/Branch'
+        schema_version:
+          const: 1
+      required:
+        - id
+        - name
+        - username
+        - role
+        - permissions
+        - branches
+        - schema_version
+    Login:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          maxLength: 72
+          writeOnly: true
+        device_id:
+          type: string
+          format: uuid
+        device_name:
+          type: string
+          maxLength: 80
+      required:
+        - username
+        - password
+        - device_id
+        - device_name
+      additionalProperties: false
+    LoginResult:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 'Bearer secret. Never log; put in platform secure storage.'
+        expires_at:
+          type: string
+          format: date-time
+        device_id:
+          type: string
+          format: uuid
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - token
+        - expires_at
+        - device_id
+        - user
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        revoked_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - revoked_at
+        - created_at
+    Discount:
+      type: object
+      properties:
+        type:
+          enum:
+            - amount
+            - percent
+        value:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+      required:
+        - type
+        - value
+      additionalProperties: false
+    Payment:
+      type: object
+      properties:
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        amount:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        confirmed:
+          type: boolean
+        reference:
+          type: string
+          maxLength: 150
+      required:
+        - account_id
+      additionalProperties: false
+    CreateVariant:
+      type: object
+      properties:
+        client_uuid:
+          type: string
+          format: uuid
+        color_id:
+          type: integer
+          format: int64
+          minimum: 1
+        size_id:
+          type: integer
+          format: int64
+          minimum: 1
+        selling_price:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        minimum_selling_price:
+          anyOf:
+            -
+              type: string
+              pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+              description: 'Decimal money string; server performs authoritative accounting.'
+            -
+              type: 'null'
+      required:
+        - client_uuid
+        - color_id
+        - size_id
+        - selling_price
+      additionalProperties: false
+    UpdateVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        client_uuid:
+          type: string
+          format: uuid
+        color_id:
+          type: integer
+          format: int64
+          minimum: 1
+        size_id:
+          type: integer
+          format: int64
+          minimum: 1
+        selling_price:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        minimum_selling_price:
+          anyOf:
+            -
+              type: string
+              pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+              description: 'Decimal money string; server performs authoritative accounting.'
+            -
+              type: 'null'
+        is_active:
+          type: boolean
+      required:
+        - color_id
+        - size_id
+        - selling_price
+      additionalProperties: false
+      anyOf:
+        -
+          required:
+            - id
+        -
+          required:
+            - client_uuid
+    ProductCreate:
+      type: object
+      properties:
+        client_uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+          maxLength: 50
+          description: 'Omit for server allocation.'
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        description:
+          type:
+            - string
+            - 'null'
+        is_active:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateVariant'
+          minItems: 1
+          maxItems: 100
+      required:
+        - client_uuid
+        - name
+        - category_id
+        - variants
+      additionalProperties: false
+    ProductUpdate:
+      type: object
+      properties:
+        product_id:
+          type: integer
+          format: int64
+          minimum: 1
+        product_uuid:
+          type: string
+          format: uuid
+        expected_revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+        name:
+          type: string
+          maxLength: 255
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+          maxLength: 50
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        description:
+          type:
+            - string
+            - 'null'
+        is_active:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpdateVariant'
+          maxItems: 100
+      required:
+        - expected_revision
+      additionalProperties: false
+      oneOf:
+        -
+          required:
+            - product_id
+          not:
+            required:
+              - product_uuid
+        -
+          required:
+            - product_uuid
+          not:
+            required:
+              - product_id
+    OpeningRow:
+      type: object
+      properties:
+        product_variant_id:
+          type: integer
+          format: int64
+          minimum: 1
+        variant_uuid:
+          type: string
+          format: uuid
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+        cost:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        price:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+      required:
+        - qty
+        - cost
+      additionalProperties: false
+      oneOf:
+        -
+          required:
+            - product_variant_id
+          not:
+            required:
+              - variant_uuid
+        -
+          required:
+            - variant_uuid
+          not:
+            required:
+              - product_variant_id
+    PurchaseRow:
+      type: object
+      properties:
+        product_variant_id:
+          type: integer
+          format: int64
+          minimum: 1
+        variant_uuid:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+        unit_cost:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+      required:
+        - quantity
+        - unit_cost
+      additionalProperties: false
+      oneOf:
+        -
+          required:
+            - product_variant_id
+          not:
+            required:
+              - variant_uuid
+        -
+          required:
+            - variant_uuid
+          not:
+            required:
+              - product_variant_id
+    SaleRow:
+      type: object
+      properties:
+        product_variant_id:
+          type: integer
+          format: int64
+          minimum: 1
+        variant_uuid:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+        unit_price:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        price_reason:
+          type: string
+          maxLength: 500
+        discount:
+          $ref: '#/components/schemas/Discount'
+        expected_revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+        stock_revision_from:
+          type: string
+          format: uuid
+      required:
+        - quantity
+      additionalProperties: false
+      allOf:
+        -
+          oneOf:
+            -
+              required:
+                - product_variant_id
+              not:
+                required:
+                  - variant_uuid
+            -
+              required:
+                - variant_uuid
+              not:
+                required:
+                  - product_variant_id
+        -
+          anyOf:
+            -
+              required:
+                - expected_revision
+            -
+              required:
+                - stock_revision_from
+    OpeningCreate:
+      type: object
+      properties:
+        opening_date:
+          type: string
+          format: date
+        notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpeningRow'
+          minItems: 1
+          maxItems: 300
+      required:
+        - opening_date
+        - rows
+      additionalProperties: false
+    PurchaseCreate:
+      type: object
+      properties:
+        supplier_id:
+          type: integer
+          format: int64
+          minimum: 1
+        invoice_date:
+          type: string
+          format: date
+        supplier_invoice_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 100
+        notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        initial_payment:
+          type: string
+          pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+          description: 'Decimal money string; server performs authoritative accounting.'
+        payment_method:
+          type:
+            - string
+            - 'null'
+          enum:
+            - cash
+            - bank
+            - wallet
+            - other
+            - null
+        payment_details:
+          type: object
+          properties:
+            account_id:
+              type: integer
+              format: int64
+              minimum: 1
+            confirmed:
+              type: boolean
+            reference:
+              type:
+                - string
+                - 'null'
+              maxLength: 100
+          required:
+            - account_id
+          additionalProperties: false
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseRow'
+          minItems: 1
+          maxItems: 300
+      required:
+        - supplier_id
+        - invoice_date
+        - initial_payment
+        - rows
+      additionalProperties: false
+    SaleCreate:
+      type: object
+      properties:
+        customer_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+          minimum: 1
+        invoice_date:
+          type: string
+          format: date
+        payment_mode:
+          enum:
+            - paid
+            - partial
+            - credit
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+          maxItems: 10
+        discount:
+          $ref: '#/components/schemas/Discount'
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+        notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleRow'
+          minItems: 1
+          maxItems: 300
+        below_minimum_confirmed:
+          type: boolean
+          default: false
+          description: 'Explicit user confirmation after reviewing an effective price below minimum. Does not grant below-cost or discount-override permissions.'
+      required:
+        - payment_mode
+        - rows
+      additionalProperties: false
+    OperationBase:
+      type: object
+      properties:
+        operation_uuid:
+          type: string
+          format: uuid
+        operation_type:
+          enum:
+            - product.create
+            - product.update
+            - opening_stock.create
+            - purchase.create
+            - sale.create
+        client_created_at:
+          type: string
+          format: date-time
+        branch_id:
+          type: integer
+          format: int64
+          minimum: 1
+        dependencies:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+          uniqueItems: true
+        payload:
+          type: object
+      required:
+        - operation_uuid
+        - operation_type
+        - client_created_at
+        - branch_id
+        - dependencies
+        - payload
+      additionalProperties: false
+    OperationResult:
+      type: object
+      properties:
+        operation_uuid:
+          type: string
+          format: uuid
+        status:
+          enum:
+            - accepted
+            - already_applied
+            - retryable
+            - conflict_requires_review
+            - validation_failed
+            - dependency_blocked
+        result:
+          type: object
+          description: 'Product mapping, document receipt, or code/message/errors. Exact forms in flutter-api-contract.md.'
+        retry_after_seconds:
+          type: integer
+          minimum: 0
+      required:
+        - operation_uuid
+        - status
+        - result
+    PushResult:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationResult'
+      required:
+        - schema_version
+        - results
+    Bootstrap:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        sync_uuid:
+          type: string
+          format: uuid
+        branch_id:
+          type: integer
+          format: int64
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 100
+      required:
+        - sync_uuid
+        - branch_id
+      additionalProperties: false
+    Pull:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        cursor:
+          type: string
+          maxLength: 4096
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 100
+      required:
+        - cursor
+      additionalProperties: false
+    Change:
+      type: object
+      properties:
+        entity:
+          enum:
+            - branches
+            - categories
+            - colors
+            - sizes
+            - products
+            - variants
+            - images
+            - swatches
+            - stocks
+            - customers
+            - customer_balances
+            - sales
+            - receipts
+            - accounts
+            - suppliers
+            - purchases
+            - openings
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        action:
+          enum:
+            - upsert
+            - delete
+        data:
+          oneOf:
+            -
+              $ref: '#/components/schemas/MobileRecord'
+            -
+              type: 'null'
+      required:
+        - entity
+        - id
+        - action
+        - data
+    SyncResult:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        server_timestamp:
+          type: string
+          format: date-time
+        branch_id:
+          type: integer
+          format: int64
+          minimum: 1
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+        has_more:
+          type: boolean
+        cursor:
+          type: string
+      required:
+        - schema_version
+        - server_timestamp
+        - branch_id
+        - changes
+        - has_more
+        - cursor
+    ImageReceipt:
+      type: object
+      properties:
+        image_id:
+          type: integer
+          format: int64
+          minimum: 1
+        product_id:
+          type: integer
+          format: int64
+          minimum: 1
+        color_id:
+          type: integer
+          format: int64
+          minimum: 1
+        thumbnail_url:
+          type: string
+          format: uri
+        optimized_url:
+          type: string
+          format: uri
+      required:
+        - image_id
+        - product_id
+        - color_id
+        - thumbnail_url
+        - optimized_url
+    CreateProductOperation:
+      allOf:
+        -
+          $ref: '#/components/schemas/OperationBase'
+        -
+          type: object
+          properties:
+            operation_type:
+              const: product.create
+            payload:
+              $ref: '#/components/schemas/ProductCreate'
+          required: []
+    UpdateProductOperation:
+      allOf:
+        -
+          $ref: '#/components/schemas/OperationBase'
+        -
+          type: object
+          properties:
+            operation_type:
+              const: product.update
+            payload:
+              $ref: '#/components/schemas/ProductUpdate'
+          required: []
+    OpeningOperation:
+      allOf:
+        -
+          $ref: '#/components/schemas/OperationBase'
+        -
+          type: object
+          properties:
+            operation_type:
+              const: opening_stock.create
+            payload:
+              $ref: '#/components/schemas/OpeningCreate'
+          required: []
+    PurchaseOperation:
+      allOf:
+        -
+          $ref: '#/components/schemas/OperationBase'
+        -
+          type: object
+          properties:
+            operation_type:
+              const: purchase.create
+            payload:
+              $ref: '#/components/schemas/PurchaseCreate'
+          required: []
+    SaleOperation:
+      allOf:
+        -
+          $ref: '#/components/schemas/OperationBase'
+        -
+          type: object
+          properties:
+            operation_type:
+              const: sale.create
+            payload:
+              $ref: '#/components/schemas/SaleCreate'
+          required: []
+    Push:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        operations:
+          type: array
+          items:
+            oneOf:
+              -
+                $ref: '#/components/schemas/CreateProductOperation'
+              -
+                $ref: '#/components/schemas/UpdateProductOperation'
+              -
+                $ref: '#/components/schemas/OpeningOperation'
+              -
+                $ref: '#/components/schemas/PurchaseOperation'
+              -
+                $ref: '#/components/schemas/SaleOperation'
+            discriminator:
+              propertyName: operation_type
+              mapping:
+                product.create: '#/components/schemas/CreateProductOperation'
+                product.update: '#/components/schemas/UpdateProductOperation'
+                opening_stock.create: '#/components/schemas/OpeningOperation'
+                purchase.create: '#/components/schemas/PurchaseOperation'
+                sale.create: '#/components/schemas/SaleOperation'
+          minItems: 1
+          maxItems: 20
+      required:
+        - schema_version
+        - operations
+      additionalProperties: false
+    RecordProduct:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+        category_id:
+          type: integer
+          format: int64
+        description:
+          type:
+            - string
+            - 'null'
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - code
+        - category_id
+        - description
+        - is_active
+        - revision
+    RecordVariant:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        color_id:
+          type: integer
+          format: int64
+        size_id:
+          type: integer
+          format: int64
+        sku:
+          type: string
+        selling_price:
+          type: string
+        minimum_selling_price:
+          type:
+            - string
+            - 'null'
+        is_active:
+          type: boolean
+        barcode_supported:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - product_id
+        - color_id
+        - size_id
+        - sku
+        - selling_price
+        - is_active
+        - barcode_supported
+        - revision
+        - minimum_selling_price
+    RecordStock:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        product_variant_id:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int64
+        quarantined_quantity:
+          type: integer
+          format: int64
+        damaged_quantity:
+          type: integer
+          format: int64
+        average_cost:
+          type:
+            - string
+            - 'null'
+        value_minor:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        quarantined_value_minor:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+        reserved_quantity:
+          type: integer
+          format: int64
+          minimum: 0
+        available_quantity:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - id
+        - branch_id
+        - product_variant_id
+        - quantity
+        - quarantined_quantity
+        - damaged_quantity
+        - revision
+        - reserved_quantity
+        - available_quantity
+    RecordCategory:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        parent_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - parent_id
+        - is_active
+        - revision
+    RecordColor:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+        hex_code:
+          type:
+            - string
+            - 'null'
+        hex:
+          type:
+            - string
+            - 'null'
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - code
+        - hex_code
+        - hex
+        - is_active
+        - revision
+    RecordSize:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+        sort_order:
+          type: integer
+          format: int64
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - code
+        - sort_order
+        - is_active
+        - revision
+    RecordBranch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        address:
+          type:
+            - string
+            - 'null'
+        phone:
+          type:
+            - string
+            - 'null'
+        type:
+          type: string
+        is_active:
+          type: boolean
+        opening_stock_closed_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - address
+        - phone
+        - type
+        - is_active
+        - opening_stock_closed_at
+        - revision
+    RecordCustomer:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        phone:
+          type:
+            - string
+            - 'null'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - phone
+        - revision
+    RecordCustomerBalance:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        debt_minor:
+          type: integer
+          format: int64
+        credit_minor:
+          type: integer
+          format: int64
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - debt_minor
+        - credit_minor
+        - revision
+    RecordAccount:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        type:
+          type: string
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - branch_id
+        - name
+        - type
+        - is_active
+        - revision
+    RecordSupplier:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        phone1:
+          type:
+            - string
+            - 'null'
+        phone2:
+          type:
+            - string
+            - 'null'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - name
+        - phone1
+        - phone2
+        - revision
+    RecordImage:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        color_id:
+          type: integer
+          format: int64
+        thumbnail_url:
+          type:
+            - string
+            - 'null'
+        optimized_url:
+          type:
+            - string
+            - 'null'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - product_id
+        - color_id
+        - thumbnail_url
+        - optimized_url
+        - revision
+    RecordSwatch:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_id:
+          type: integer
+          format: int64
+        color_id:
+          type: integer
+          format: int64
+        url:
+          type:
+            - string
+            - 'null'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - product_id
+        - color_id
+        - url
+        - revision
+    SaleItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_variant_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        product_name:
+          type: string
+        product_code:
+          type: string
+        sku:
+          type: string
+        color_name:
+          type: string
+        size_name:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+        unit_price_minor:
+          type: integer
+          format: int64
+        net_minor:
+          type: integer
+          format: int64
+        returned_quantity:
+          type: integer
+          format: int64
+        unit_cost:
+          type: string
+        cost_minor:
+          type: integer
+          format: int64
+      required:
+        - id
+        - product_variant_id
+        - product_name
+        - product_code
+        - sku
+        - color_name
+        - size_name
+        - quantity
+        - unit_price_minor
+        - net_minor
+        - returned_quantity
+    AcquisitionItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_variant_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        product_name:
+          type: string
+        product_code:
+          type: string
+        sku:
+          type: string
+        color_name:
+          type: string
+        size_name:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+        unit_cost_minor:
+          type: integer
+          format: int64
+        line_total_minor:
+          type: integer
+          format: int64
+        unit_cost:
+          type: string
+        line_total:
+          type: string
+      required:
+        - id
+        - product_variant_id
+        - product_name
+        - product_code
+        - sku
+        - color_name
+        - size_name
+        - quantity
+        - unit_cost
+        - line_total
+    RecordSale:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        number:
+          type: string
+        invoice_date:
+          type: string
+          format: date
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        customer_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        customer_name:
+          type: string
+        cashier_name:
+          type: string
+        total_quantity:
+          type: integer
+          format: int64
+        total_minor:
+          type: integer
+          format: int64
+        paid_minor:
+          type: integer
+          format: int64
+        released_minor:
+          type: integer
+          format: int64
+        returned_minor:
+          type: integer
+          format: int64
+        due_minor:
+          type: integer
+          format: int64
+        cost_minor:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleItem'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - branch_id
+        - number
+        - invoice_date
+        - status
+        - version
+        - customer_id
+        - customer_name
+        - cashier_name
+        - total_quantity
+        - total_minor
+        - paid_minor
+        - released_minor
+        - returned_minor
+        - due_minor
+        - items
+        - revision
+    RecordReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        number:
+          type: string
+        customer_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        transaction_date:
+          type: string
+          format: date
+        kind:
+          type: string
+        status:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - branch_id
+        - number
+        - customer_id
+        - transaction_date
+        - kind
+        - status
+        - amount_minor
+        - revision
+    RecordPurchase:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        number:
+          type: string
+        supplier_id:
+          type:
+            - integer
+            - 'null'
+          format: int64
+        supplier_name:
+          type: string
+        invoice_date:
+          type: string
+          format: date
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        total_minor:
+          type: integer
+          format: int64
+        paid_minor:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcquisitionItem'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - branch_id
+        - number
+        - supplier_id
+        - supplier_name
+        - invoice_date
+        - status
+        - version
+        - total_minor
+        - paid_minor
+        - items
+        - revision
+    RecordOpening:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+          format: int64
+        number:
+          type: string
+        opening_date:
+          type: string
+          format: date
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        total_quantity:
+          type: integer
+          format: int64
+        total_cost:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcquisitionItem'
+        revision:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - id
+        - branch_id
+        - number
+        - opening_date
+        - status
+        - version
+        - total_quantity
+        - total_cost
+        - items
+        - revision
+    MobileRecord:
+      oneOf:
+        -
+          $ref: '#/components/schemas/RecordProduct'
+        -
+          $ref: '#/components/schemas/RecordVariant'
+        -
+          $ref: '#/components/schemas/RecordStock'
+        -
+          $ref: '#/components/schemas/RecordCategory'
+        -
+          $ref: '#/components/schemas/RecordColor'
+        -
+          $ref: '#/components/schemas/RecordSize'
+        -
+          $ref: '#/components/schemas/RecordBranch'
+        -
+          $ref: '#/components/schemas/RecordCustomer'
+        -
+          $ref: '#/components/schemas/RecordCustomerBalance'
+        -
+          $ref: '#/components/schemas/RecordAccount'
+        -
+          $ref: '#/components/schemas/RecordSupplier'
+        -
+          $ref: '#/components/schemas/RecordImage'
+        -
+          $ref: '#/components/schemas/RecordSwatch'
+        -
+          $ref: '#/components/schemas/RecordSale'
+        -
+          $ref: '#/components/schemas/RecordReceipt'
+        -
+          $ref: '#/components/schemas/RecordPurchase'
+        -
+          $ref: '#/components/schemas/RecordOpening'

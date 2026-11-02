@@ -1,0 +1,11 @@
+@extends('layouts.app')
+@section('title','طلبات الموقع')
+@section('content')
+@php($routePrefix=request()->routeIs('store.admin.*') ? 'store.admin.orders.' : 'store.orders.')
+<div class="screen active commerce-page"><header class="commerce-header"><div><p class="commerce-eyebrow">المبيعات عبر الموقع</p><h1>طلبات الموقع</h1><p>طلبات حقيقية، وحجز يبدأ بعد المراجعة فقط.</p></div>@can('store.manage')<a class="btn btn-outline" href="{{ route('store.admin.home') }}">إدارة الموقع</a>@endcan</header>
+@include('store.admin.feedback')
+<form method="GET" class="commerce-filter"><label>البحث<input name="q" value="{{ $filters['q']??'' }}" placeholder="اسم العميل، هاتفه أو رقم الطلب"></label><label>الحالة<select name="status"><option value="">جميع الحالات</option>@foreach(['new'=>'جديد','confirmed'=>'مؤكد','dispatched'=>'قيد التوصيل','delivered'=>'تم التسليم','refused'=>'مرفوض عند الاستلام','return_pending'=>'بانتظار عودة البضاعة','cancelled'=>'ملغى'] as $key=>$label)<option value="{{ $key }}" @selected(($filters['status']??'')===$key)>{{ $label }}</option>@endforeach</select></label><button class="btn btn-primary">بحث</button></form>
+<section class="commerce-card"><div class="table-responsive"><table><thead><tr><th>الطلب</th><th>العميل</th><th>الحالة</th><th>قيمة المنتجات</th><th>التوصيل</th><th>التحصيل</th><th>التاريخ</th><th></th></tr></thead><tbody>
+@forelse($entries as $entry)<tr><td>WEB-{{ $entry->id }}</td><td>{{ $entry->customer_name }}<br><bdi>{{ $entry->phone }}</bdi></td><td><span class="commerce-badge">{{ ['new'=>'جديد','confirmed'=>'مؤكد','dispatched'=>'قيد التوصيل','delivered'=>'تم التسليم','refused'=>'مرفوض','return_pending'=>'بانتظار العودة','cancelled'=>'ملغى'][$entry->status] }}</span></td><td>{{ \App\Support\Sales\Money::format($entry->products_minor) }}</td><td>{{ \App\Support\Sales\Money::format($entry->delivery_minor) }}</td><td>{{ ['uncollected'=>'غير محصل','partial'=>'جزئي','paid'=>'محصل'][$entry->collection_state] }}</td><td>{{ $entry->created_at->format('Y-m-d H:i') }}</td><td><a class="btn btn-outline btn-sm" href="{{ route($routePrefix.'show',$entry) }}">تفاصيل الطلب</a></td></tr>
+@empty<tr><td colspan="8"><div class="commerce-empty">لا توجد طلبات تطابق البحث.</div></td></tr>@endforelse</tbody></table></div>{{ $entries->links() }}</section></div>
+@endsection

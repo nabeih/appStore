@@ -8,6 +8,15 @@ use App\Support\Sales\SalesAccess;
 class AccessPermissions
 {
     public const EXTRA = [
+        'store.manage' => 'إدارة محتوى وإعدادات الموقع',
+        'store.orders.view' => 'عرض طلبات الموقع',
+        'store.orders.manage' => 'معالجة طلبات الموقع وحجزها',
+        'store.courier_settle' => 'تسوية عهدة ومستحقات مزوّد التوصيل',
+        'notifications.price_alerts' => 'استلام تنبيهات البيع تحت الحد الأدنى',
+        'branches.view' => 'عرض الفروع',
+        'branches.create' => 'إنشاء الفروع',
+        'branches.update' => 'تعديل الفروع',
+        'branches.manage_status' => 'إدارة حالة الفروع',
         'catalog.search' => 'البحث عن المنتجات',
         'inventory.view' => 'عرض كميات المخزون',
         'purchases.view' => 'عرض المشتريات والموردين',
@@ -39,6 +48,7 @@ class AccessPermissions
     public static function group(string $permission): string
     {
         return match (true) {
+            str_starts_with($permission, 'store.'), str_starts_with($permission, 'notifications.') => 'الموقع والإشعارات',
             str_starts_with($permission, 'access.'), $permission === 'sales.manage_access' => 'المستخدمون والأدوار',
             $permission === 'catalog.search', $permission === 'inventory.manage_catalog' => 'المنتجات والكتالوج',
             str_starts_with($permission, 'inventory.') => 'المخزون والإعداد',
@@ -46,7 +56,7 @@ class AccessPermissions
             in_array($permission, ['sales.return', 'sales.exchange', 'sales.reverse'], true) => 'المرتجعات والعكس',
             $permission === 'sales.customers' => 'العملاء',
             $permission === 'sales.collect' => 'التحصيل',
-            $permission === 'sales.all_branches' => 'الفروع',
+            str_starts_with($permission, 'branches.'), $permission === 'sales.all_branches' => 'الفروع',
             in_array($permission, ['sales.view_cost', 'sales.reports'], true) => 'التكلفة والتقارير',
             str_starts_with($permission, 'finance.'), $permission === 'sales.manage_accounts' => 'المالية والصناديق',
             default => 'المبيعات',

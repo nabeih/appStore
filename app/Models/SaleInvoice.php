@@ -23,6 +23,11 @@ class SaleInvoice extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function minimumExceptions(): HasMany
+    {
+        return $this->hasMany(SalePriceException::class);
+    }
+
     public function returns(): HasMany
     {
         return $this->hasMany(SaleReturn::class);

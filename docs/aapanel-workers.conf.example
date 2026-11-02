@@ -1,0 +1,27 @@
+# Supervisor template. Verify paths and service user; this does not start workers.
+[program:appstore-default]
+command=/www/server/php/85/bin/php /www/wwwroot/REPLACE_RELEASE_PATH/artisan queue:work database --queue=default --sleep=3 --tries=3 --timeout=60 --max-time=3600
+directory=/www/wwwroot/REPLACE_RELEASE_PATH
+user=www
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=120
+redirect_stderr=true
+stdout_logfile=/www/wwwroot/REPLACE_RELEASE_PATH/storage/logs/worker-default.log
+
+# Enable only after testing the existing AI runtime and approved model.
+[program:appstore-ai-indexing]
+command=/www/server/php/85/bin/php /www/wwwroot/REPLACE_RELEASE_PATH/artisan queue:work ai_database --queue=ai-indexing --sleep=3 --tries=3 --timeout=60 --max-time=3600
+directory=/www/wwwroot/REPLACE_RELEASE_PATH
+user=www
+numprocs=1
+autostart=false
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=150
+redirect_stderr=true
+stdout_logfile=/www/wwwroot/REPLACE_RELEASE_PATH/storage/logs/worker-ai.log

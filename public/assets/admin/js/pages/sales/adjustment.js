@@ -11,6 +11,7 @@
         const credit = el('adjustment-refund-mode').value === 'credit';
         el('adjustment-refunds').hidden = credit; el('adjustment-add-refund').hidden = credit; invalidate();
     }
+    el('exchange-minimum-confirm')?.addEventListener('change', () => { reviewed = false; version++; clearTimeout(timer); request?.abort(); el('adjustment-submit').disabled = true; preview(); });
     function payload() {
         const returns = [...form.querySelectorAll('[data-return-item]')].map(row => ({ sale_item_id: Number(row.dataset.returnItem),
             quantity: Number(row.querySelector('[data-return-quantity]').value), condition: row.querySelector('[data-return-condition]').value })).filter(row => row.quantity > 0);
@@ -19,9 +20,10 @@
         let payments = ui.payments(el('exchange-payments'));
         if (el('exchange-settlement-mode').value === 'credit') payments = payments.filter(part => part.amount !== null);
         return { ...common, return_rows: returns, rows: rows.map(row => ({ product_variant_id: row.product_variant_id, quantity: row.quantity,
-            unit_price: row.unit_price, discount: { type: 'amount', value: row.discount || '0' } })), settlement_mode: el('exchange-settlement-mode').value, payments };
+            unit_price: row.unit_price, discount: { type: 'amount', value: row.discount || '0' } })), settlement_mode: el('exchange-settlement-mode').value, payments, below_minimum_confirmed: !!el('exchange-minimum-confirm')?.checked };
     }
     function invalidate() {
+        if (el('exchange-minimum-confirm')) el('exchange-minimum-confirm').checked = false;
         reviewed = false; dirty = true; version++; clearTimeout(timer); request?.abort(); el('adjustment-submit').disabled = true;
         el('adjustment-summary').replaceChildren(); el('adjustment-preview-status').textContent = 'جارٍ مراجعة التسوية...';
         if (!busy) timer = setTimeout(preview,400);
@@ -43,8 +45,8 @@
     el('adjustment-refund-mode').addEventListener('change',refundMode);
     payment(el('adjustment-refunds')); el('adjustment-refunds').hidden = el('adjustment-refund-mode').value === 'credit';
     el('adjustment-add-refund').hidden = el('adjustment-refund-mode').value === 'credit';
-    form.addEventListener('input',event => { if (!['exchange-product-search','adjustment-customer-search'].includes(event.target.id)) invalidate(); });
-    form.addEventListener('change',invalidate);
+    form.addEventListener('input',event => { if (!['exchange-product-search','adjustment-customer-search','exchange-minimum-confirm'].includes(event.target.id)) invalidate(); });
+    form.addEventListener('change',event => { if(event.target.id !== 'exchange-minimum-confirm') invalidate(); });
     if (el('adjustment-customer-search')) {
         el('adjustment-customer-search').addEventListener('input',() => {
             customerId = null; invalidate(); clearTimeout(customerTimer); customerRequest?.abort(); const q = el('adjustment-customer-search').value.trim();

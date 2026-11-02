@@ -22,7 +22,7 @@ use Illuminate\View\View;
 
 class TreasuryController extends Controller
 {
-    public function index(SearchRequest $request): View
+    public function index(SearchRequest $request): View|JsonResponse
     {
         if (! FinanceContext::installed()) {
             return view('finance.pending');
@@ -32,6 +32,18 @@ class TreasuryController extends Controller
         $branchId = (int) ($filters['branch_id'] ?? $branches->first()?->id);
         abort_unless($branches->contains('id', $branchId), 403);
         $day = $filters['to'] ?? OperationContext::today();
+        $periodFilters = ['branch_id' => $branchId, 'from' => $filters['from'] ?? $day, 'to' => $day];
+        abort_if($periodFilters['from'] > $day, 422, 'تاريخ البداية يجب ألا يتجاوز النهاية.');
+        $period = app(FinanceReports::class)->periodFor($request->user(), $periodFilters);
+        $completeness = app(FinanceReports::class)->completeness([$branchId]);
+        if ($request->expectsJson() || $request->boolean('export')) {
+            $headers = ['Cache-Control' => 'no-store, private'];
+            if ($request->boolean('export')) {
+                $headers['Content-Disposition'] = 'attachment; filename="operating-period-report.json"';
+            }
+
+            return response()->json(['filters' => $periodFilters, 'period' => $period, 'completeness' => $completeness], 200, $headers);
+        }
         $next = CarbonImmutable::parse($day)->addDay()->toDateString();
         $accounts = FinancialAccount::where('branch_id', $branchId)->whereIn('type', ['cash', 'bank', 'wallet'])
             ->withSum(['lines as opening_debit' => fn ($q) => $q->whereHas('entry', fn ($q) => $q->where('transaction_date', '<', $day))], 'debit_minor')
@@ -49,10 +61,8 @@ class TreasuryController extends Controller
         $entries = $query->with(['account', 'entry'])->latest('id')->paginate(20)->withQueryString();
         $documents = TreasuryDocument::where('branch_id', $branchId)->with(['fromAccount', 'toAccount'])->latest('id')->paginate(10, ['*'], 'documents_page')->withQueryString();
         $counts = CashCount::where('branch_id', $branchId)->with(['account', 'settlement'])->latest('id')->paginate(10, ['*'], 'counts_page')->withQueryString();
-        $completeness = app(FinanceReports::class)->completeness([$branchId]);
-        $period = app(FinanceReports::class)->period(['branch_id' => $branchId, 'from' => $filters['from'] ?? $day, 'to' => $day]);
 
-        return view('finance.treasury.index', compact('filters', 'branches', 'branchId', 'day', 'accounts', 'entries', 'documents', 'counts', 'completeness', 'period'));
+        return view('finance.treasury.index', compact('filters', 'branches', 'branchId', 'day', 'accounts', 'entries', 'documents', 'counts', 'completeness', 'period', 'periodFilters'));
     }
 
     public function store(TreasuryRequest $request, ManageTreasuryAction $action): JsonResponse

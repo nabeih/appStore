@@ -27,7 +27,7 @@ class SaveSaleRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['client_uuid' => ['required', 'uuid'], 'version' => ['sometimes', 'integer', 'min:1'],
+        return ['client_uuid' => ['required', 'uuid'], 'version' => ['sometimes', 'integer', 'min:1'], 'below_minimum_confirmed' => ['sometimes', 'boolean'],
             'branch_id' => ['required', 'integer', 'min:1'], 'customer_id' => ['nullable', 'integer', 'min:1'],
             'invoice_date' => ['sometimes', 'date_format:Y-m-d'], 'payment_mode' => ['required', Rule::in(['paid', 'partial', 'credit'])],
             'reason' => ['nullable', 'string', 'max:500'], 'notes' => ['nullable', 'string', 'max:2000'],

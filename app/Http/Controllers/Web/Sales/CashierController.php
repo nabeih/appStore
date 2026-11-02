@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Sales;
 
+use App\Actions\Catalog\VisibleProductsQuery;
 use App\Actions\Inventory\ReviewInventoryAction;
 use App\Actions\Sales\PrepareSaleAction;
 use App\Actions\Search\ModuleSearch;
@@ -54,10 +55,18 @@ class CashierController extends Controller
         $branch = OperationContext::branch($request->user(), (int) $data['branch_id'], 'sales.sell');
         $data['q'] = SearchTerm::normalize($data['q'] ?? '');
         $q = $data['q'];
-        $products = app(ModuleSearch::class)->rankProducts(Product::query(), $q)->where('is_active', true)->whereHas('category', fn ($q) => $q->where('is_active', true))
+        $visible = app(VisibleProductsQuery::class)->variants($request->user(), $branch->id)
+            ->whereHas('inventories', fn ($stock) => $stock->where('branch_id', $branch->id))
+            ->where('is_active', true)->whereHas('color', fn ($color) => $color->where('is_active', true))
+            ->whereHas('size', fn ($size) => $size->where('is_active', true));
+        $variants = fn ($query) => app(ModuleSearch::class)->variants($query, $data)
+            ->whereIn('product_variants.id', (clone $visible)->select('product_variants.id'));
+        $media = fn ($query) => $query->whereIn('color_id', (clone $visible)
+            ->whereColumn('product_variants.product_id', $query->getRelated()->getTable().'.product_id')->select('product_variants.color_id'));
+        $products = app(ModuleSearch::class)->rankProducts(Product::query(), $q, $visible)->where('is_active', true)->whereHas('category', fn ($q) => $q->where('is_active', true))
             ->whereHas('variants', fn ($query) => $query->where('is_active', true)->whereHas('inventories', fn ($query) => $query->where('branch_id', $branch->id)->where('quantity', '>', 0)))
-            ->whereHas('variants', fn ($query) => app(ModuleSearch::class)->variants($query, $data))
-            ->with(['images', 'swatches', 'variants' => fn ($query) => app(ModuleSearch::class)->variants($query, $data)->where('is_active', true)->whereHas('color', fn ($query) => $query->where('is_active', true))->whereHas('size', fn ($query) => $query->where('is_active', true)),
+            ->whereHas('variants', $variants)
+            ->with(['images' => $media, 'swatches' => $media, 'variants' => $variants,
                 'variants.color', 'variants.size', 'variants.inventories' => fn ($query) => $query->where('branch_id', $branch->id)])
             ->orderBy('name')->paginate(16);
         $canCost = SalesAccess::allows($request->user(), 'sales.view_cost');
@@ -78,7 +87,8 @@ class CashierController extends Controller
                 $stock = $variant->inventories->first();
                 $result = ['product_variant_id' => $variant->id, 'product_id' => $variant->product_id, 'sku' => $variant->sku,
                     'color_id' => $variant->color_id, 'color' => $variant->color->name, 'hex' => $variant->color->display_hex,
-                    'size' => $variant->size->name, 'unit_price' => $variant->selling_price, 'available' => (int) ($stock?->quantity ?? 0),
+                    'size' => $variant->size->name, 'unit_price' => $variant->selling_price, 'minimum_selling_price' => $variant->minimum_selling_price,
+                    'available' => max(0, (int) ($stock?->quantity ?? 0) - (int) ($stock?->reserved_quantity ?? 0)),
                     'image_url' => $product->images->firstWhere('color_id', $variant->color_id)?->thumbnail_url,
                     'swatch_url' => $product->swatches->firstWhere('color_id', $variant->color_id)?->url,
                     'optimized_image_url' => $product->images->firstWhere('color_id', $variant->color_id)?->optimized_url];

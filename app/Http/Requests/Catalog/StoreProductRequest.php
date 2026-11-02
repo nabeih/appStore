@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Catalog;
 
+use App\Support\Access\AccessPermissions;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,7 +15,10 @@ class StoreProductRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+        $minimum = collect((array) $this->input('variants', []))->contains(fn ($row): bool => is_array($row) && array_key_exists('minimum_selling_price', $row));
+
+        return $user && $user->can('inventory.manage_catalog') && (! $minimum || AccessPermissions::isOwner($user));
     }
 
     /**
@@ -87,6 +91,7 @@ class StoreProductRequest extends FormRequest
             ],
 
             'variants.*.minimum_selling_price' => [
+                Rule::prohibitedIf(fn (): bool => $this->user() === null || ! AccessPermissions::isOwner($this->user())),
                 'nullable',
                 'numeric',
                 'min:0',

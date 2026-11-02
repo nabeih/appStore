@@ -277,6 +277,13 @@ class OpeningStockTest extends TestCase
             DB::enableQueryLog();
             $this->postJson(route('inventory.opening-stock.store'), $this->payload($rows))->assertCreated();
             $queries = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_starts_with(strtolower($query['query']), 'select'))->count();
+            if (getenv('FINANCIAL_QUERY_PROFILE') === '1') {
+                file_put_contents(storage_path('app/reports/financial-remediation-query-after.jsonl'), json_encode(['rows' => count($rows), 'selects' => $queries,
+                    'queries' => collect(DB::getQueryLog())->filter(fn (array $query): bool => str_starts_with(strtolower($query['query']), 'select'))->pluck('query')->all()], JSON_THROW_ON_ERROR).PHP_EOL, FILE_APPEND | LOCK_EX);
+            }
+            $installationQueries = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_starts_with(strtolower($query['query']), 'select') && str_contains($query['query'], 'application_installations'))->count();
+            $this->assertLessThanOrEqual(2, $installationQueries, 'Read installation state once per request, including its schema compatibility check.');
+            $this->assertLessThanOrEqual(21, $queries - $installationQueries, 'Preserve the original business-query budget.');
             DB::disableQueryLog();
 
             return $queries;
@@ -288,7 +295,7 @@ class OpeningStockTest extends TestCase
         }
         $batch = $selectCount($rows);
         $this->assertLessThanOrEqual($single + 2, $batch);
-        $this->assertLessThanOrEqual(21, $batch);
+        $this->assertLessThanOrEqual(23, $batch, '21 business queries plus at most two installation-safety queries.');
     }
 
     public function test_catalog_options_quick_add_and_product_search_are_available(): void

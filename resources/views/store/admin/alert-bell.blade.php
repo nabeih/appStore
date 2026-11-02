@@ -1,0 +1,3 @@
+<div class="app-alert-shell" data-app-alerts data-url="{{ route('alerts.index') }}" data-read-all="{{ route('alerts.read-all') }}">
+<button type="button" class="app-alert-bell" aria-label="الإشعارات" aria-expanded="false" data-alert-toggle><i class="fas fa-bell" aria-hidden="true"></i><span class="store-count-badge" data-alert-count hidden>0</span></button>
+<section class="app-alert-menu" data-alert-menu hidden aria-label="قائمة الإشعارات"><header><strong>الإشعارات</strong><button type="button" data-alert-read-all>تعليم الكل كمقروء</button></header><p data-alert-status role="status"></p><div data-alert-list></div></section></div>

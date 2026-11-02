@@ -5,10 +5,13 @@ namespace App\Actions\Sales;
 use App\Actions\Customers\RecordCustomerReceiptAction;
 use App\Actions\Finance\PostJournalAction;
 use App\Actions\Inventory\StockLedger;
+use App\Actions\Notifications\DispatchAppAlerts;
 use App\Models\SaleInvoice;
+use App\Models\SalePriceException;
 use App\Models\User;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
+use Illuminate\Support\Facades\Schema;
 
 class PostSaleAction
 {
@@ -44,6 +47,13 @@ class PostSaleAction
                     abort_unless((string) $row[$field] === (string) $item->$field, 409, 'تغيرت بيانات أو أسعار صنف؛ افتح المسودة وراجعها قبل الاعتماد.');
                 }
                 $cost = $row['cost_minor'];
+                if ($row['net_minor'] < $row['minimum_snapshot_minor'] * $item->quantity) {
+                    abort_unless(Schema::hasTable('sale_price_exceptions'), 503, 'يلزم تطبيق تحديث تنبيهات الحد الأدنى.');
+                    SalePriceException::firstOrCreate(['sale_item_id' => $item->id], [
+                        'sale_invoice_id' => $current->id, 'user_id' => $actor->id, 'product_variant_id' => $item->product_variant_id,
+                        'quantity' => $item->quantity, 'minimum_unit_minor' => $row['minimum_snapshot_minor'],
+                        'effective_total_minor' => $row['net_minor'], 'confirmed_at' => now()]);
+                }
                 $item->update(['unit_cost' => $this->stock->unitCost($cost, $item->quantity), 'cost_minor' => $cost]);
                 $this->stock->move($positions->get($item->product_variant_id), -$item->quantity, -$cost, 'available', $item, 'sale', $actor, $current->invoice_date->toDateString());
             }
@@ -63,6 +73,10 @@ class PostSaleAction
             }
             OperationContext::audit($current, $actor, 'sale.approved', $data['reason'] ?? null, ['discount_minor' => $current->line_discount_minor + $current->invoice_discount_minor,
                 'price_changes' => $items->where('price_reason', '!=', null)->map->only(['id', 'base_price_minor', 'unit_price_minor', 'price_reason'])->values()->all()]);
+            if (collect($plan['rows'])->contains(fn (array $row): bool => $row['net_minor'] < $row['minimum_snapshot_minor'] * $row['quantity'])) {
+                app(DispatchAppAlerts::class)->record('sale-minimum:'.$current->id, 'minimum_price', $current->branch_id, $current->id,
+                    'بيع أقل من الحد الأدنى', 'اعتمد '.$actor->name.' الفاتورة '.$current->number.' بسعر فعلي أقل من الحد الأدنى.');
+            }
 
             return $current->refresh();
         });

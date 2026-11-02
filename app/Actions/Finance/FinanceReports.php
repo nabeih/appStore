@@ -7,8 +7,12 @@ use App\Models\JournalLine;
 use App\Models\OpeningStockEntry;
 use App\Models\PurchaseInvoice;
 use App\Models\SupplierPayment;
+use App\Models\User;
 use App\Support\Sales\Money;
+use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -63,15 +67,45 @@ class FinanceReports
             'message' => ! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.'];
     }
 
+    public function periodFor(User $actor, array $filters): array
+    {
+        OperationContext::branch($actor, (int) $filters['branch_id'], 'finance.view', false);
+
+        return $this->buildPeriod($filters, $actor->can('sales.view_cost'));
+    }
+
     public function period(array $filters): array
     {
-        $sales = app(SalesReports::class)->summary($filters);
+        return $this->buildPeriod($filters, true);
+    }
+
+    private function buildPeriod(array $filters, bool $includeCost): array
+    {
+        $sales = app(SalesReports::class)->summary($filters, $includeCost);
         $base = DB::table('journal_lines as lines')->join('journal_entries as entries', 'entries.id', '=', 'lines.journal_entry_id')
             ->join('financial_accounts as accounts', 'accounts.id', '=', 'lines.financial_account_id')
             ->where('entries.branch_id', $filters['branch_id'])->where('entries.transaction_date', '>=', $filters['from'])->where('entries.transaction_date', '<', CarbonImmutable::parse($filters['to'])->addDay()->toDateString());
         $expenses = Money::integer((string) (clone $base)->where('accounts.code', 'operating_expenses')->selectRaw('COALESCE(SUM(debit_minor),0)-COALESCE(SUM(credit_minor),0) AS amount')->value('amount'));
         $variance = Money::integer((string) (clone $base)->where('accounts.code', 'cash_variance')->selectRaw('COALESCE(SUM(debit_minor),0)-COALESCE(SUM(credit_minor),0) AS amount')->value('amount'));
 
-        return $sales + ['expenses_minor' => $expenses, 'variance_minor' => $variance, 'result_minor' => $sales['gross_profit_minor'] - $expenses - $sales['inventory_loss_minor'] - $variance];
+        $delivery = -Money::integer((string) (clone $base)->where('accounts.code', 'delivery_revenue')->selectRaw('COALESCE(SUM(debit_minor),0)-COALESCE(SUM(credit_minor),0) AS amount')->value('amount'));
+        $report = $sales + ['expenses_minor' => $expenses, 'variance_minor' => $variance, 'delivery_revenue_minor' => $delivery, 'operating_income_minor' => Money::add($sales['net_sales_minor'], $delivery)];
+        if ($includeCost) {
+            $result = $sales['gross_profit_minor'] + $delivery - $expenses - $sales['inventory_loss_minor'] - $variance;
+            $report += ['result_minor' => $result,
+                'gross_margin_percent' => $this->percentage($sales['gross_profit_minor'], $sales['net_sales_minor']),
+                'operating_margin_percent' => $this->percentage($result, $report['operating_income_minor'])];
+        }
+
+        return $report;
+    }
+
+    private function percentage(int $numerator, int $netSales): ?string
+    {
+        if ($netSales === 0) {
+            return null;
+        }
+
+        return (string) BigDecimal::of($numerator)->multipliedBy(100)->dividedBy($netSales, 2, RoundingMode::HalfUp);
     }
 }

@@ -22,7 +22,12 @@ class SearchRequest extends FormRequest
 
     public function rules(): array
     {
-        return self::filterRules() + ['type' => ['nullable', Rule::in(['products', 'customers', 'suppliers', 'sales', 'purchases', 'openings', 'returns', 'exchanges', 'receipts', 'supplier_payments', 'accounts', 'categories', 'colors', 'sizes'])]];
+        $rules = self::filterRules();
+        if (! $this->routeIs('inventory.review.index', 'inventory.review.export')) {
+            $rules['valuation'] = ['prohibited'];
+        }
+
+        return $rules + ['type' => ['nullable', Rule::in(['products', 'customers', 'suppliers', 'sales', 'purchases', 'openings', 'returns', 'exchanges', 'receipts', 'supplier_payments', 'accounts', 'categories', 'colors', 'sizes'])]];
     }
 
     public static function filterRules(): array

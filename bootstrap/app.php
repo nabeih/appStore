@@ -1,11 +1,20 @@
 <?php
 
 use App\Http\Middleware\Auth\EnsureActiveUser;
+use App\Http\Middleware\Auth\FirstRunSetupGate;
 use App\Http\Middleware\Auth\PreventBackHistory;
+use App\Http\Middleware\Auth\RequireFirstBranch;
+use App\Http\Middleware\Mobile\MobileApiContext;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,10 +26,35 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(fn () => route('dashboard.index'));
-        $middleware->appendToGroup('web', PreventBackHistory::class);
-        $middleware->alias(['active.user' => EnsureActiveUser::class]);
+        $middleware->appendToGroup('web', [FirstRunSetupGate::class, PreventBackHistory::class]);
+        $middleware->prependToPriorityList(AuthenticatesRequests::class, FirstRunSetupGate::class);
+        $middleware->alias(['active.user' => EnsureActiveUser::class, 'first.branch' => RequireFirstBranch::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (Throwable $error, Request $request) {
+            if ($request->is('api/v1/*')) {
+                return app(MobileApiContext::class)->failure($error);
+            }
+            if ($request->is('shop', 'shop/*') && ! $error instanceof ValidationException) {
+                $status = $error instanceof HttpExceptionInterface ? $error->getStatusCode()
+                    : ($error instanceof ModelNotFoundException ? 404 : ($error instanceof TokenMismatchException ? 419 : 503));
+                $message = match ($status) {
+                    404 => 'الصفحة غير متاحة.', 419 => 'انتهت الجلسة؛ حدّث الصفحة وأعد المحاولة.', 429 => 'طلبات كثيرة؛ انتظر قليلًا ثم حاول مجددًا.', default => 'تعذر إتمام الطلب حاليًا؛ احتفظ بالحقيبة وأعد المحاولة.'
+                };
+                $headers = $error instanceof HttpExceptionInterface ? $error->getHeaders() : [];
+
+                return $request->expectsJson() ? response()->json(['message' => $message], $status, $headers)->header('Cache-Control', 'no-store')
+                    : response($message, $status, $headers)->header('Cache-Control', 'no-store');
+            }
+        });
+        $exceptions->report(function (Throwable $error) {
+            if (request()->is('api/v1/*')) {
+                Log::warning('mobile.api.failed', ['type' => class_basename($error)]);
+
+                return false;
+            }
+        });
+        $exceptions->dontFlash(['setup_token', 'password', 'password_confirmation', 'current_password', 'token']);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

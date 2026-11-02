@@ -1,7 +1,14 @@
 <?php
 
+require __DIR__.'/store.php';
+
 use App\Http\Controllers\Web\Access\AccessController;
+use App\Http\Controllers\Web\Account\ProfileController;
 use App\Http\Controllers\Web\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Web\Auth\EmailVerificationController;
+use App\Http\Controllers\Web\Auth\FirstRunSetupController;
+use App\Http\Controllers\Web\Auth\PasswordRecoveryController;
+use App\Http\Controllers\Web\Branches\BranchController;
 use App\Http\Controllers\Web\Catalog\Attributes\AttributeController;
 use App\Http\Controllers\Web\Catalog\Attributes\CategoryController;
 use App\Http\Controllers\Web\Catalog\Attributes\ColorController;
@@ -10,6 +17,7 @@ use App\Http\Controllers\Web\Catalog\FabricSwatchController;
 use App\Http\Controllers\Web\Catalog\ProductColorImageController;
 use App\Http\Controllers\Web\Customers\CustomerController;
 use App\Http\Controllers\Web\Customers\CustomerReceiptController;
+use App\Http\Controllers\Web\Dashboard\DashboardController;
 use App\Http\Controllers\Web\Finance\ExpenseController;
 use App\Http\Controllers\Web\Finance\FinanceReviewController;
 use App\Http\Controllers\Web\Finance\FinancialAccountController;
@@ -20,6 +28,7 @@ use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockController;
 use App\Http\Controllers\Web\Inventory\ProductDetailsController;
 use App\Http\Controllers\Web\Inventory\Setup\InventoryReviewController;
 use App\Http\Controllers\Web\Inventory\Setup\InventorySetupController;
+use App\Http\Controllers\Web\Onboarding\FirstBranchController;
 use App\Http\Controllers\Web\Purchases\PurchaseCatalogController;
 use App\Http\Controllers\Web\Purchases\PurchaseInvoiceController;
 use App\Http\Controllers\Web\Purchases\SupplierPaymentController;
@@ -35,11 +44,33 @@ use App\Http\Controllers\Web\Suppliers\SupplierController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
+    Route::get('/setup', [FirstRunSetupController::class, 'create'])->name('setup.show');
+    Route::post('/setup', [FirstRunSetupController::class, 'store'])->middleware('throttle:first-run-setup')->name('setup.store');
+    Route::get('/forgot-password', [PasswordRecoveryController::class, 'create'])->name('password.request');
+    Route::post('/forgot-password', [PasswordRecoveryController::class, 'send'])->middleware('throttle:account-recovery')->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordRecoveryController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [PasswordRecoveryController::class, 'update'])->middleware('throttle:account-recovery')->name('password.update');
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
+Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->group(function () {
+    Route::get('/onboarding/branch', [FirstBranchController::class, 'create'])->name('onboarding.branch');
+    Route::post('/onboarding/branch', [FirstBranchController::class, 'store'])->middleware('throttle:10,1')->name('onboarding.branch.store');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [ProfileController::class, 'update'])->middleware('throttle:10,1')->name('profile.update');
+    Route::put('/profile/password', [ProfileController::class, 'password'])->middleware('throttle:5,1')->name('profile.password');
+    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware('throttle:6,1')->name('verification.send');
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+    Route::prefix('branches')->name('branches.')->middleware('can:branches.view')->group(function (): void {
+        Route::get('/', [BranchController::class, 'index'])->name('index');
+        Route::get('/create', [BranchController::class, 'create'])->middleware(['can:branches.create', 'can:sales.all_branches'])->name('create');
+        Route::post('/', [BranchController::class, 'store'])->middleware(['can:branches.create', 'can:sales.all_branches', 'throttle:20,1'])->name('store');
+        Route::get('/{branch}/edit', [BranchController::class, 'edit'])->whereNumber('branch')->middleware('can:branches.update')->name('edit');
+        Route::put('/{branch}', [BranchController::class, 'update'])->whereNumber('branch')->middleware(['can:branches.update', 'throttle:30,1'])->name('update');
+        Route::put('/{branch}/status', [BranchController::class, 'status'])->whereNumber('branch')->middleware(['can:branches.manage_status', 'throttle:10,1'])->name('status');
+    });
     Route::prefix('access')->name('access.')->group(function (): void {
         Route::get('/roles', [AccessController::class, 'roles'])->middleware('can:access.roles.manage')->name('roles.index');
         Route::get('/roles/{role}/edit', [AccessController::class, 'roles'])->whereNumber('role')->middleware('can:access.roles.manage')->name('roles.edit');
@@ -188,6 +219,6 @@ Route::middleware(['auth', 'auth.session', 'active.user'])->group(function () {
     Route::delete('/inventory/{inventory}', [InventorySetupController::class, 'destroy'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.destroy');
     Route::redirect('/', '/dashboard')->name('home');
     Route::view('/design-preview', 'index')->name('design.preview');
-    Route::view('dashboard', 'dashboard.index')->name('dashboard.index');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
 });

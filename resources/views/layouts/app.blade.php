@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex,nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -20,9 +21,11 @@
     <link rel="stylesheet" href="{{ asset('assets/admin/css/catalog/color-dot.css') }}">
 
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/session.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/navigation.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/search.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/catalog/fabric-swatches.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/search/products.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/store/commerce.css') }}">
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/css/mobile-documents.css') }}">
 </head>
@@ -34,7 +37,11 @@
 
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-        @include('partials.sidebar')
+        @if(request()->routeIs('store.admin.*'))
+            @include('store.admin.sidebar')
+        @else
+            @include('partials.sidebar')
+        @endif
 
         <main class="main-content">
 
@@ -51,11 +58,13 @@
 
     <script src="{{ asset('assets/admin/js/pages/auth/session.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/layout.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/navigation.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/search.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/pages/catalog/fabric-swatches.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/pages/search/recognition.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/pages/search/products.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/pages/search/visual.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/pages/store/alerts.js') }}" defer></script>
     @stack('scripts')
 </body>
 

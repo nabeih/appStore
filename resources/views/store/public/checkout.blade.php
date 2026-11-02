@@ -1,0 +1,11 @@
+@extends('store.public.layout')
+@section('title','حقيبة التسوق وإتمام الطلب')
+@section('meta')<meta name="robots" content="noindex,nofollow">@endsection
+@section('content')
+<header class="live-page-title"><p>خطوة أخيرة وتكون اختياراتك في الطريق</p><h1>حقيبة التسوق وإتمام الطلب</h1></header>
+<div class="live-checkout" data-store-checkout data-quote="{{ route('store.quote') }}" data-place="{{ route('store.place') }}" data-status="{{ url('/shop/orders/by-client') }}" data-policy="{{ hash('sha256',$settings->policy) }}">
+<section class="live-checkout-card"><h2>اختياراتك</h2><div data-checkout-cart></div><a href="{{ route('store.home') }}">متابعة التسوق</a></section>
+<form class="live-checkout-card live-form" data-checkout-form><h2>بيانات الاستلام</h2><label>الاسم<input name="customer_name" autocomplete="name" required maxlength="150"></label><label>الهاتف<input name="phone" type="tel" autocomplete="tel" required minlength="7" maxlength="40"></label><label>المنطقة<select name="delivery_zone_id" required><option value="">اختر المنطقة</option>@foreach($zones as $zone)<option value="{{ $zone->id }}">{{ $zone->name }}</option>@endforeach</select></label><label>العنوان بالتفصيل<textarea name="address" required minlength="5" maxlength="2000" autocomplete="street-address"></textarea></label><label>ملاحظات اختيارية<textarea name="notes" maxlength="1000"></textarea></label>
+<div class="live-price-summary" aria-live="polite"><p>قيمة المنتجات <strong data-quote-products>—</strong></p><p>التوصيل <strong data-quote-delivery>—</strong></p><p>رسوم المنطقة الأصلية المستحقة عند رفض الاستلام <strong data-quote-original_delivery>—</strong></p><p>الإجمالي <strong data-quote-total>—</strong></p></div>
+<details open><summary>سياسة الطلب والتوصيل ورفض الاستلام</summary><p class="live-policy">{{ $settings->policy }}</p></details><label class="live-check"><input type="checkbox" name="accepted" required> قرأت سياسة الطلب وأوافق عليها، بما فيها رسوم المنطقة الأصلية عند رفض الاستلام ولو كان التوصيل مجانيًا.</label><p>الدفع عند الاستلام فقط، نقدًا للمزوّد أو تحويلًا مباشرًا للمحل أثناء وجوده.</p><p class="live-form-error" data-checkout-error role="alert"></p><button class="live-button" type="submit">تأكيد وإرسال الطلب</button><noscript>يلزم تفعيل JavaScript لإدارة الحقيبة وإتمام الطلب.</noscript></form></div>
+@endsection

@@ -90,7 +90,8 @@
                                     </td>
 
                                     <td>
-                                        {{ $inventory->quantity }}
+                                        {{ max(0,(int)$inventory->quantity-(int)($inventory->reserved_quantity??0)) }}
+                                        @if($inventory->reserved_quantity)<small class="sale-muted">الإجمالي {{ $inventory->quantity }} · محجوز داخل المحل {{ (int)$inventory->reserved_quantity-($transitQuantities[$inventory->branch_id.':'.$inventory->product_variant_id]??0) }} · بعهدة التوصيل {{ $transitQuantities[$inventory->branch_id.':'.$inventory->product_variant_id]??0 }}</small>@endif
                                     </td>
 
                                     @include('inventory.setup.partials.actions')

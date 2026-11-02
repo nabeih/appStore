@@ -9,6 +9,7 @@ use App\Models\CustomerReceipt;
 use App\Models\SaleExchange;
 use App\Models\SaleInvoice;
 use App\Models\SaleReturn;
+use App\Models\StoreOrder;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,12 +39,16 @@ class SalesReports
             ->selectRaw('COALESCE(SUM(lines.debit_minor),0) - COALESCE(SUM(lines.credit_minor),0) AS amount')->value('amount');
     }
 
-    public function summary(array $filters): array
+    public function summary(array $filters, bool $includeCost = true): array
     {
         $sales = -$this->amount('sales', $filters);
         $returns = $this->amount('sales_returns', $filters);
-        $cogs = $this->amount('cogs', $filters);
-        $loss = $this->amount('inventory_loss', $filters);
+        $cost = [];
+        if ($includeCost) {
+            $cogs = $this->amount('cogs', $filters);
+            $cost = ['cogs_minor' => $cogs, 'gross_profit_minor' => $sales - $returns - $cogs,
+                'inventory_loss_minor' => $this->amount('inventory_loss', $filters)];
+        }
         $receipts = $this->lines($filters)->leftJoin('journal_entries as original', 'entries.reversal_of_id', '=', 'original.id')
             ->whereIn('accounts.type', ['cash', 'bank', 'wallet'])
             ->where(fn ($query) => $query->where('entries.source_type', CustomerReceipt::class)->orWhere('original.source_type', CustomerReceipt::class))
@@ -56,10 +61,9 @@ class SalesReports
             ->selectRaw("COALESCE(SUM(CASE WHEN movement_type IN ('sale_return','sale_return_reversal') THEN quantity_change ELSE 0 END),0) AS returned")
             ->selectRaw("COALESCE(SUM(CASE WHEN stock_bucket = 'available' THEN quantity_change ELSE 0 END),0) AS available_change")->first();
 
-        return ['sales_minor' => $sales, 'returns_minor' => $returns, 'net_sales_minor' => $sales - $returns, 'cogs_minor' => $cogs,
-            'gross_profit_minor' => $sales - $returns - $cogs, 'inventory_loss_minor' => $loss,
+        return ['sales_minor' => $sales, 'returns_minor' => $returns, 'net_sales_minor' => $sales - $returns,
             'receivables_minor' => $this->amount('receivables', $filters, true), 'customer_credit_minor' => -$this->amount('customer_credit', $filters, true),
-            'receipts' => $receipts, 'sold_quantity' => (int) $quantities->sold, 'returned_quantity' => (int) $quantities->returned, 'available_change' => (int) $quantities->available_change];
+            'receipts' => $receipts, 'sold_quantity' => (int) $quantities->sold, 'returned_quantity' => (int) $quantities->returned, 'available_change' => (int) $quantities->available_change] + $cost;
     }
 
     public function customerStatement(Customer $customer, array $filters): array
@@ -120,6 +124,7 @@ class SalesReports
     public static function sourceUrl(string $type, int $id): ?string
     {
         return match ($type) {
+            StoreOrder::class => route('store.orders.show', $id),
             SaleInvoice::class => route('sales.invoices.show', $id),
             SaleReturn::class => route('sales.returns.show', $id),
             SaleExchange::class => route('sales.exchanges.show', $id),

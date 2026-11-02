@@ -17,6 +17,7 @@ use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class SaleInvoiceController extends Controller
@@ -97,6 +98,9 @@ class SaleInvoiceController extends Controller
     {
         OperationContext::branch($request->user(), $invoice->branch_id, 'sales.view', false);
         $invoice->load(['items', 'returns.items.saleItem', 'allocations.receipt.parts.account']);
+        if ($request->user()->can('notifications.price_alerts') && Schema::hasTable('sale_price_exceptions')) {
+            $invoice->load('minimumExceptions');
+        }
         $events = AuditEvent::where('subject_type', SaleInvoice::class)->where('subject_id', $invoice->id)->latest('id')->get();
         $exchanges = SaleExchange::where(fn ($q) => $q->where('original_invoice_id', $invoice->id)->orWhere('new_invoice_id', $invoice->id))->get();
         $accounts = FinancialAccount::where('branch_id', $invoice->branch_id)->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get(['id', 'name', 'type']);

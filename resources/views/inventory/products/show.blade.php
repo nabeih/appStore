@@ -12,6 +12,7 @@
         <div class="product-show-actions">
             <a class="btn btn-outline" href="{{ $backUrl }}">الرجوع لقائمة المخزون</a>
             @if($canManage)
+                @if(\App\Support\Access\AccessPermissions::isOwner(auth()->user()))<a class="btn btn-outline" href="{{ route('catalog.minimum.edit',$product) }}">الحد الأدنى للبيع</a>@endif
                 <button type="button" class="btn btn-primary" data-product-details="{{ json_encode(['name'=>$product->name,'description'=>$product->description,'variant_id'=>null,'url'=>url('/api/products/'.$product->id)]) }}">تعديل المنتج</button>
                 <button type="button" class="btn btn-danger" data-product-delete data-url="{{ url('/api/products/'.$product->id) }}">حذف / تعطيل المنتج</button>
             @endif

@@ -36,7 +36,7 @@ class ExchangeSaleAction
             $return = $this->returns->execute($current, $returnData, $actor, true);
             $customerId = $return->customer_id;
             $newData = ['client_uuid' => (string) Str::uuid(), 'branch_id' => $branch->id, 'customer_id' => $customerId, 'rows' => $data['rows'],
-                'discount' => $data['discount'] ?? [], 'reason' => $data['reason'], 'payment_mode' => 'credit', 'payments' => []];
+                'discount' => $data['discount'] ?? [], 'reason' => $data['reason'], 'payment_mode' => 'credit', 'payments' => [], 'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false)];
             $new = $this->save->execute($newData, $actor);
             $new = $this->post->execute($new, $actor, true);
             $exchange->update(['new_invoice_id' => $new->id, 'sale_return_id' => $return->id]);
@@ -90,7 +90,7 @@ class ExchangeSaleAction
         $returnPlan = $this->returns->prepare($invoice, ['rows' => $data['return_rows'], 'refund_payments' => [],
             'customer_id' => $invoice->customer_id ?? ($data['customer_id'] ?? null)], $actor, true);
         $newPlan = $this->prepare->execute(['branch_id' => $invoice->branch_id, 'customer_id' => $returnPlan['customer_id'],
-            'rows' => $data['rows'], 'discount' => $data['discount'] ?? [], 'reason' => $data['reason'], 'payments' => [], 'payment_mode' => 'credit'], $actor, false, false, $returnPlan['rows']);
+            'rows' => $data['rows'], 'discount' => $data['discount'] ?? [], 'reason' => $data['reason'], 'payments' => [], 'payment_mode' => 'credit', 'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false)], $actor, false, false, $returnPlan['rows']);
         $creditUsed = min($returnPlan['credit'], $newPlan['attributes']['total_minor']);
         $fullDue = $returnPlan['due_after'] + $newPlan['attributes']['total_minor'] - $creditUsed;
         $payments = $this->accounts->payments($data['payments'] ?? [], $invoice->branch_id, $fullDue, true);

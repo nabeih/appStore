@@ -36,6 +36,7 @@
             </div>
             <button type="submit" class="login-submit" id="login-submit">تسجيل الدخول</button>
         </form>
+        <p><a href="{{ route('password.request') }}">نسيت كلمة المرور؟</a></p>
         <p class="login-footer">لوحة إدارة المتجر</p>
     </main>
 </body>

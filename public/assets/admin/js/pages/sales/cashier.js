@@ -4,6 +4,7 @@
     const el = id => document.getElementById(id), form = el('cashier-form'), allowed = key => !!config.capabilities[key];
     let dirty = false, busy = false, products = [], nextPage, selectedProduct, selectedVariant, previousBranch = el('cashier-branch').value;
     let scanBusy = false;
+    el('cashier-minimum-confirm')?.addEventListener('change', () => { lastPreview = null; previewVersion++; clearTimeout(previewTimer); previewRequest?.abort(); el('cashier-complete').disabled = true; preview(); });
     let catalogRequest, catalogTimer, customerRequest, customerTimer, previewRequest, previewTimer, previewVersion = 0, lastPreview;
     const accounts = () => config.accounts.filter(account => String(account.branch_id) === el('cashier-branch').value);
     function addPayment(initial = {}) {
@@ -22,9 +23,11 @@
                 discount: row.discount || { type: 'amount', value: '0' }, price_reason: row.price_reason || null })),
             discount: { type: el('cashier-discount-type').value, value: el('cashier-discount-value').value.trim() || '0' },
             reason: el('cashier-reason').value.trim() || null, notes: el('cashier-notes').value.trim() || null, payment_mode: el('cashier-payment-mode').value,
+            below_minimum_confirmed: !!el('cashier-minimum-confirm')?.checked,
             payments: el('cashier-payment-mode').value === 'credit' ? [] : ui.payments(el('cashier-payments')) };
     }
     function invalidate() {
+        if (el('cashier-minimum-confirm')) el('cashier-minimum-confirm').checked = false;
         dirty = true; lastPreview = null; previewVersion++; clearTimeout(previewTimer); previewRequest?.abort();
         ui.error(form,'');
         ['gross','discount','total','paid','due','change','cost','gross-profit'].forEach(key => { const node = el('cashier-'+key); if (node) node.textContent = '—'; });
@@ -86,7 +89,7 @@
             const button = ui.element('button','',variant.size+' ('+variant.available+')'); button.type = 'button'; button.disabled = variant.available < 1; button.setAttribute('aria-pressed','false');
             button.addEventListener('click', () => {
                 selectedVariant = variant; list.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed',String(b === button)));
-                el('cashier-variant-info').textContent = variant.color+' / '+variant.size+' — المتاح '+variant.available+' — '+variant.unit_price+' ₪'; el('cashier-add-variant').disabled = false;
+                el('cashier-variant-info').textContent = variant.color+' / '+variant.size+' — المتاح '+variant.available+' — '+variant.unit_price+' ₪ — الحد الأدنى '+(variant.minimum_selling_price ?? 'غير محدد'); el('cashier-add-variant').disabled = false;
             }); list.append(button);
         });
         el('cashier-variant-info').textContent = 'اختيار اللون والمقاس مطلوب قبل الإضافة.';
@@ -162,8 +165,8 @@
     });
     el('cashier-add-payment').addEventListener('click',() => { addPayment(); invalidate(); });
     el('cashier-payment-mode').addEventListener('change',() => { el('cashier-payment-section').hidden = el('cashier-payment-mode').value === 'credit'; invalidate(); });
-    form.addEventListener('input',event => { if (!['cashier-search','cashier-customer-search'].includes(event.target.id) && !event.target.closest('#cashier-lines')) invalidate(); });
-    form.addEventListener('change',event => { if (!event.target.closest('#cashier-lines') && event.target.id !== 'cashier-branch') invalidate(); });
+    form.addEventListener('input',event => { if (!['cashier-search','cashier-customer-search','cashier-minimum-confirm'].includes(event.target.id) && !event.target.closest('#cashier-lines')) invalidate(); });
+    form.addEventListener('change',event => { if (!event.target.closest('#cashier-lines') && !['cashier-branch','cashier-minimum-confirm'].includes(event.target.id)) invalidate(); });
     el('cashier-customer-search').addEventListener('input',() => {
         state.customer_id = null; clearTimeout(customerTimer); customerRequest?.abort(); el('cashier-customer-results').hidden = true;
         el('cashier-customer-selection').textContent = 'اختر العميل من النتائج لربط المستحق به.'; invalidate();

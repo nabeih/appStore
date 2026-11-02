@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory\OpeningStock;
 
+use App\Actions\Catalog\AllocateProductCodesAction;
 use App\Actions\Catalog\ProcessProductImageAction;
 use App\Actions\Finance\PostJournalAction;
 use App\Models\Branch;
@@ -51,7 +52,7 @@ class PostOpeningStockAction
                 $plan = $this->prepare->execute($data, true);
                 $groups = $plan['groups'];
                 $needed = collect($groups)->filter(fn (array $group): bool => ! $group['product'] && blank($group['code']))->count();
-                $generated = $this->generateCodes($needed, (int) ($counter?->last_number ?? 0), collect($groups)->pluck('code')->filter()->all());
+                $generated = app(AllocateProductCodesAction::class)->execute($needed, (int) ($counter?->last_number ?? 0), collect($groups)->pluck('code')->filter()->all());
                 foreach ($groups as &$group) {
                     if (! $group['product']) {
                         $group['product'] = Product::create([
@@ -129,29 +130,5 @@ class PostOpeningStockAction
         }, $data['rows']);
 
         return hash('sha256', json_encode(['branch_id' => (int) $data['branch_id'], 'opening_date' => $data['opening_date'], 'notes' => $data['notes'] ?? null, 'rows' => $rows], JSON_THROW_ON_ERROR));
-    }
-
-    /** @return list<string> */
-    private function generateCodes(int $count, int $lastNumber, array $reserved): array
-    {
-        $result = [];
-        while (count($result) < $count) {
-            $candidates = [];
-            for ($i = 0; $i < max(16, $count); $i++) {
-                $candidates[] = 'P-'.str_pad((string) ++$lastNumber, 8, '0', STR_PAD_LEFT);
-            }
-            $occupied = Product::withTrashed()->whereIn('code', $candidates)->pluck('code')->map(fn (string $code): string => strtoupper($code))->all();
-            foreach (array_diff($candidates, $occupied, $reserved) as $candidate) {
-                $result[] = $candidate;
-                if (count($result) === $count) {
-                    break;
-                }
-            }
-        }
-        if ($count > 0) {
-            DB::table('product_code_counters')->updateOrInsert(['id' => 1], ['last_number' => $lastNumber, 'updated_at' => now()]);
-        }
-
-        return $result;
     }
 }

@@ -69,20 +69,26 @@ class ModuleSearch
         return $query;
     }
 
-    public function products(Builder $query, array $filters): Builder
+    public function products(Builder $query, array $filters, ?Builder $visibleVariants = null): Builder
     {
+        $scope = function (Builder $variant) use ($filters, $visibleVariants): void {
+            $this->variants($variant, $filters);
+            if ($visibleVariants !== null) {
+                $variant->whereIn('product_variants.id', (clone $visibleVariants)->select('product_variants.id'));
+            }
+        };
         $term = SearchTerm::normalize($filters['q'] ?? '');
         if ($term !== '') {
-            $query->where(function (Builder $product) use ($term, $filters): void {
+            $query->where(function (Builder $product) use ($term, $filters, $scope): void {
                 SearchTerm::apply($product, $term, ['name'], ['code'], $filters['match'] ?? 'contains');
-                $product->orWhereHas('variants', fn (Builder $variant) => $this->variants($variant, $filters));
+                $product->orWhereHas('variants', $scope);
             });
         }
         if (! empty($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
         }
         if (! empty($filters['color_id']) || ! empty($filters['size_id']) || in_array($filters['active'] ?? '', ['active', 'inactive'], true)) {
-            $query->whereHas('variants', fn (Builder $variant) => $this->variants($variant, $filters));
+            $query->whereHas('variants', $scope);
         }
 
         return $query;
@@ -115,19 +121,22 @@ class ModuleSearch
         return $query;
     }
 
-    public function rankProducts(Builder $query, string $term): Builder
+    public function rankProducts(Builder $query, string $term, ?Builder $visibleVariants = null): Builder
     {
         $term = SearchTerm::normalize($term);
         if ($term === '') {
             return $query;
         }
         $prefix = SearchTerm::pattern($term, 'prefix');
+        $scope = $visibleVariants === null ? null : (clone $visibleVariants)->select('product_variants.id');
+        $scopeSql = $scope === null ? '' : ' AND ranked.id IN ('.$scope->toSql().')';
+        $bindings = $scope?->getBindings() ?? [];
 
         return $query->orderByRaw("CASE
-            WHEN EXISTS (SELECT 1 FROM product_variants ranked WHERE ranked.product_id = products.id AND ranked.is_active = 1 AND ranked.sku = ?) THEN 0
+            WHEN EXISTS (SELECT 1 FROM product_variants ranked WHERE ranked.product_id = products.id AND ranked.is_active = 1 AND ranked.sku = ?{$scopeSql}) THEN 0
             WHEN products.code = ? THEN 1
-            WHEN products.code LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_variants ranked WHERE ranked.product_id = products.id AND ranked.is_active = 1 AND ranked.sku LIKE ? ESCAPE '!') THEN 2
-            WHEN products.name = ? THEN 3 ELSE 4 END", [$term, $term, $prefix, $prefix, $term]);
+            WHEN products.code LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_variants ranked WHERE ranked.product_id = products.id AND ranked.is_active = 1 AND ranked.sku LIKE ? ESCAPE '!'{$scopeSql}) THEN 2
+            WHEN products.name = ? THEN 3 ELSE 4 END", [$term, ...$bindings, $term, $prefix, $prefix, ...$bindings, $term]);
     }
 
     public function rankInventory(Builder $query, string $term): Builder

@@ -27,12 +27,14 @@ class ProductController extends Controller
     {
         $filters = $request->validated();
         Gate::authorize('catalog.search');
-        $query = $search->products($this->visibleProducts($request->user()), $filters)->with([
-            'category:id,name', 'images', 'swatches', 'variants' => fn ($query) => $search->variants($query, $filters),
-            'variants.color:id,name,code', 'variants.size:id,name,code',
-        ]);
+        $visibleVariants = app(VisibleProductsQuery::class)->variants($request->user(), isset($filters['branch_id']) ? (int) $filters['branch_id'] : null);
+        $query = $search->products($this->visibleProducts($request->user()), $filters, $visibleVariants)
+            ->with($this->readRelations($request->user(), $filters));
+        if (! empty($filters['branch_id'])) {
+            $query->whereHas('variants', fn ($variant) => $variant->whereIn('product_variants.id', (clone $visibleVariants)->select('product_variants.id')));
+        }
 
-        $search->rankProducts($query, $filters['q'] ?? '');
+        $search->rankProducts($query, $filters['q'] ?? '', $visibleVariants);
         $products = $search->sort($query, $filters, 'name')->paginate(15)->withQueryString();
         if (! $request->user()->can('sales.view_cost')) {
             $products->each(fn (Product $product) => $product->variants->each->makeHidden('minimum_selling_price'));
@@ -43,11 +45,25 @@ class ProductController extends Controller
 
     private function present(Product $product): Product
     {
+        $product->load($this->readRelations(auth()->user()));
         if (! auth()->user()->can('sales.view_cost')) {
             $product->variants->each->makeHidden('minimum_selling_price');
         }
 
         return $product;
+    }
+
+    /** @return array<string, mixed> */
+    private function readRelations(User $actor, array $filters = []): array
+    {
+        $visible = app(VisibleProductsQuery::class)->variants($actor, isset($filters['branch_id']) ? (int) $filters['branch_id'] : null);
+        $media = fn ($query) => $query->whereIn('color_id', (clone $visible)
+            ->whereColumn('product_variants.product_id', $query->getRelated()->getTable().'.product_id')->select('product_variants.color_id'));
+
+        return ['category:id,name', 'images' => $media, 'swatches' => $media,
+            'variants' => fn ($query) => app(ModuleSearch::class)->variants($query, $filters)
+                ->whereIn('product_variants.id', (clone $visible)->select('product_variants.id')),
+            'variants.color:id,name,code', 'variants.size:id,name,code'];
     }
 
     private function visibleProducts(User $actor): Builder
@@ -73,18 +89,9 @@ class ProductController extends Controller
     public function show(int $id): JsonResponse
     {
         Gate::authorize('catalog.search');
-        $product = $this->visibleProducts(auth()->user())->with([
-            'category:id,name',
-            'images', 'swatches',
-            'variants.color:id,name,code',
-            'variants.size:id,name,code',
-        ])->findOrFail($id);
+        $product = $this->visibleProducts(auth()->user())->findOrFail($id);
 
-        if (! auth()->user()->can('sales.view_cost')) {
-            $product->variants->each->makeHidden('minimum_selling_price');
-        }
-
-        return response()->json($product);
+        return response()->json($this->present($product));
     }
 
     public function update(

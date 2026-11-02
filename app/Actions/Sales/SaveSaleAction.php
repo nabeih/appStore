@@ -34,7 +34,8 @@ class SaveSaleAction
             $attributes = $plan['attributes'];
             $attributes['cost_minor'] = null;
             $attributes += ['request_hash' => $hash, 'payment_instructions' => ['payments' => $data['payments'] ?? [], 'payment_mode' => $data['payment_mode'] ?? 'paid'],
-                'discount_instructions' => ['discount' => $data['discount'] ?? [], 'reason' => $data['reason'] ?? null], 'notes' => $data['notes'] ?? null];
+                'discount_instructions' => ['discount' => $data['discount'] ?? [], 'reason' => $data['reason'] ?? null,
+                    'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false)], 'notes' => $data['notes'] ?? null];
             if ($invoice) {
                 OperationContext::branch($actor, $invoice->branch_id, 'sales.sell');
                 $attributes['version'] = $invoice->version + 1;
@@ -44,7 +45,7 @@ class SaveSaleAction
                 $invoice = SaleInvoice::create($attributes + ['client_uuid' => $data['client_uuid'], 'created_by' => $actor->id, 'status' => 'draft', 'version' => 1]);
             }
             foreach ($plan['rows'] as $row) {
-                unset($row['cost_minor']);
+                unset($row['cost_minor'], $row['minimum_snapshot_minor']);
                 $invoice->items()->create($row);
             }
             OperationContext::audit($invoice, $actor, 'sale.draft_saved');

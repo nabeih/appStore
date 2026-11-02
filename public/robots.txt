@@ -1,2 +1,24 @@
 User-agent: *
-Disallow:
+Disallow: /api/
+Disallow: /site-admin/
+Disallow: /store-orders/
+Disallow: /notifications
+Disallow: /access/
+Disallow: /finance/
+Disallow: /inventory/
+Disallow: /sales/
+Disallow: /purchases/
+Disallow: /suppliers/
+Disallow: /customers/
+Disallow: /branches/
+Disallow: /profile
+Disallow: /login
+Disallow: /setup
+Disallow: /onboarding/
+Disallow: /forgot-password
+Disallow: /reset-password/
+Disallow: /email/
+Disallow: /dashboard
+Disallow: /design-preview
+Disallow: /shop/checkout
+Disallow: /shop/orders/
