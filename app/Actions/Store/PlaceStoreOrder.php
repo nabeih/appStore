@@ -19,7 +19,7 @@ class PlaceStoreOrder
 
                 return $existing;
             }
-            $settings = app(StoreContext::class)->settings(true);
+            $settings = app(StoreContext::class)->checkoutSettings();
             if (! hash_equals(hash('sha256', $settings->policy), $data['policy_version'])) {
                 throw ValidationException::withMessages(['policy_version' => 'تغيرت سياسة الطلب؛ راجعها وأعد الموافقة.']);
             }

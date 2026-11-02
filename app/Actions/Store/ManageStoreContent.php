@@ -23,7 +23,7 @@ class ManageStoreContent
     public const TYPES = ['settings' => StoreSetting::class, 'products' => StoreListing::class, 'sections' => StoreSection::class,
         'banners' => StoreBanner::class, 'offers' => StoreOffer::class, 'zones' => DeliveryZone::class];
 
-    public const TITLES = ['settings' => 'إعدادات الموقع وSEO', 'products' => 'المنتجات المنشورة', 'sections' => 'أقسام الموقع',
+    public const TITLES = ['settings' => 'معلومات المتجر وظهوره في Google', 'products' => 'المنتجات المنشورة', 'sections' => 'أقسام الموقع',
         'banners' => 'البانرات', 'offers' => 'العروض', 'zones' => 'مناطق ورسوم التوصيل'];
 
     public function model(string $type): Model

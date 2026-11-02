@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ImageEmbeddingIndex::class, MySqlImageEmbeddingIndex::class);
         $this->app['config']->set('debugbar.except', array_values(array_unique([
             ...(array) $this->app['config']->get('debugbar.except', []),
-            'api/v1/*', 'login', 'setup', 'setup/*', 'profile*', 'email/*', 'forgot-password', 'reset-password*', 'onboarding/*', 'access/users*', 'search/products/visual',
+            'api/v1/*', 'shop', 'shop/*', 'login', 'setup', 'setup/*', 'profile*', 'email/*', 'forgot-password', 'reset-password*', 'onboarding/*', 'access/users*', 'search/products/visual',
         ])));
     }
 

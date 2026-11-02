@@ -45,12 +45,12 @@
 @endif
 @if($type==='settings')
 <label>فرع تنفيذ طلبات الموقع<select name="branch_id" required>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected((int)old('branch_id',$entry->branch_id)===$branch->id)>{{ $branch->name }}</option>@endforeach</select></label>
-<label>هاتف التواصل<input name="phone" type="tel" maxlength="40" value="{{ old('phone',$entry->phone) }}"></label>
+<p class="commerce-notice">اسم المتجر والنبذة وهاتف التواصل تظهر في واجهة متجرك. الصور والمجموعات تُدار من المنتجات المنشورة والأقسام والبنرات؛ لا نستخدم صورًا أو شعارًا من متجر آخر.</p><label>هاتف التواصل<input name="phone" type="tel" maxlength="40" value="{{ old('phone',$entry->phone) }}"></label>
 <label>سياسة الطلب والتوصيل ورفض الاستلام<textarea name="policy" required minlength="20" maxlength="15000" rows="8">{{ old('policy',$entry->policy??\App\Actions\Store\StoreContext::POLICY_TEMPLATE) }}</textarea></label><p class="commerce-notice">اكتب سياسة واضحة تتضمن موافقة الزبون على دفع رسوم المنطقة الأصلية عند رفض الاستلام، حتى مع عرض التوصيل المجاني. تُحفظ نسخة السياسة وموافقة الزبون مع كل طلب.</p>
-<label class="commerce-check"><input type="checkbox" name="is_open" value="1" @checked(old('is_open',$entry->is_open))> فتح المتجر العام لقبول الطلبات</label>
+<label class="commerce-check"><input type="checkbox" name="is_open" value="1" @checked(old('is_open',$entry->is_open))> تفعيل استقبال الطلبات بعد اكتمال إعداد المبيعات</label>
 @endif
 @if(in_array($type,['settings','products','sections']))
-<label>عنوان محركات البحث والمشاركة<input name="seo_title" maxlength="255" value="{{ old('seo_title',$entry->seo_title) }}"></label><label>وصف محركات البحث والمشاركة<textarea name="seo_description" maxlength="1000">{{ old('seo_description',$entry->seo_description) }}</textarea></label>
+<label>العنوان الذي يظهر في نتائج البحث والمشاركة<input name="seo_title" maxlength="255" value="{{ old('seo_title',$entry->seo_title) }}"></label><label>نبذة قصيرة تظهر للزوار في نتائج البحث<textarea name="seo_description" maxlength="1000">{{ old('seo_description',$entry->seo_description) }}</textarea></label>
 @endif
 @if(!in_array($type,['settings','products']))<label class="commerce-check"><input type="checkbox" name="is_active" value="1" @checked(old('is_active',$entry->exists?$entry->is_active:true))> فعال</label>@endif
 <div class="commerce-actions"><button class="btn btn-primary">حفظ التغييرات</button><a class="btn btn-outline" href="{{ route('store.admin.content.index',$type) }}">إلغاء</a></div>

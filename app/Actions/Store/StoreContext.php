@@ -3,17 +3,21 @@
 namespace App\Actions\Store;
 
 use App\Models\Branch;
+use App\Models\DeliveryZone;
 use App\Models\ProductVariant;
 use App\Models\StoreListing;
 use App\Models\StoreOrder;
 use App\Models\StoreReservation;
 use App\Models\StoreSetting;
 use App\Models\User;
+use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class StoreContext
 {
@@ -40,21 +44,74 @@ class StoreContext
         return $settings;
     }
 
+    public function publicSettings(): StoreSetting
+    {
+        return StoreSetting::find(1) ?? new StoreSetting([
+            'name' => config('app.name', 'المتجر'),
+            'seo_description' => 'اكتشف تشكيلتنا واختر الألوان والمقاسات التي تناسبك.',
+            'policy' => self::POLICY_TEMPLATE,
+            'is_open' => false,
+        ]);
+    }
+
+    /** @return array{ready: bool, code: string, message: string} */
+    public function checkoutState(): array
+    {
+        $settings = $this->publicSettings();
+        if (! $settings->exists || ! $settings->is_open) {
+            return ['ready' => false, 'code' => 'store_closed', 'message' => 'الطلبات متوقفة مؤقتًا أثناء تجهيز المتجر. يمكنك التصفح والاحتفاظ باختياراتك في السلة.'];
+        }
+        $branch = Branch::whereKey($settings->branch_id)->where('is_active', true)->first();
+        if (! $branch) {
+            return ['ready' => false, 'code' => 'branch_unavailable', 'message' => 'خدمة الطلب غير متاحة حاليًا. يمكنك متابعة تصفح التشكيلة.'];
+        }
+        try {
+            OperationContext::salesStarted($branch);
+            OperationContext::ready();
+        } catch (ValidationException|HttpExceptionInterface) {
+            return ['ready' => false, 'code' => 'sales_not_ready', 'message' => 'نجهّز خدمة الطلب والتوصيل. يمكنك تصفح المنتجات وحفظها في السلة، وسيُتاح إتمام الطلب لاحقًا.'];
+        }
+        if (! DeliveryZone::where('is_active', true)->exists()) {
+            return ['ready' => false, 'code' => 'delivery_unavailable', 'message' => 'مناطق التوصيل قيد التجهيز. يمكنك متابعة التسوق والاحتفاظ بالسلة.'];
+        }
+
+        return ['ready' => true, 'code' => 'ready', 'message' => 'الدفع عند الاستلام نقدًا أو بتحويل مباشر للمحل.'];
+    }
+
+    public function checkoutSettings(): StoreSetting
+    {
+        $state = $this->checkoutState();
+        if (! $state['ready']) {
+            throw ValidationException::withMessages(['checkout' => $state['message']]);
+        }
+
+        return $this->settings(true);
+    }
+
+    public function catalogueBranchId(): ?int
+    {
+        $settings = $this->publicSettings();
+
+        return Branch::whereKey($settings->branch_id)->where('is_active', true)->value('id');
+    }
+
     public function listings(): Builder
     {
-        $settings = $this->settings(true);
+        $branchId = $this->catalogueBranchId();
         $media = fn ($q) => $q->whereIn('color_id', ProductVariant::where('is_active', true)
             ->whereHas('color', fn ($c) => $c->where('is_active', true))->whereHas('size', fn ($s) => $s->where('is_active', true))
-            ->whereHas('inventories', fn ($i) => $i->where('branch_id', $settings->branch_id))
+            ->when($branchId !== null, fn ($variant) => $variant->whereHas('inventories', fn ($i) => $i->where('branch_id', $branchId)))
             ->whereColumn('product_variants.product_id', $q->getRelated()->getTable().'.product_id')->select('color_id'));
 
         return StoreListing::where('is_published', true)
             ->where(fn (Builder $q) => $q->whereNull('store_section_id')->orWhereHas('section', fn (Builder $s) => $s->where('is_active', true)))
             ->whereHas('product', fn (Builder $p) => $p->where('is_active', true)->whereHas('category', fn (Builder $c) => $c->where('is_active', true)))
-            ->with(['product.variants' => fn ($v) => $v->where('is_active', true)
+            ->with(['product.variants' => fn ($v) => $v->select('id', 'product_id', 'color_id', 'size_id', 'sku', 'selling_price', 'is_active')->where('is_active', true)
                 ->whereHas('color', fn ($c) => $c->where('is_active', true))->whereHas('size', fn ($s) => $s->where('is_active', true))
-                ->whereHas('inventories', fn ($i) => $i->where('branch_id', $settings->branch_id)),
-                'product.variants.color', 'product.variants.size', 'product.images' => $media, 'product.swatches' => $media, 'section']);
+                ->when($branchId !== null, fn ($variant) => $variant->whereHas('inventories', fn ($i) => $i->where('branch_id', $branchId))),
+                'product.variants.color', 'product.variants.size',
+                'product.variants.inventories' => fn ($stock) => $stock->where('branch_id', $branchId)->select('id', 'product_variant_id', 'branch_id', 'quantity', 'reserved_quantity'),
+                'product.images' => $media, 'product.swatches' => $media, 'section']);
     }
 
     public function orders(User $actor): Builder

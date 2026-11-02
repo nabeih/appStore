@@ -43,8 +43,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 };
                 $headers = $error instanceof HttpExceptionInterface ? $error->getHeaders() : [];
 
-                return $request->expectsJson() ? response()->json(['message' => $message], $status, $headers)->header('Cache-Control', 'no-store')
-                    : response($message, $status, $headers)->header('Cache-Control', 'no-store');
+                if ($request->isMethod('GET') && ! $request->expectsJson()) {
+                    $message = match ($status) {
+                        404 => 'لم نجد الصفحة التي تبحث عنها',
+                        429 => 'طلبات كثيرة، لنجرب بعد قليل',
+                        default => 'المتجر غير متاح مؤقتًا',
+                    };
+
+                    return response()->view('store.public.error', compact('status', 'message'), $status, $headers)->header('Cache-Control', 'no-store');
+                }
+
+                return response()->json(['message' => $message], $status, $headers)->header('Cache-Control', 'no-store');
             }
         });
         $exceptions->report(function (Throwable $error) {
