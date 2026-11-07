@@ -1,0 +1,40 @@
+.treasury-page{max-width:1450px;line-height:1.7}
+.treasury-header{padding:6px 0 8px;margin-bottom:12px}
+.treasury-eyebrow{font-size:11px;font-weight:800;color:var(--primary);margin:0 0 4px}
+.treasury-header .sale-muted{margin-bottom:0}
+.treasury-header .btn{display:inline-flex;align-items:center;gap:8px}
+.treasury-nav{flex-wrap:wrap;gap:8px;margin:18px 0}
+.treasury-nav a{text-decoration:none;white-space:nowrap}
+.treasury-nav a:focus-visible,.treasury-page a:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}
+.treasury-page .sale-panel{border-radius:14px;box-shadow:0 1px 4px #0f172a08;padding:20px}
+.treasury-page .sale-filters{background:#fff;border:1px solid #e2e8f0;gap:14px}
+.treasury-section{margin:22px 0;scroll-margin-top:90px}
+.treasury-section h2{font-size:16px;font-weight:800;margin:0}
+.treasury-page [id^=treasury-]{scroll-margin-top:90px}
+.treasury-page .cashbox-kpi-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:10px}
+.treasury-account-heading{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.treasury-account-heading i{font-size:19px;opacity:.8}
+.treasury-page .cashbox-kpi-card h3{font-size:14px;font-weight:800;margin:10px 0 4px;overflow-wrap:anywhere}
+.treasury-page .cashbox-kpi-card .stat-value{font-size:27px;margin:0 0 16px;overflow-wrap:anywhere}
+.treasury-page .stat-value small{font-size:14px;font-weight:600}
+.treasury-account-opening{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #e2e8f0;padding-top:10px;font-size:12px}
+.treasury-page .expected .treasury-account-opening{border-color:#ffffff30}
+.treasury-page .stat-sub{font-size:10px;color:var(--gray);margin:7px 0 0}
+.treasury-page .treasury-empty{grid-column:1/-1;text-align:center;padding:32px}
+.treasury-empty>i{font-size:28px;color:var(--primary);margin-bottom:14px}
+.treasury-page .sale-table th{padding:14px 12px}
+.treasury-page .sale-table td{padding:14px 12px}
+.treasury-page .sale-panel>h2{padding-bottom:12px;border-bottom:1px solid #f1f5f9}
+.treasury-page .sale-panel details{box-shadow:none}
+@media(max-width:767px){
+ .treasury-page .sale-panel{padding:14px}
+ .treasury-page .cashbox-kpi-grid{grid-template-columns:minmax(0,1fr)}
+ .treasury-page .cashbox-kpi-card{padding:18px}
+ .treasury-nav{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding:4px 2px 10px}
+ .treasury-nav a{flex-shrink:0;font-size:12px;padding:9px 12px}
+ .treasury-page .sale-filters label{min-width:0;flex-basis:calc(50% - 14px)}
+ .treasury-page .sale-filters label:last-of-type{flex-basis:100%}
+ .treasury-page .sale-table td{padding:0}
+ .treasury-header .btn{min-height:44px}
+}
+@media print{.treasury-nav,.treasury-header>.btn{display:none}.treasury-page .cashbox-kpi-card{break-inside:avoid;box-shadow:none}.treasury-page .expected{background:#fff;color:#1e293b;border:1px solid #e2e8f0}.treasury-page .expected .stat-value,.treasury-page .expected .stat-label,.treasury-page .expected .stat-sub{color:#1e293b}}
