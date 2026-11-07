@@ -207,7 +207,7 @@ class SalesIntegrationTest extends SalesTestCase
         $this->postJson(route('sales.invoices.complete'), $this->saleData($variant,
             ['payments' => [['account_id' => $bank->id, 'amount' => '70']]]))->assertUnprocessable();
         $other = DB::table('branches')->insertGetId(['name' => 'فرع آخر']);
-        $bank->update(['branch_id' => $other]);
+        $bank = FinancialAccount::create(['name' => 'بنك الفرع الآخر', 'code' => 'BANK-OTHER', 'type' => 'bank', 'branch_id' => $other]);
         $this->postJson(route('sales.invoices.complete'), $this->saleData($variant,
             ['payments' => [['account_id' => $bank->id, 'amount' => '70', 'confirmed' => true]]]))->assertUnprocessable();
         $this->postJson(route('sales.invoices.complete'), $this->saleData($variant,

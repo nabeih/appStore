@@ -5,6 +5,7 @@ namespace App\Actions\Sales;
 use App\Actions\Customers\RecordCustomerReceiptAction;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
 use App\Models\Customer;
 use App\Models\SaleInvoice;
@@ -23,6 +24,7 @@ class ReturnSaleAction
         $branch = OperationContext::branch($actor, $invoice->branch_id, $exchange ? 'sales.exchange' : 'sales.return');
         $date = OperationContext::date($branch, $data['transaction_date'] ?? null);
         abort_unless($invoice->status === 'approved', 409, 'المرتجع يحتاج فاتورة بيع معتمدة.');
+        app(ProgressiveOperation::class)->assertOriginalSale($invoice);
         $items = $invoice->items()->orderBy('id')->get()->keyBy('id');
         $rows = [];
         $seen = [];
@@ -53,6 +55,7 @@ class ReturnSaleAction
         if ($rows === []) {
             $this->fail('اختر قطعة واحدة على الأقل للإرجاع.');
         }
+        app(ProgressiveOperation::class)->assertStocks($invoice->branch_id, array_map(fn ($row) => $row['item']->product_variant_id, $rows));
         $customerId = $invoice->customer_id ?? ($data['customer_id'] ?? null);
         if ($customerId) {
             $customerId = Customer::findOrFail($customerId)->id;
@@ -62,6 +65,9 @@ class ReturnSaleAction
         $refund = $this->accounts->payments($data['refund_payments'] ?? [], $invoice->branch_id, $credit);
         if (! $exchange && ! $customerId && $credit > $refund['paid']) {
             $this->fail('للاحتفاظ بمبلغ لصالح العميل اختر عميلًا معرفًا، أو أعد له كامل المبلغ المستحق.');
+        }
+        if ($customerId && ($debt > 0 || $credit > $refund['paid'])) {
+            app(ProgressiveOperation::class)->assertParty($invoice->branch_id, 'customer', $customerId);
         }
 
         return ['rows' => $rows, 'total' => $total, 'cost' => $cost, 'debt' => $debt, 'credit' => $credit, 'refund' => $refund,

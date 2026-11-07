@@ -80,6 +80,10 @@ class PushMobileOperations
                 });
             }, 3);
         } catch (ValidationException $error) {
+            if (isset($error->errors()['readiness'])) {
+                return $this->failed($device, $operation, $hash, 'conflict_requires_review', ['code' => 'readiness_changed', 'message' => 'تغيرت جاهزية التشغيل؛ راجع المالك قبل إعادة اعتماد العملية.', 'errors' => $error->errors()]);
+            }
+
             return $this->failed($device, $operation, $hash, 'validation_failed', ['code' => 'validation_failed', 'message' => 'راجع البيانات وقواعد العملية.', 'errors' => $error->errors()]);
         } catch (AuthorizationException) {
             return $this->failed($device, $operation, $hash, 'validation_failed', ['code' => 'forbidden', 'message' => 'العملية غير مسموحة.']);

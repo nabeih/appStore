@@ -166,7 +166,7 @@ class ApplyMobileOperation
         $type = $operation['operation_type'];
         $payload = $operation['payload'];
         $allowed = match ($type) {
-            'opening_stock.create' => ['opening_date', 'notes', 'rows'],
+            'opening_stock.create' => ['opening_date', 'notes', 'rows', 'progressive_opening'],
             'purchase.create' => ['supplier_id', 'invoice_date', 'supplier_invoice_number', 'notes', 'initial_payment', 'payment_method', 'payment_details', 'rows'],
             'sale.create' => ['customer_id', 'invoice_date', 'payment_mode', 'payments', 'discount', 'reason', 'notes', 'rows', 'below_minimum_confirmed'],
         };

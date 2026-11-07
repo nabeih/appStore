@@ -8,6 +8,7 @@ use Throwable;
 
 class PrepareSetupTokenCommand extends Command
 {
+    //php artisan app:setup-token --expires=60
     protected $signature = 'app:setup-token {--expires=60 : Lifetime in minutes (15-1440)} {--rotate : Explicitly replace a pending unused token}';
 
     protected $description = 'Prepare a private one-time installation token for a pristine installation; never reopen an existing installation';

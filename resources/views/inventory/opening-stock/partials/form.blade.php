@@ -19,6 +19,7 @@
                 <details class="os-grow os-inline-notes"><summary>ملاحظات (اختياري)</summary><input id="openingStockNotes" aria-label="ملاحظات المستند" maxlength="2000" placeholder="مثال: جرد البضاعة عند بدء العمل"></details>
             </div>
             <details class="os-notice"><summary>عن الإدخال الافتتاحي</summary><p>كل صنف يُدخل مرة واحدة لكل فرع. المستند المعتمد محفوظ للمراجعة ولا يُعدّل من هذه الشاشة.</p></details>
+            @include('inventory.opening-stock.partials.progressive-declaration',['declarationId'=>'osProgressiveDeclaration'])
             <section class="os-section" aria-labelledby="osMatrixTitle">
                 <h3 id="osMatrixTitle">1. إضافة الأصناف</h3>
                 <label>اختيار منتج موجود <input type="search" id="osProductSearch" autocomplete="off" placeholder="ابحث بحرفين أو أكثر من الاسم أو الكود"></label>

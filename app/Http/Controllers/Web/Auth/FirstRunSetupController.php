@@ -13,6 +13,19 @@ use Illuminate\View\View;
 
 class FirstRunSetupController extends Controller
 {
+    public function home(InstallationReadiness $readiness): RedirectResponse
+    {
+        $state = $readiness->state();
+        if ($state?->status === 'completed' && $state->completed_at !== null) {
+            return redirect()->route('store.home');
+        }
+        if ($readiness->canBootstrap($state)) {
+            return redirect()->route('setup.show');
+        }
+
+        abort(503);
+    }
+
     public function create(InstallationReadiness $readiness): View
     {
         $state = $readiness->state();

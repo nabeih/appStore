@@ -2,6 +2,9 @@
 
 namespace App\Actions\Finance;
 
+use App\Actions\Inventory\ProgressiveOperation;
+use App\Models\AuditEvent;
+use App\Models\Branch;
 use App\Models\FinancialAccount;
 use App\Models\JournalLine;
 use App\Models\OpeningStockEntry;
@@ -59,12 +62,14 @@ class FinanceReports
             ->when($branchIds !== null, fn ($q) => $q->whereIn('stock.branch_id', $branchIds))
             ->where(fn ($q) => $q->whereNull('stock.value_minor')->orWhereRaw('stock.quantity <> COALESCE(history.quantity,0)')
                 ->orWhereRaw('stock.value_minor <> COALESCE(history.value_minor,0)')->orWhere('history.unknown_values', '>', 0))->count();
-        $complete = $invoices === 0 && $payments === 0 && $openings === 0 && $unknownAccounts === 0 && $missingAccounts === [] && $unreadyStocks === 0;
+        $progressiveIds = AuditEvent::where('subject_type', Branch::class)->where('action', 'operation.progressive_started')
+            ->whereIn('subject_id', Branch::whereNull('opening_stock_closed_at')->when($branchIds !== null, fn ($q) => $q->whereIn('id', $branchIds))->select('id'))->distinct()->pluck('subject_id')->all();
+        $complete = $invoices === 0 && $payments === 0 && $openings === 0 && $unknownAccounts === 0 && $missingAccounts === [] && $unreadyStocks === 0 && $progressiveIds === [];
 
         return ['complete' => $complete, 'legacy_invoices' => $invoices, 'legacy_payments' => $payments,
             'legacy_openings' => $openings, 'unknown_account_openings' => $unknownAccounts, 'missing_system_accounts' => array_values($missingAccounts),
-            'unready_inventory_positions' => $unreadyStocks,
-            'message' => ! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.'];
+            'unready_inventory_positions' => $unreadyStocks, 'progressive_branches' => $progressiveIds,
+            'message' => $progressiveIds !== [] ? ProgressiveOperation::WARNING : (! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.')];
     }
 
     public function periodFor(User $actor, array $filters): array

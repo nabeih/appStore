@@ -2,6 +2,7 @@
 
 namespace App\Support\Sales;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\AuditEvent;
 use App\Models\Branch;
 use App\Models\User;
@@ -49,9 +50,7 @@ class OperationContext
 
     public static function salesStarted(Branch $branch): void
     {
-        if (! $branch->opening_stock_closed_at) {
-            throw ValidationException::withMessages(['setup' => 'البيع ممنوع: فترة الإعداد الافتتاحي ما زالت مفتوحة. يلزم إنهاء الإعداد واعتماد الأرصدة من صاحب الصلاحية.']);
-        }
+        app(ProgressiveOperation::class)->assertBranch($branch);
     }
 
     public static function ready(): void

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\MobileAuthController;
 use App\Http\Controllers\Api\V1\MobileDataController;
 use App\Http\Controllers\Api\V1\MobileImageController;
 use App\Http\Controllers\Api\V1\MobileSyncController;
+use App\Http\Controllers\Web\Inventory\Setup\ProgressiveOperationController;
 use App\Http\Middleware\Mobile\AuthenticateMobileDevice;
 use App\Http\Middleware\Mobile\MobileApiContext;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +13,7 @@ Route::prefix('v1')->name('mobile.')->middleware(MobileApiContext::class)->group
     Route::post('auth/login', [MobileAuthController::class, 'login'])->middleware('throttle:mobile-login')->name('login');
     Route::middleware(['auth:sanctum', AuthenticateMobileDevice::class, 'throttle:120,1'])->group(function (): void {
         Route::get('auth/me', [MobileAuthController::class, 'me'])->name('me');
+        Route::get('operation-state', [ProgressiveOperationController::class, 'status'])->name('operation-state');
         Route::post('auth/logout', [MobileAuthController::class, 'logout'])->name('logout');
         Route::get('devices', [MobileAuthController::class, 'devices'])->name('devices.index');
         Route::delete('devices/{device}', [MobileAuthController::class, 'revoke'])->whereUuid('device')->name('devices.revoke');

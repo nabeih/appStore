@@ -3,6 +3,7 @@
 namespace App\Actions\Inventory\OpeningStock;
 
 use App\Actions\Finance\PostJournalAction;
+use App\Models\AuditEvent;
 use App\Models\Inventory;
 use App\Models\OpeningStockEntry;
 use App\Models\StockMovement;
@@ -13,9 +14,9 @@ use Illuminate\Validation\ValidationException;
 
 class ManageOpeningDraftAction
 {
-    public function approve(OpeningStockEntry $entry, int $version, User $actor): OpeningStockEntry
+    public function approve(OpeningStockEntry $entry, int $version, User $actor, array $declaration = []): OpeningStockEntry
     {
-        return OperationContext::run(function () use ($entry, $version, $actor): OpeningStockEntry {
+        return OperationContext::run(function () use ($entry, $version, $actor, $declaration): OpeningStockEntry {
             $branch = OperationContext::branch($actor, $entry->branch_id, 'inventory.correct_setup');
             $current = OpeningStockEntry::whereKey($entry->id)->lockForUpdate()->firstOrFail();
             if ($current->status === 'approved') {
@@ -29,7 +30,14 @@ class ManageOpeningDraftAction
                 'rows' => $items->map(fn ($item): array => ['name' => $item->product_name, 'code' => $item->product_code,
                     'category_id' => $item->productVariant->product->category_id, 'color_id' => $item->productVariant->color_id,
                     'size_id' => $item->productVariant->size_id, 'qty' => $item->quantity, 'cost' => $item->unit_cost, 'price' => $item->selling_price])->all()];
+            $savedDeclaration = AuditEvent::where('subject_type', $current->getMorphClass())->where('subject_id', $current->id)->where('action', 'operation.opening_snapshot_recorded')->latest('id')->first()?->data['declaration'] ?? null;
+            if ($declaration !== [] || $savedDeclaration) {
+                $data['progressive_opening'] = $declaration ?: $savedDeclaration;
+            }
             app(PrepareOpeningStockAction::class)->execute($data, true);
+            if (isset($data['progressive_opening'])) {
+                OperationContext::audit($current, $actor, 'operation.opening_snapshot_recorded', $data['progressive_opening']['evidence'], ['declaration' => $data['progressive_opening']]);
+            }
             foreach ($items as $item) {
                 $value = Money::minor($item->line_total);
                 Inventory::create(['branch_id' => $branch->id, 'product_variant_id' => $item->product_variant_id, 'quantity' => $item->quantity,

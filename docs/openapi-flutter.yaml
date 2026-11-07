@@ -579,6 +579,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /operation-state:
+    get:
+      operationId: mobileOperationState
+      summary: 'Live branch operation mode; recheck on reconnect. Does not certify individual stock or payment accounts.'
+      parameters:
+        - name: branch_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        200:
+          description: 'No-store branch state, requires sales.sell and branch access. Posting always rechecks readiness.'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, data]
+                properties:
+                  schema_version:
+                    const: 1
+                  data:
+                    type: object
+                    required: [branch_id, mode, cutover_at, sales_allowed, warning]
+                    properties:
+                      branch_id:
+                        type: integer
+                      mode:
+                        enum: [setup, progressive, full]
+                      cutover_at:
+                        type: [string, 'null']
+                        format: date-time
+                      sales_allowed:
+                        type: boolean
+                      warning:
+                        type: [string, 'null']
+        401:
+          description: 'Authentication required.'
+        403:
+          description: 'Permission or branch denied.'
+        422:
+          description: 'Invalid branch input.'
+        503:
+          description: 'Schema or temporary service failure; retain outbox.'
   /sync/bootstrap:
     post:
       operationId: mobileBootstrap
@@ -1429,6 +1474,21 @@ components:
     OpeningCreate:
       type: object
       properties:
+        progressive_opening:
+          type: object
+          additionalProperties: false
+          required: [counted_at, evidence, confirmed]
+          description: 'Required after progressive cutover. Original count at/before cutover, matching opening_date; never a current count used as old opening.'
+          properties:
+            counted_at:
+              type: string
+              format: date-time
+            evidence:
+              type: string
+              minLength: 5
+              maxLength: 2000
+            confirmed:
+              const: true
         opening_date:
           type: string
           format: date

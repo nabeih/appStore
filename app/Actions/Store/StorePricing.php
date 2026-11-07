@@ -2,6 +2,7 @@
 
 namespace App\Actions\Store;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\DeliveryZone;
 use App\Models\ProductVariant;
 use App\Models\StoreOffer;
@@ -48,6 +49,7 @@ class StorePricing
     public function quote(array $data): array
     {
         $settings = app(StoreContext::class)->settings(true);
+        app(ProgressiveOperation::class)->assertStocks((int) $settings->branch_id, array_column($data['rows'], 'product_variant_id'));
         $zone = DeliveryZone::whereKey($data['delivery_zone_id'])->where('is_active', true)->firstOrFail();
         $variants = ProductVariant::with(['product', 'color', 'size', 'inventories' => fn ($q) => $q->where('branch_id', $settings->branch_id)])
             ->whereIn('id', array_column($data['rows'], 'product_variant_id'))->get()->keyBy('id');

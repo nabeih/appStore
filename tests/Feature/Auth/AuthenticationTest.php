@@ -23,7 +23,7 @@ class AuthenticationTest extends TestCase
 
     public function test_guests_cannot_read_admin_pages_or_the_design_preview(): void
     {
-        foreach (['/', '/dashboard', '/inventory', '/inventory/opening-stock', '/catalog/attributes', '/design-preview'] as $path) {
+        foreach (['/dashboard', '/inventory', '/inventory/opening-stock', '/catalog/attributes', '/design-preview'] as $path) {
             $this->get($path)->assertRedirect(route('login'));
         }
     }

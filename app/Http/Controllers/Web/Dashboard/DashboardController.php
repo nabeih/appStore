@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web\Dashboard;
 
+use App\Actions\Inventory\InventoryValuationSummary;
 use App\Actions\Store\StoreContext;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
@@ -16,7 +17,15 @@ class DashboardController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
-        $branches = SalesReports::branches($actor, false)->modelKeys();
+        $allowedBranches = SalesReports::branches($actor, false);
+        $branches = $allowedBranches->modelKeys();
+        $input = $request->validate(['branch_id' => ['nullable', 'integer', 'min:1']]);
+        $branchId = empty($input['branch_id']) ? null : (int) $input['branch_id'];
+        if ($branchId !== null) {
+            abort_unless(in_array($branchId, $branches, true), 403);
+            $branches = [$branchId];
+        }
+        $valuation = $actor->can('inventory.view') && $actor->can('sales.view_cost') ? app(InventoryValuationSummary::class)->build($actor, $branchId) : null;
         $stats = [];
         $recent = collect();
         if ($actor->can('sales.view')) {
@@ -33,6 +42,6 @@ class DashboardController extends Controller
             $stats[] = ['label' => 'طلبات الموقع الجديدة', 'value' => app(StoreContext::class)->orders($actor)->where('status', 'new')->count(), 'icon' => 'fa-bag-shopping'];
         }
 
-        return view('dashboard.index', compact('stats', 'recent'));
+        return view('dashboard.index', compact('stats', 'recent', 'valuation', 'allowedBranches', 'branchId'));
     }
 }

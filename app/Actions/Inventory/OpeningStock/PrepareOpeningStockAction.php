@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory\OpeningStock;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Color;
@@ -17,13 +18,17 @@ use Illuminate\Validation\ValidationException;
 class PrepareOpeningStockAction
 {
     /** @return array{groups: array, rows: array, total_quantity: int, total_cost: string, line_count: int} */
-    public function execute(array $data, bool $lock = false): array
+    public function execute(array $data, bool $lock = false, ?Branch $lockedBranch = null): array
     {
-        $branch = Branch::findOrFail($data['branch_id']);
+        $branch = $lockedBranch ?? Branch::findOrFail($data['branch_id']);
+        if ((int) $branch->id !== (int) $data['branch_id'] || ($lockedBranch && DB::transactionLevel() === 0)) {
+            throw new \LogicException('A supplied branch must belong to the current transaction and opening document.');
+        }
         if ($branch->opening_stock_closed_at) {
             throw ValidationException::withMessages(['branch_id' => 'أُغلق إعداد أول المدة لهذا الفرع. استخدم مستند الشراء أو مستند التسوية المناسب.']);
         }
         OperationContext::date($branch, $data['opening_date'], false);
+        app(ProgressiveOperation::class)->guardLateOpening($branch, $data);
         $input = collect($data['rows']);
         $categories = Category::whereIn('id', $input->pluck('category_id')->unique())->where('is_active', true)->get()->keyBy('id');
         $colors = Color::whereIn('id', $input->pluck('color_id')->unique())->where('is_active', true)->get()->keyBy('id');

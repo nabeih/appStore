@@ -168,6 +168,9 @@ class SetupReadinessReport
         $requiredAccounts = array_keys(ManageFinancialAccountsAction::SYSTEM);
         $missingAccounts = array_values(array_diff($requiredAccounts, FinancialAccount::whereIn('code', $requiredAccounts)->pluck('code')->all()));
         $add($missingAccounts !== [], 'missing_system_accounts', 'تعريف الحسابات النظامية غير مكتمل.');
+        foreach (app(ProgressiveOperation::class)->closureBlockers($branch) as $message) {
+            $blockers[] = ['code' => 'progressive_incomplete', 'message' => $message];
+        }
         $closedEvent = AuditEvent::where('subject_type', $branch->getMorphClass())->where('subject_id', $branch->id)
             ->where('action', 'inventory.setup_closed')->latest('id')->first();
         $closure = $branch->opening_stock_closed_at ? ['at' => $branch->opening_stock_closed_at, 'by' => $branch->opening_stock_closed_by,

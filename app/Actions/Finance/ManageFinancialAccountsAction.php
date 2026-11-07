@@ -2,6 +2,7 @@
 
 namespace App\Actions\Finance;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\FinancialAccount;
 use App\Models\JournalEntry;
 use App\Models\User;
@@ -52,6 +53,7 @@ class ManageFinancialAccountsAction
     /** @return array{parts: array, paid: int, change: int} */
     public function payments(array $input, int $branchId, int $limit, bool $allowCashChange = false): array
     {
+        app(ProgressiveOperation::class)->assertAccounts($branchId, array_column($input, 'account_id'));
         $accounts = FinancialAccount::whereIn('id', array_column($input, 'account_id'))->where('branch_id', $branchId)
             ->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get()->keyBy('id');
         $parts = [];

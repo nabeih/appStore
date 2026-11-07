@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Inventory\OpeningStock;
 use App\Actions\Inventory\OpeningStock\ManageOpeningDraftAction;
 use App\Actions\Inventory\OpeningStock\PostOpeningStockAction;
 use App\Actions\Inventory\OpeningStock\PrepareOpeningStockAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Search\ModuleSearch;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\OpeningStock\StoreOpeningStockRequest;
@@ -94,8 +95,8 @@ class OpeningStockController extends Controller
 
     public function approveDraft(Request $request, OpeningStockEntry $entry, ManageOpeningDraftAction $manage): JsonResponse
     {
-        $data = $request->validate(['version' => ['required', 'integer', 'min:1']]);
-        $manage->approve($entry, (int) $data['version'], $request->user());
+        $data = $request->validate(['version' => ['required', 'integer', 'min:1']] + ProgressiveOperation::openingRules());
+        $manage->approve($entry, (int) $data['version'], $request->user(), $data['progressive_opening'] ?? []);
 
         return response()->json(['url' => route('inventory.opening-stock.show', $entry), 'message' => 'اعتمد المستند ودخلت البضاعة المخزون.']);
     }

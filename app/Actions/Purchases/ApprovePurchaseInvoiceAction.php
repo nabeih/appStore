@@ -4,6 +4,7 @@ namespace App\Actions\Purchases;
 
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\PostPurchaseFinanceAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
 use App\Models\Branch;
 use App\Models\Inventory;
@@ -40,6 +41,7 @@ class ApprovePurchaseInvoiceAction
             if (! $supplier) {
                 throw ValidationException::withMessages(['supplier_id' => 'المورد مؤرشف. استعده قبل اعتماد الفاتورة.']);
             }
+            app(ProgressiveOperation::class)->assertParty($current->branch_id, 'supplier', $supplier->id);
             if ($current->supplier_invoice_number && PurchaseInvoice::where('supplier_id', $supplier->id)->where('supplier_invoice_number', $current->supplier_invoice_number)->where('status', 'approved')->where('id', '!=', $current->id)->exists()) {
                 throw ValidationException::withMessages(['supplier_invoice_number' => 'رقم فاتورة المورد مسجل مسبقًا في فاتورة معتمدة.']);
             }

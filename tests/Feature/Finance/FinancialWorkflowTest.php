@@ -35,15 +35,19 @@ class FinancialWorkflowTest extends SalesTestCase
             $this->get(route($route))->assertOk();
         }
         $expense = $this->expense();
-        $this->get(route('finance.expenses.show', $expense))->assertOk()->assertSee('مصروف واجهة');
+        $this->get(route('finance.expenses.index'))->assertOk()->assertSee('غير معتمد بعد');
+        $this->get(route('finance.expenses.show', $expense))->assertOk()->assertSee('مصروف واجهة')->assertSee('غير معتمد بعد');
         $this->assertSame(0, $this->balance('operating_expenses'));
         $this->postJson(route('finance.expenses.approve', $expense))->assertOk();
+        $this->get(route('finance.expenses.index'))->assertOk()->assertDontSee('غير معتمد بعد')->assertSee('50.00');
+        $this->get(route('finance.expenses.show', $expense))->assertOk()->assertDontSee('غير معتمد بعد');
         $this->assertSame(5000, $this->balance('operating_expenses'));
         app(ManageFinancialAccountsAction::class)->opening($this->cash, ['opening_balance' => '100', 'reason' => 'رصيد موثق'], $this->owner);
         $data = ['client_uuid' => (string) Str::uuid(), 'account_id' => $this->cash->id, 'amount' => '20', 'reason' => 'صرف موثق'];
         $this->postJson(route('finance.expenses.pay', $expense), $data)->assertOk();
         $this->postJson(route('finance.expenses.pay', $expense), $data)->assertOk();
         $this->get(route('finance.expenses.show', $expense))->assertOk()->assertSee('30.00');
+        $this->get(route('finance.expenses.index'))->assertOk()->assertSee('20.00')->assertSee('30.00');
         $this->assertSame(8000, app(PostJournalAction::class)->balance($this->cash->id));
         $this->assertSame(-3000, $this->balance('expense_payables'));
     }

@@ -124,6 +124,7 @@ class ReviewInventoryAction
 
     private function assertSetupOpen(Branch $branch): void
     {
+        app(ProgressiveOperation::class)->guardCorrection($branch->id);
         if ($branch->opening_stock_closed_at) {
             throw ValidationException::withMessages(['inventory' => 'انتهى الإعداد؛ التصحيح يكون بمستند المصدر أو عكسه ضمن ضوابطه، وليس بتعديل المخزون مباشرة.']);
         }

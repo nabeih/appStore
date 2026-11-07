@@ -18,6 +18,7 @@ use App\Http\Controllers\Web\Catalog\ProductColorImageController;
 use App\Http\Controllers\Web\Customers\CustomerController;
 use App\Http\Controllers\Web\Customers\CustomerReceiptController;
 use App\Http\Controllers\Web\Dashboard\DashboardController;
+use App\Http\Controllers\Web\Finance\ChartOfAccountsController;
 use App\Http\Controllers\Web\Finance\ExpenseController;
 use App\Http\Controllers\Web\Finance\FinanceReviewController;
 use App\Http\Controllers\Web\Finance\FinancialAccountController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockController;
 use App\Http\Controllers\Web\Inventory\ProductDetailsController;
 use App\Http\Controllers\Web\Inventory\Setup\InventoryReviewController;
 use App\Http\Controllers\Web\Inventory\Setup\InventorySetupController;
+use App\Http\Controllers\Web\Inventory\Setup\ProgressiveOperationController;
 use App\Http\Controllers\Web\Onboarding\FirstBranchController;
 use App\Http\Controllers\Web\Purchases\PurchaseCatalogController;
 use App\Http\Controllers\Web\Purchases\PurchaseInvoiceController;
@@ -42,6 +44,8 @@ use App\Http\Controllers\Web\Search\SearchController;
 use App\Http\Controllers\Web\Search\VisualIndexController;
 use App\Http\Controllers\Web\Suppliers\SupplierController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/', [FirstRunSetupController::class, 'home'])->name('home');
 
 Route::middleware('guest')->group(function () {
     Route::get('/setup', [FirstRunSetupController::class, 'create'])->name('setup.show');
@@ -130,6 +134,11 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
         Route::put('/{customer}', [CustomerController::class, 'update'])->whereNumber('customer')->name('update');
         Route::post('/{customer}/archive', [CustomerController::class, 'archive'])->whereNumber('customer')->name('archive');
     });
+    Route::get('/finance/chart', [ChartOfAccountsController::class, 'index'])->middleware(['can:finance.view', 'can:sales.view_cost'])->name('finance.chart.index');
+    Route::post('/finance/chart', [ChartOfAccountsController::class, 'store'])->middleware(['can:finance.view', 'can:sales.view_cost', 'can:sales.manage_accounts'])->name('finance.chart.store');
+    Route::get('/finance/chart/{account}', [ChartOfAccountsController::class, 'show'])->whereNumber('account')->middleware(['can:finance.view', 'can:sales.view_cost'])->name('finance.chart.show');
+    Route::put('/finance/chart/{account}', [ChartOfAccountsController::class, 'update'])->whereNumber('account')->middleware(['can:finance.view', 'can:sales.view_cost', 'can:sales.manage_accounts'])->name('finance.chart.update');
+    Route::get('/finance/inventory-reconciliation', [ChartOfAccountsController::class, 'reconciliation'])->middleware(['can:finance.view', 'can:sales.view_cost', 'can:inventory.view'])->name('finance.inventory-reconciliation');
     Route::get('/finance/expenses', [ExpenseController::class, 'index'])->middleware('can:finance.view')->name('finance.expenses.index');
     Route::post('/finance/expenses', [ExpenseController::class, 'store'])->middleware('can:finance.expenses.manage')->name('finance.expenses.store');
     Route::get('/finance/expenses/{expense}', [ExpenseController::class, 'show'])->middleware('can:finance.view')->whereNumber('expense')->name('finance.expenses.show');
@@ -154,6 +163,9 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::post('/finance/accounts', [FinancialAccountController::class, 'store'])->name('finance.accounts.store');
     Route::get('/inventory/readiness/export', [InventoryReviewController::class, 'export'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.export');
     Route::get('/inventory/readiness', [InventoryReviewController::class, 'index'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.index');
+    Route::get('/inventory/operation', [ProgressiveOperationController::class, 'index'])->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.index');
+    Route::post('/inventory/branches/{branch}/operation', [ProgressiveOperationController::class, 'activate'])->whereNumber('branch')->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.activate');
+    Route::post('/inventory/branches/{branch}/operation/zero/{kind}/{record}', [ProgressiveOperationController::class, 'confirmZero'])->whereNumber(['branch', 'record'])->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.zero');
     Route::post('/inventory/{inventory}/baseline', [InventoryReviewController::class, 'baseline'])->whereNumber('inventory')->name('inventory.review.baseline');
     Route::post('/inventory/branches/{branch}/close-setup', [InventoryReviewController::class, 'close'])->whereNumber('branch')->middleware('can:inventory.close_setup')->name('inventory.review.close');
     Route::get('/catalog/products/{product}/swatches', [FabricSwatchController::class, 'index'])->whereNumber('product')->name('catalog.swatches.index');
@@ -217,7 +229,6 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     });
     Route::put('/inventory/{inventory}', [InventorySetupController::class, 'update'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.update');
     Route::delete('/inventory/{inventory}', [InventorySetupController::class, 'destroy'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.destroy');
-    Route::redirect('/', '/dashboard')->name('home');
     Route::view('/design-preview', 'index')->name('design.preview');
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 

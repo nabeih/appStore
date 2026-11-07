@@ -4,6 +4,7 @@ namespace App\Actions\Customers;
 
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
 use App\Models\SaleInvoice;
@@ -30,6 +31,7 @@ class RecordCustomerReceiptAction
                 return OperationContext::replay($existing, $hash);
             }
             $customer = Customer::findOrFail($data['customer_id']);
+            app(ProgressiveOperation::class)->assertParty($branch->id, 'customer', $customer->id);
             $kind = $data['kind'] ?? 'receipt';
             if ($kind === 'refund') {
                 Gate::forUser($actor)->authorize('sales.return');

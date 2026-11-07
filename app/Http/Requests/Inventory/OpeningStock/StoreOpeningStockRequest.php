@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory\OpeningStock;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
@@ -32,7 +33,7 @@ class StoreOpeningStockRequest extends FormRequest
                 }
                 $files[$index] = ['image' => $this->file('images.'.$index)];
             }
-            $this->merge(Arr::only($payload, ['client_uuid', 'branch_id', 'opening_date', 'notes', 'rows']));
+            $this->merge(Arr::only($payload, ['client_uuid', 'branch_id', 'opening_date', 'notes', 'rows', 'progressive_opening']));
             $this->files->set('rows', $files);
             $this->convertedFiles = null;
         }
@@ -62,7 +63,7 @@ class StoreOpeningStockRequest extends FormRequest
     {
         $money = ['required', 'numeric', 'min:0', 'max:9999999.99', 'regex:/^\d{1,7}(\.\d{1,2})?$/'];
 
-        return [
+        return ProgressiveOperation::openingRules() + [
             'client_uuid' => ['required', 'uuid'],
             'branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('is_active', true)],
             'opening_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],

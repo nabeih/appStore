@@ -3,6 +3,7 @@
 namespace App\Actions\Sales;
 
 use App\Actions\Finance\ManageFinancialAccountsAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
 use App\Models\Customer;
 use App\Models\ProductVariant;
@@ -27,6 +28,7 @@ class PrepareSaleAction
         }
         $variants = ProductVariant::with(['product.images', 'product.category', 'color', 'size'])->whereIn('id', $ids)->get()->keyBy('id');
         $positions = $this->stock->positions($branch->id, $ids, $lock);
+        app(ProgressiveOperation::class)->assertStocks($branch->id, $ids);
         foreach ($virtualReturns as $returned) {
             if ($returned['condition'] !== 'resellable') {
                 continue;
@@ -110,6 +112,9 @@ class PrepareSaleAction
         $customer = ! empty($data['customer_id']) ? Customer::findOrFail($data['customer_id']) : null;
         $payments = $this->accounts->payments($data['payments'] ?? [], $branch->id, $total, true);
         $mode = $data['payment_mode'] ?? 'paid';
+        if ($customer && $total > $payments['paid']) {
+            app(ProgressiveOperation::class)->assertParty($branch->id, 'customer', $customer->id);
+        }
         if ($checkSettlement) {
             if (($mode === 'paid' && $payments['paid'] !== $total) || ($mode === 'credit' && $payments['paid'] !== 0)
                 || ($mode === 'partial' && ($payments['paid'] <= 0 || $payments['paid'] >= $total))) {

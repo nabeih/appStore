@@ -8,6 +8,7 @@ use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
 use App\Actions\Finance\Treasury\ManageTreasuryAction;
 use App\Actions\Inventory\OpeningStock\PostOpeningStockAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\SetupReadinessReport;
 use App\Actions\Purchases\ApprovePurchaseInvoiceAction;
 use App\Actions\Purchases\SavePurchaseInvoiceAction;
@@ -175,6 +176,22 @@ PHP;
     {
         $this->assertCount(1, array_filter($results, fn (array $row): bool => $row['ok']));
         $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
+    }
+
+    public function test_mysql_progressive_two_sales_compete_for_last_piece(): void
+    {
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null, 'opening_stock_closed_by' => null]);
+        $operation = app(ProgressiveOperation::class);
+        $branch = Branch::findOrFail($this->branchId);
+        $operation->activate($branch, ['revision' => $operation->report($branch)['revision'], 'reason' => 'Isolated progressive race',
+            'confirmed' => true, 'external_movements_confirmed' => true], $this->owner);
+        $first = $this->draft();
+        $second = $this->draft();
+        $this->assertOne($this->race('sale', [['id' => $first->id], ['id' => $second->id]]));
+        $this->assertSame(0, (int) Inventory::where('product_variant_id', $this->variantId)->value('quantity'));
+        $this->assertSame(1, SaleInvoice::where('status', 'approved')->count());
+        $this->assertSame(1, DB::table('stock_movements')->where('movement_type', 'sale')->count());
+        $this->assertNull($branch->fresh()->opening_stock_closed_at);
     }
 
     public function test_mysql_concurrent_legacy_transition_posts_finance_once_without_receiving_stock_again(): void

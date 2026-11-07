@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Sales;
 
 use App\Actions\Catalog\VisibleProductsQuery;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\ReviewInventoryAction;
 use App\Actions\Sales\PrepareSaleAction;
 use App\Actions\Search\ModuleSearch;
@@ -81,6 +82,8 @@ class CashierController extends Controller
             COALESCE(SUM(CASE WHEN inventories.value_minor IS NULL THEN 1 ELSE 0 END),0) AS unapproved_values,
             COALESCE(SUM(CASE WHEN COALESCE(history.missing_values,0) > 0 THEN 1 ELSE 0 END),0) AS unknown_movements')->first();
 
+        $operationState = app(ProgressiveOperation::class)->state($branch);
+
         return response()->json(['data' => $products->map(fn ($product): array => ['id' => $product->id, 'name' => $product->name, 'code' => $product->code,
             'images' => $product->images->map(fn ($image): array => ['color_id' => $image->color_id, 'url' => $image->thumbnail_url, 'optimized_url' => $image->optimized_url]),
             'variants' => $product->variants->map(function ($variant) use ($canCost, $product): array {
@@ -102,7 +105,8 @@ class CashierController extends Controller
                 'quantity_mismatches' => (int) $readiness->quantity_mismatches, 'unapproved_values' => (int) $readiness->unapproved_values,
                 'unknown_movements' => (int) $readiness->unknown_movements,
                 'setup_open' => ! $branch->opening_stock_closed_at,
-                'setup_message' => ! $branch->opening_stock_closed_at ? 'البيع ممنوع: فترة الإعداد الافتتاحي ما زالت مفتوحة. يلزم مراجعة الأرصدة واعتماد إنهاء الإعداد.' : null,
+                'operation_state' => $operationState,
+                'setup_message' => $operationState === 'progressive' ? ProgressiveOperation::WARNING : (! $branch->opening_stock_closed_at ? 'البيع ممنوع: فترة الإعداد الافتتاحي ما زالت مفتوحة. يلزم مراجعة الأرصدة واعتماد التشغيل التدريجي أو إنهاء الإعداد.' : null),
                 'review_url' => $request->user()->can('inventory.valuation_review') ? route('inventory.review.index', ['branch_id' => $branch->id]) : null]]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Store;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
 use App\Actions\Sales\PostSaleAction;
 use App\Actions\Sales\SaveSaleAction;
@@ -39,6 +40,7 @@ class ManageStoreOrder
                 abort_unless($quote['products_minor'] === (int) $current->products_minor && $quote['delivery_minor'] === (int) $current->delivery_minor
                     && $quote['original_delivery_minor'] === (int) $current->original_delivery_minor, 409, 'تغيرت الأسعار أو الرسوم؛ يلزم طلب محدث وموافقة الزبون، دون تغيير طلبه تلقائيًا.');
                 $positions = app(StockLedger::class)->positions($current->branch_id, $current->items->pluck('product_variant_id')->all(), true);
+                app(ProgressiveOperation::class)->assertStocks($current->branch_id, $current->items->pluck('product_variant_id')->all());
                 foreach ($current->items as $item) {
                     $position = $positions->get($item->product_variant_id);
                     abort_unless($position, 422, 'لا يوجد مخزون لهذا الصنف.');

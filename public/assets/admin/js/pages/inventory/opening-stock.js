@@ -332,6 +332,11 @@
         if (!filled.length) throw new Error('أدخل صنفًا واحدًا على الأقل.');
         const form = new FormData();
         const data = { client_uuid: clientUuid, branch_id: el('openingStockBranch').value, opening_date: el('openingStockDate').value, notes: el('openingStockNotes').value.trim(), rows: [], image_rows: [] };
+        const declaration = document.getElementById('osProgressiveDeclaration');
+        if (declaration?.querySelector('[data-progressive-confirmed]')?.checked) {
+            const counted = declaration.querySelector('[data-progressive-counted]').value;
+            data.progressive_opening = { counted_at: counted ? new Date(counted).toISOString() : '', evidence: declaration.querySelector('[data-progressive-evidence]').value, confirmed: true };
+        }
         let imageBytes = 0;
         const attached = new Set();
         renderColorImages();

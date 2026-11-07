@@ -38,7 +38,7 @@ class PostOpeningStockAction
                     OperationContext::branch(User::findOrFail($actorId), (int) $data['branch_id'], 'inventory.correct_setup');
                 }
                 $counter = DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
-                Branch::whereKey($data['branch_id'])->where('is_active', true)->lockForUpdate()->firstOrFail();
+                $branch = Branch::whereKey($data['branch_id'])->where('is_active', true)->lockForUpdate()->firstOrFail();
                 $existing = OpeningStockEntry::where('client_uuid', $data['client_uuid'])->first();
                 if ($existing) {
                     if (! hash_equals((string) $existing->request_hash, $hash)) {
@@ -49,7 +49,7 @@ class PostOpeningStockAction
 
                     return $existing;
                 }
-                $plan = $this->prepare->execute($data, true);
+                $plan = $this->prepare->execute($data, true, $branch);
                 $groups = $plan['groups'];
                 $needed = collect($groups)->filter(fn (array $group): bool => ! $group['product'] && blank($group['code']))->count();
                 $generated = app(AllocateProductCodesAction::class)->execute($needed, (int) ($counter?->last_number ?? 0), collect($groups)->pluck('code')->filter()->all());
@@ -70,6 +70,9 @@ class PostOpeningStockAction
                     'status' => $draft ? 'draft' : 'approved', 'version' => 1, 'notes' => $data['notes'] ?? null,
                     'total_quantity' => $plan['total_quantity'], 'total_cost' => $plan['total_cost'],
                 ]);
+                if (isset($data['progressive_opening'])) {
+                    OperationContext::audit($entry, User::findOrFail($actorId), 'operation.opening_snapshot_recorded', $data['progressive_opening']['evidence'], ['declaration' => $data['progressive_opening']]);
+                }
                 $inventories = $movements = [];
                 $timestamp = now();
                 foreach ($plan['rows'] as $row) {
@@ -129,6 +132,11 @@ class PostOpeningStockAction
                 'image' => empty($row['image']) ? null : hash_file('sha256', $row['image']->getRealPath())];
         }, $data['rows']);
 
-        return hash('sha256', json_encode(['branch_id' => (int) $data['branch_id'], 'opening_date' => $data['opening_date'], 'notes' => $data['notes'] ?? null, 'rows' => $rows], JSON_THROW_ON_ERROR));
+        $payload = ['branch_id' => (int) $data['branch_id'], 'opening_date' => $data['opening_date'], 'notes' => $data['notes'] ?? null, 'rows' => $rows];
+        if (isset($data['progressive_opening'])) {
+            $payload['progressive_opening'] = $data['progressive_opening'];
+        }
+
+        return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
     }
 }

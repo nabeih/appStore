@@ -29,7 +29,17 @@ class PostJournalAction
             return $entry;
         }
         $codes = array_values(array_filter(array_column($lines, 'account'), 'is_string'));
-        $accounts = FinancialAccount::whereIn('code', $codes)->get()->keyBy('code');
+        $ids = array_values(array_filter(array_column($lines, 'account'), 'is_int'));
+        $resolved = FinancialAccount::where(fn ($query) => $query->whereIn('code', $codes)->orWhereIn('id', $ids))->orderBy('id')->lockForUpdate()->get();
+        $accounts = $resolved->keyBy('code');
+        $byId = $resolved->keyBy('id');
+        foreach ($lines as $line) {
+            $account = is_int($line['account']) ? $byId->get($line['account']) : $accounts->get($line['account']);
+            if (! $account || $account->is_posting === false || (! $account->is_active && $reversalOf === null)
+                || ($account->branch_id !== null && (int) $account->branch_id !== $branchId)) {
+                throw ValidationException::withMessages(['account' => 'الترحيل يتطلب حسابًا تفصيليًا فعالًا ضمن فرع المستند؛ الحساب التجميعي لا يستقبل قيودًا.']);
+            }
+        }
         $entry = JournalEntry::create(['source_type' => $source->getMorphClass(), 'source_id' => $source->id,
             'event' => $event, 'branch_id' => $branchId, 'created_by' => $actor->id, 'transaction_date' => $date,
             'description' => $description, 'reversal_of_id' => $reversalOf]);

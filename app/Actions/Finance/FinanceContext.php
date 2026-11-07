@@ -2,6 +2,7 @@
 
 namespace App\Actions\Finance;
 
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\FinancialAccount;
 use App\Models\User;
 use App\Support\Sales\Money;
@@ -36,6 +37,7 @@ class FinanceContext
         if (! $account) {
             self::fail('اختر حسابًا فعليًا فعالًا في الفرع.');
         }
+        app(ProgressiveOperation::class)->assertAccounts($branchId, [$account->id]);
 
         return $account;
     }

@@ -4,6 +4,7 @@ namespace App\Actions\Purchases;
 
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\PurchaseInvoice;
 use App\Models\SupplierPayment;
 use App\Models\User;
@@ -22,6 +23,7 @@ class RecordSupplierPaymentAction
                 return OperationContext::replay($existing, $hash);
             }
             abort_unless($current->status === 'approved', 409, 'تُسجل الدفعات للفواتير المعتمدة فقط.');
+            app(ProgressiveOperation::class)->assertParty($current->branch_id, 'supplier', $current->supplier_id);
             if (! $current->financial_posted_at) {
                 FinanceContext::fail('الفاتورة خارج الدفتر الموحد أو غير معتمدة؛ راجع خطة الانتقال دون ترحيل قديم تلقائي.');
             }

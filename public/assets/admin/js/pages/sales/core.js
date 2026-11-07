@@ -59,6 +59,11 @@
         const form = event.target.closest('[data-simple-form]'); if (!form) return;
         event.preventDefault(); if (form.dataset.busy) return;
         const data = Object.fromEntries(new FormData(form)); delete data._token; delete data._method;
+        const declaration = form.querySelector('[data-progressive-opening]');
+        if (declaration?.querySelector('[data-progressive-confirmed]')?.checked) {
+            const counted = declaration.querySelector('[data-progressive-counted]').value;
+            data.progressive_opening = { counted_at: counted ? new Date(counted).toISOString() : '', evidence: declaration.querySelector('[data-progressive-evidence]').value, confirmed: true };
+        }
         ['goods_confirmed', 'funds_confirmed', 'confirm_opening', 'confirmed'].forEach(key => { const input = form.elements.namedItem(key); if (input?.type === 'checkbox') data[key] = input.checked; });
         if (form.querySelector('[data-refund-rows]')) data.refund_payments = payments(form.querySelector('[data-refund-rows]'));
         form.dataset.busy = '1'; error(form, '');

@@ -17,6 +17,7 @@ class SidebarNavigation
                 ['customers.index', 'العملاء والتحصيل', 'fa-users', ['sales.customers'], ['customers.*']],
             ]],
             ['inventory', 'المنتجات والمخزون', 'fa-boxes-stacked', [
+                ['inventory.operation.index', 'حالة تشغيل المحل', 'fa-toggle-on', ['inventory.close_setup', 'sales.view_cost'], ['inventory.operation.*']],
                 ['inventory.index', 'إدارة المخزون والمنتجات', 'fa-boxes-stacked', ['inventory.view'], ['inventory.index', 'inventory.products.*', 'inventory.update', 'catalog.swatches.*']],
                 ['catalog.attributes.index', 'التصنيفات والألوان والمقاسات', 'fa-tags', ['inventory.manage_catalog'], ['catalog.attributes.*']],
                 ['inventory.opening-stock.index', 'البضاعة الافتتاحية', 'fa-box-open', ['inventory.correct_setup', 'sales.view_cost'], ['inventory.opening-stock.*']],
@@ -27,6 +28,8 @@ class SidebarNavigation
                 ['suppliers.index', 'الموردون', 'fa-truck', ['purchases.view', 'sales.view_cost'], ['suppliers.*']],
             ]],
             ['finance', 'المالية والمحاسبة', 'fa-wallet', [
+                ['finance.chart.index', 'شجرة الحسابات', 'fa-sitemap', ['finance.view', 'sales.view_cost'], ['finance.chart.*']],
+                ['finance.inventory-reconciliation', 'مطابقة قيمة المخزون والدفتر', 'fa-scale-balanced', ['finance.view', 'sales.view_cost', 'inventory.view'], ['finance.inventory-reconciliation']],
                 ['finance.expenses.index', 'المصروفات', 'fa-file-invoice-dollar', ['finance.view'], ['finance.expenses.*', 'finance.expense-payments.*']],
                 ['finance.treasury.index', 'الصناديق والتحويلات', 'fa-money-bill-transfer', ['finance.view'], ['finance.treasury.*', 'finance.counts.*']],
                 ['finance.accounts.index', 'الحسابات المالية', 'fa-wallet', ['sales.manage_accounts'], ['finance.accounts.*']],

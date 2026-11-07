@@ -1,9 +1,10 @@
 <section class="sale-panel">
     <h2>مراجعة إنهاء الإعداد واعتماد أرصدة البدء</h2>
-    <p class="sale-notice">البيع ممنوع أثناء الإعداد. الإنهاء لا يضيف بضاعة أو دفعات أو قيودًا؛ يعتمد لقطة الأرصدة بعد المطابقة فقط. لا تعتمد رصيدًا مجهولًا كصفر.</p>
+    <p class="sale-notice">وضع الإعداد فقط يمنع البيع. التشغيل التدريجي المعتمد يسمح بالجاهز فقط. الإنهاء لا يضيف بضاعة أو دفعات أو قيودًا؛ يعتمد لقطة الأرصدة بعد المطابقة فقط. لا تعتمد رصيدًا مجهولًا كصفر.</p>
+    <a class="btn btn-outline" href="{{ route('inventory.operation.index') }}">حالة تشغيل المحل وفحص الجاهزية</a>
     @foreach($setupReports as $setup)
         <details @if(count($setupReports) === 1) open @endif>
-            <summary>{{ $setup['branch'] }} — {{ $setup['setup_open'] ? 'الإعداد مفتوح والبيع ممنوع' : 'الإعداد مغلق' }}</summary>
+            <summary>{{ $setup['branch'] }} — {{ $setup['setup_open'] ? (app(\App\Actions\Inventory\ProgressiveOperation::class)->activation($setup['branch_id'])?'تشغيل تدريجي والإعداد مفتوح':'إعداد فقط والبيع ممنوع') : 'تشغيل كامل والإعداد مغلق' }}</summary>
             @if($setup['closure'])
                 <p>تاريخ بدء التشغيل المعتمد: {{ $setup['closure']['start_date'] ?? 'غير موثق؛ راجع السجل' }}.
                     اعتمد المستخدم #{{ $setup['closure']['by'] }} الإنهاء في {{ $setup['closure']['at'] }}.
