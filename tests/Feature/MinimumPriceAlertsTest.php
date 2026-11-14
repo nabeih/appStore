@@ -41,7 +41,7 @@ class MinimumPriceAlertsTest extends MobileTestCase
         return array_replace($this->saleData($this->variant), ['rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 1]], 'discount' => ['type' => 'amount', 'value' => '2.00']], $changes);
     }
 
-    public function test_cashier_sees_minimum_without_cost_and_can_confirm_exception_without_manager_permission(): void
+    public function test_cashier_sees_minimum_without_cost_but_only_authorized_actor_can_confirm_exception(): void
     {
         $catalog = $this->getJson(route('sales.catalog', ['branch_id' => $this->branchId]))->assertOk();
         $catalog->assertJsonPath('data.0.variants.0.minimum_selling_price', '34.00')->assertJsonMissingPath('data.0.variants.0.unit_cost');
@@ -49,6 +49,10 @@ class MinimumPriceAlertsTest extends MobileTestCase
         $this->postJson(route('sales.invoices.complete'), $data)->assertUnprocessable()->assertJsonValidationErrors('below_minimum_confirmed');
         $this->assertDatabaseCount('sale_invoices', 0);
         $data['below_minimum_confirmed'] = true;
+        $this->postJson(route('sales.invoices.complete'), $data)->assertForbidden();
+        $this->assertDatabaseCount('sale_invoices', 0);
+        $this->actingAs($this->owner);
+        $data['reason'] = 'موافقة المالك الموثقة';
         $this->postJson(route('sales.invoices.complete'), $data)->assertOk();
         $this->postJson(route('sales.invoices.complete'), $data)->assertOk();
         $this->assertDatabaseCount('sale_invoices', 1);
@@ -57,13 +61,14 @@ class MinimumPriceAlertsTest extends MobileTestCase
         $exception = SalePriceException::firstOrFail();
         $this->assertSame(3400, (int) $exception->minimum_unit_minor);
         $this->assertSame(3300, (int) $exception->effective_total_minor);
-        $this->assertSame($this->cashier->id, $exception->user_id);
+        $this->assertSame($this->owner->id, $exception->user_id);
         $this->assertFalse($this->cashier->can('sales.below_cost'));
     }
 
     public function test_minimum_uses_exact_total_after_invoice_allocation_without_rounding_unit_price(): void
     {
-        $data = $this->discounted(['rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 3]], 'discount' => ['type' => 'amount', 'value' => '4.00'], 'below_minimum_confirmed' => true]);
+        $this->actingAs($this->owner);
+        $data = $this->discounted(['rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 3]], 'discount' => ['type' => 'amount', 'value' => '4.00'], 'below_minimum_confirmed' => true, 'reason' => 'سبب موثق من المالك']);
         $this->postJson(route('sales.invoices.complete'), $data)->assertOk();
         $exception = SalePriceException::firstOrFail();
         $this->assertSame(3, (int) $exception->quantity);
@@ -86,14 +91,14 @@ class MinimumPriceAlertsTest extends MobileTestCase
         Event::listen('eloquent.created: '.AppAlertEvent::class, function () use (&$noRecipientBeforeCommit): void {
             $noRecipientBeforeCommit = AppAlert::count() === 0;
         });
-        $this->postJson(route('sales.invoices.complete'), $this->discounted(['below_minimum_confirmed' => true]))->assertOk();
+        $this->actingAs($this->owner)->postJson(route('sales.invoices.complete'), $this->discounted(['below_minimum_confirmed' => true, 'reason' => 'استثناء موثق من المالك']))->assertOk();
         Event::forget('eloquent.created: '.AppAlertEvent::class);
         $this->assertTrue($noRecipientBeforeCommit);
         app(DispatchAppAlerts::class)->pending();
         app(DispatchAppAlerts::class)->pending();
         $this->assertDatabaseCount('app_alerts', 1);
         $this->assertSame($this->owner->id, AppAlert::firstOrFail()->user_id);
-        $this->getJson(route('alerts.index'))->assertOk()->assertJsonPath('unread', 0);
+        $this->actingAs($this->cashier)->getJson(route('alerts.index'))->assertOk()->assertJsonPath('unread', 0);
         $alert = AppAlert::firstOrFail();
         $this->postJson(route('alerts.read', $alert))->assertNotFound();
         $this->actingAs($this->owner)->getJson(route('alerts.index'))->assertOk()->assertJsonPath('unread', 1);
@@ -122,7 +127,11 @@ class MinimumPriceAlertsTest extends MobileTestCase
             'rows' => [['product_variant_id' => $this->variant->id, 'quantity' => 1, 'expected_revision' => MobileRevision::of($stock)]]];
         $bad = $this->operation('sale.create', $payload);
         $this->push([$bad])->assertJsonPath('results.0.status', 'validation_failed');
-        $good = $this->operation('sale.create', $payload + ['below_minimum_confirmed' => true]);
+        $unauthorized = $this->operation('sale.create', $payload + ['below_minimum_confirmed' => true, 'reason' => 'تأكيد دون صلاحية']);
+        $this->push([$unauthorized])->assertJsonPath('results.0.status', 'validation_failed');
+        $this->assertDatabaseCount('sale_invoices', 0);
+        $this->mobileLogin($this->owner);
+        $good = $this->operation('sale.create', $payload + ['below_minimum_confirmed' => true, 'reason' => 'موافقة المالك الموثقة']);
         $this->push([$good])->assertJsonPath('results.0.status', 'accepted');
         $this->push([$good])->assertJsonPath('results.0.status', 'already_applied');
         $this->assertDatabaseCount('sale_invoices', 1);

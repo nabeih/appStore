@@ -24,6 +24,7 @@ use App\Models\ProductVariant;
 use App\Models\PurchaseInvoice;
 use App\Models\SaleInvoice;
 use App\Models\User;
+use App\Support\Access\AccessPermissions;
 use App\Support\Mobile\MobileRevision;
 use App\Support\Sales\OperationContext;
 use Illuminate\Foundation\Http\FormRequest;
@@ -133,7 +134,7 @@ class ApplyMobileOperation
                 abort(422, 'معرّف محلي مطلوب لكل متغير جديد.');
             }
             if (isset($row['minimum_selling_price'])) {
-                abort_unless($actor->can('sales.view_cost'), 403);
+                abort_unless(AccessPermissions::canManageMinimumPrices($actor), 403);
             }
         }
         unset($row);

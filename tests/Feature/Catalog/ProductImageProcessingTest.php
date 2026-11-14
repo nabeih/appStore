@@ -14,7 +14,9 @@ use App\Models\ProductImage;
 use App\Models\SaleInvoice;
 use App\Models\SaleItem;
 use App\Models\Size;
+use App\Models\StoreListing;
 use App\Models\User;
+use DOMDocument;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +81,87 @@ class ProductImageProcessingTest extends TestCase
         $this->assertCount(2, Storage::disk('public')->allFiles());
         $this->assertSame(3, $this->product->variants()->count());
         $this->assertDatabaseCount('product_images', 1);
+    }
+
+    public function test_new_uppercase_upload_uses_portable_generated_paths_and_never_saves_the_original(): void
+    {
+        $file = UploadedFile::fake()->image('New Colour PHOTO.PNG', 2400, 1600);
+        $image = $this->upload($file);
+        $this->assertPair($image, [1200, 800], [160, 106]);
+        $this->assertMatchesRegularExpression('#\Aproducts/colors/[a-f0-9-]{36}/optimized\.webp\z#', $image->image_path);
+        $this->assertSame(dirname($image->image_path).'/thumbnail.webp', $image->thumbnail_path);
+        $this->assertStringNotContainsString('\\', $image->image_path);
+        $this->assertEqualsCanonicalizing([$image->image_path, $image->thumbnail_path], Storage::disk('public')->allFiles());
+        $this->assertLessThan($file->getSize(), Storage::disk('public')->size($image->image_path));
+        $this->assertLessThan(Storage::disk('public')->size($image->image_path), Storage::disk('public')->size($image->thumbnail_path));
+        $this->assertSame($image->thumbnail_url, $image->url);
+    }
+
+    public function test_new_upload_uses_small_sources_in_inventory_and_search_and_optimized_public_details(): void
+    {
+        $image = $this->upload(UploadedFile::fake()->image('new-detail.jpg', 1800, 1200));
+        $branchId = DB::table('branches')->insertGetId(['name' => 'Isolated image branch']);
+        foreach ($this->product->variants as $variant) {
+            Inventory::create(['branch_id' => $branchId, 'product_variant_id' => $variant->id, 'quantity' => 1,
+                'average_cost' => '20', 'value_minor' => 2000]);
+        }
+        $inventory = $this->get(route('inventory.index'))->assertOk();
+        $document = new DOMDocument;
+        $document->loadHTML($inventory->getContent(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        $sources = [];
+        foreach ($document->getElementsByTagName('img') as $element) {
+            $sources[] = $element->getAttribute('src');
+            $this->assertStringNotContainsString($image->optimized_url, $element->getAttribute('srcset'));
+        }
+        $this->assertContains($image->thumbnail_url, $sources);
+        $this->assertNotContains($image->optimized_url, $sources);
+        $this->getJson(route('search.products', ['branch_id' => $branchId, 'q' => 'PHOTO']))->assertOk()
+            ->assertJsonPath('data.0.image_url', $image->thumbnail_url)->assertJsonMissingPath('data.0.optimized_url');
+        $this->get(route('inventory.products.show', $this->product))->assertOk()
+            ->assertSee('src="'.$image->thumbnail_url.'"', false)->assertSee('href="'.$image->optimized_url.'"', false);
+        StoreListing::factory()->create(['product_id' => $this->product->id, 'slug' => 'new-upload-product']);
+        $details = $this->get('/shop/products/new-upload-product')->assertOk();
+        $document->loadHTML($details->getContent(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        $sources = [];
+        foreach ($document->getElementsByTagName('img') as $element) {
+            $sources[] = $element->getAttribute('src');
+        }
+        $this->assertContains($image->optimized_url, $sources);
+        $this->assertContains($image->thumbnail_url, $sources);
+        $this->assertCount(2, Storage::disk('public')->allFiles());
+    }
+
+    public function test_failed_second_color_upload_rolls_back_new_image_rows_and_keeps_unrelated_files(): void
+    {
+        $color = Color::create(['name' => 'Blue image fixture', 'code' => 'IMAGE-BLUE']);
+        $this->product->variants()->create(['color_id' => $color->id, 'size_id' => $this->product->variants()->first()->size_id,
+            'sku' => 'PHOTO-IMAGE-BLUE-S', 'selling_price' => '35', 'is_active' => true]);
+        $disk = Storage::disk('public');
+        $disk->put('unrelated/keep.txt', 'isolated existing content');
+        $proxy = \Mockery::mock($disk);
+        $writes = 0;
+        $proxy->shouldReceive('put')->times(3)->andReturnUsing(function (string $path, string $bytes) use ($disk, &$writes): bool {
+            $writes++;
+            $disk->put($path, $bytes);
+
+            return $writes !== 3;
+        });
+        $proxy->shouldReceive('delete')->andReturnUsing(fn (array $paths): bool => $disk->delete($paths));
+        Storage::set('public', $proxy);
+        try {
+            $this->withoutExceptionHandling()->post(route('catalog.product-images.store', $this->product), ['images' => [
+                ['color_id' => $this->color->id, 'image' => UploadedFile::fake()->image('new-black.jpg')],
+                ['color_id' => $color->id, 'image' => UploadedFile::fake()->image('new-blue.jpg')],
+            ]], ['Accept' => 'application/json']);
+            $this->fail('Expected the second image storage failure.');
+        } catch (RuntimeException $error) {
+            $this->assertSame('تعذر حفظ نسختي الصورة.', $error->getMessage());
+        } finally {
+            Storage::set('public', $disk);
+        }
+        $this->assertDatabaseCount('product_images', 0);
+        $this->assertSame(['unrelated/keep.txt'], $disk->allFiles());
+        $this->assertSame('isolated existing content', $disk->get('unrelated/keep.txt'));
     }
 
     public function test_small_transparent_png_is_not_upscaled_and_preserves_transparency(): void

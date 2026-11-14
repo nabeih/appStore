@@ -98,7 +98,7 @@
             } catch (error) { if (error.name !== 'AbortError') report(error); }
         }, 300);
     }
-    const blank = data => ({ id: newUuid(), name: '', code: '', category_id: '', color_id: '', size_id: '', qty: '', cost: '', price: '', ...data });
+    const blank = data => ({ id: newUuid(), name: '', code: '', category_id: '', color_id: '', size_id: '', qty: '', cost: '', price: '', minimum_selling_price: '', ...data });
     const hasData = row => ['name', 'code', 'qty', 'cost', 'price'].some(key => String(row[key]).trim() !== '');
     const options = (items, selected = '', multiple = false) => `${multiple ? '' : '<option value="">اختر...</option>'}${items.map(item => `<option value="${item.id}" ${String(selected) === String(item.id) ? 'selected' : ''}>${escape(item.name)}</option>`).join('')}`;
 
@@ -160,7 +160,7 @@
             <td data-label="الكود"><input aria-label="كود المنتج السطر ${index + 1}" data-id="${row.id}" data-field="code" dir="ltr" maxlength="50" value="${escape(row.code)}" placeholder="تلقائي"></td>
             <td data-label="اسم المنتج"><input aria-label="اسم المنتج السطر ${index + 1}" data-id="${row.id}" data-field="name" maxlength="200" value="${escape(row.name)}"></td>
             ${[['category_id', 'categories', 'التصنيف'], ['color_id', 'colors', 'اللون'], ['size_id', 'sizes', 'المقاس']].map(([field, list, label]) => `<td data-label="${label}"><select aria-label="${label} السطر ${index + 1}" data-id="${row.id}" data-field="${field}">${options(catalog[list], row[field])}</select></td>`).join('')}
-            ${[['qty', 'الكمية'], ['cost', 'تكلفة الوحدة'], ['price', 'سعر البيع']].map(([field, label]) => `<td data-label="${label}"><input type="number" aria-label="${label} السطر ${index + 1}" min="${field === 'qty' ? 1 : 0}" max="${field === 'qty' ? 1000000 : 9999999.99}" step="${field === 'qty' ? 1 : '0.01'}" data-id="${row.id}" data-field="${field}" value="${escape(row[field])}"></td>`).join('')}
+            ${[['qty', 'الكمية'], ['cost', 'تكلفة الوحدة'], ['price', 'سعر البيع'], ...(config.canManageMinimum ? [['minimum_selling_price', 'الحد الأدنى']] : [])].map(([field, label]) => `<td data-label="${label}"><input type="number" aria-label="${label} السطر ${index + 1}" min="${field === 'qty' ? 1 : 0}" max="${field === 'qty' ? 1000000 : 9999999.99}" step="${field === 'qty' ? 1 : '0.01'}" data-id="${row.id}" data-field="${field}" value="${escape(row[field])}"></td>`).join('')}
             <td><button type="button" class="btn btn-outline btn-sm" data-remove="${row.id}" aria-label="حذف السطر ${index + 1}">✕</button></td>
         </tr>`).join('');
         el('quickStockRowCount').textContent = `${rows.filter(hasData).length} سطر من أصل ${rows.length} — الحد الأقصى 300`;
@@ -169,7 +169,7 @@
     function fillExistingPrice(row) {
         const product = products.get(row.code.trim().toUpperCase());
         const variant = product?.variants.find(item => String(item.color_id) === String(row.color_id) && String(item.size_id) === String(row.size_id));
-        if (variant) row.price = variant.selling_price;
+        if (variant) { row.price = variant.selling_price; row.minimum_selling_price = variant.minimum_selling_price ?? ''; }
     }
     window.openQuickOpeningStockModal = async () => {
         if (!dialog.open) dialog.showModal();
@@ -222,7 +222,7 @@
         const generated = [];
         colors.forEach(color => sizes.forEach(size => {
             if (rows.some(row => row.name.trim() === name && row.code === code && String(row.category_id) === category && String(row.color_id) === color && String(row.size_id) === size)) return;
-            const row = blank({ name, code, category_id: category, color_id: color, size_id: size, qty: el('matrixQty').value, cost: el('matrixCost').value, price: el('matrixPrice').value });
+            const row = blank({ name, code, category_id: category, color_id: color, size_id: size, qty: el('matrixQty').value, cost: el('matrixCost').value, price: el('matrixPrice').value, minimum_selling_price: el('matrixMinimum')?.value || '' });
             fillExistingPrice(row); generated.push(row);
         }));
         if (!generated.length) return errors(['التركيبات المختارة موجودة في الجدول بالفعل.']);
@@ -342,6 +342,7 @@
         renderColorImages();
         filled.forEach((row, index) => {
             data.rows.push(Object.fromEntries(['name', 'code', 'category_id', 'color_id', 'size_id', 'qty', 'cost', 'price'].map(key => [key, String(row[key]).trim()])));
+            if (config.canManageMinimum && row.minimum_selling_price !== undefined && row.minimum_selling_price !== '') data.rows[index].minimum_selling_price = String(row.minimum_selling_price).trim();
             const key = currentImageKeys.get(row.id);
             const image = colorFiles.get(key);
             if (image && !attached.has(key)) {

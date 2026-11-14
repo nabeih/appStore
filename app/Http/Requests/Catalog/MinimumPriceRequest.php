@@ -9,7 +9,7 @@ class MinimumPriceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && AccessPermissions::isOwner($this->user()) && $this->user()->can('inventory.manage_catalog');
+        return $this->user() && AccessPermissions::canManageMinimumPrices($this->user());
     }
 
     public function rules(): array

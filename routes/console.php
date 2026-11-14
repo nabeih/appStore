@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('app:alerts-dispatch')->everyMinute()->withoutOverlapping();
+Schedule::command('app:expenses-recognize')->dailyAt('00:10')->withoutOverlapping();
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

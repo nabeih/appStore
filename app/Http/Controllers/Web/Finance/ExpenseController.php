@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Web\Finance;
 
+use App\Actions\Finance\Expenses\ExpensePeriodReport;
 use App\Actions\Finance\Expenses\ManageExpenseAction;
+use App\Actions\Finance\Expenses\RecognizePrepaidExpense;
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\FinanceReports;
 use App\Actions\Search\SearchTerm;
@@ -13,15 +15,41 @@ use App\Http\Requests\Search\SearchRequest;
 use App\Models\Expense;
 use App\Models\ExpensePayment;
 use App\Models\FinancialAccount;
+use App\Support\ExcelDownload;
+use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ExpenseController extends Controller
 {
+    public function report(Request $request, ExpensePeriodReport $reports): View|JsonResponse|BinaryFileResponse
+    {
+        FinanceContext::ready();
+        $filters = $request->validate(['branch_id' => ['required', 'integer', 'min:1'], 'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from']]);
+        $report = $reports->build($request->user(), (int) $filters['branch_id'], $filters['from'], $filters['to']);
+        $completeness = app(FinanceReports::class)->completeness([(int) $filters['branch_id']]);
+        if ($request->query('export') === 'xlsx') {
+            $rows = array_map(fn (array $row): array => [$row['category'], Money::format($row['expenses_minor']),
+                Money::format($row['cash_paid_minor'])], $report['rows']);
+
+            return app(ExcelDownload::class)->download('expense-period.xlsx', ['المصروفات' => array_merge([
+                ['الفرع', (string) $filters['branch_id']], ['من', $filters['from'], 'إلى', $filters['to']],
+                ['البيانات مكتملة', $completeness['complete'] ? 'نعم وفق الفحوص المسجلة' : 'لا؛ التقرير جزئي'],
+                ['التصنيف', 'المصروف المعترف به', 'الدفع النقدي الصافي']], $rows)]);
+        }
+        if ($request->expectsJson() || $request->query('export') === 'json') {
+            return response()->json(['filters' => $filters, 'data' => $report, 'completeness' => $completeness])->header('Cache-Control', 'no-store, private');
+        }
+
+        return view('finance.expenses.report', compact('filters', 'report', 'completeness'));
+    }
+
     public function index(SearchRequest $request): View
     {
         if (! FinanceContext::installed()) {
@@ -64,7 +92,16 @@ class ExpenseController extends Controller
         $accounts = FinancialAccount::where('branch_id', $expense->branch_id)->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get();
         $completeness = app(FinanceReports::class)->completeness([$expense->branch_id]);
 
-        return view('finance.expenses.show', compact('expense', 'payments', 'paid', 'accounts', 'completeness'));
+        $allocations = $expense->recognition_method === 'prepaid' ? $expense->allocations()->orderBy('month')->get() : collect();
+
+        return view('finance.expenses.show', compact('expense', 'payments', 'paid', 'accounts', 'completeness', 'allocations'));
+    }
+
+    public function recognize(Request $request, Expense $expense, RecognizePrepaidExpense $action): JsonResponse
+    {
+        $count = $action->execute($expense, $request->user());
+
+        return response()->json(['url' => route('finance.expenses.show', $expense), 'message' => 'رحلت '.$count.' حصة مستحقة دون صرف نقدي جديد.']);
     }
 
     public function approve(Request $request, Expense $expense, ManageExpenseAction $action): JsonResponse

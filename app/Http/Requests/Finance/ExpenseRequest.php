@@ -14,6 +14,7 @@ class ExpenseRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'recognition_method' => ['sometimes', 'required', 'in:immediate,prepaid'],
             'client_uuid' => ['required', 'uuid'], 'branch_id' => ['required', 'integer', 'min:1'], 'title' => ['required', 'string', 'max:200'],
             'category' => ['required', 'in:rent,utilities,maintenance,transport,supplies,other'], 'payee' => ['nullable', 'string', 'max:150'],
             'period_start' => ['required', 'date_format:Y-m-d'], 'period_end' => ['required', 'date_format:Y-m-d', 'after_or_equal:period_start'],

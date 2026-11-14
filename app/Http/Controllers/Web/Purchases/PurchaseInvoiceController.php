@@ -81,6 +81,7 @@ class PurchaseInvoiceController extends Controller
         $plan = $prepare->execute($request->validated());
 
         return response()->json(['total' => DecimalAmount::format($plan['attributes']['total_minor']), 'quantity' => $plan['attributes']['total_quantity'],
+            'paid' => DecimalAmount::format($plan['attributes']['initial_payment_minor']),
             'remaining' => DecimalAmount::format($plan['attributes']['total_minor'] - $plan['attributes']['initial_payment_minor']),
             'lines' => array_map(fn (array $row): string => DecimalAmount::format($row['line_total_minor']), $plan['rows'])]);
     }

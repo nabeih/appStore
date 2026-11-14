@@ -14,7 +14,7 @@ class UpdateProductRequest extends FormRequest
         $user = $this->user();
         $minimum = collect((array) $this->input('variants', []))->contains(fn ($row): bool => is_array($row) && array_key_exists('minimum_selling_price', $row));
 
-        return $user && $user->can('inventory.manage_catalog') && (! $minimum || AccessPermissions::isOwner($user));
+        return $user && $user->can('inventory.manage_catalog') && (! $minimum || AccessPermissions::canManageMinimumPrices($user));
     }
 
     public function rules(): array
@@ -68,7 +68,7 @@ class UpdateProductRequest extends FormRequest
             ],
 
             'variants.*.minimum_selling_price' => [
-                Rule::prohibitedIf(fn (): bool => $this->user() === null || ! AccessPermissions::isOwner($this->user())),
+                Rule::prohibitedIf(fn (): bool => $this->user() === null || ! AccessPermissions::canManageMinimumPrices($this->user())),
                 'nullable',
                 'numeric',
                 'min:0',

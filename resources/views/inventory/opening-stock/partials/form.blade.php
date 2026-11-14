@@ -36,6 +36,7 @@
                     <label>الكمية لكل تركيبة <input id="matrixQty" type="number" min="1" max="1000000" step="1" placeholder="اختياري"></label>
                     <label>تكلفة الوحدة ₪ <input id="matrixCost" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري"></label>
                     <label>سعر البيع ₪ <input id="matrixPrice" type="number" min="0" max="9999999.99" step="0.01" placeholder="للتركيبات الجديدة"></label>
+                    @if(\App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()))<label>الحد الأدنى للبيع ₪ <input id="matrixMinimum" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري للتركيبات الجديدة"></label>@endif
                     <button type="button" class="btn btn-primary" id="osGenerate">إضافة التركيبات للجدول</button>
                 </div>
             </section>
@@ -58,7 +59,7 @@
             <h3 class="os-lines-title">2. الأصناف المدخلة</h3>
             <div class="os-table-wrap">
                 <table class="quick-stock-table os-entry-table" role="table" aria-label="أصناف البضاعة الافتتاحية">
-                    <thead><tr><th>#</th><th>الكود</th><th>اسم المنتج</th><th>التصنيف</th><th>اللون</th><th>المقاس</th><th>الكمية</th><th>تكلفة الوحدة ₪</th><th>سعر البيع ₪</th><th>حذف</th></tr></thead>
+                    <thead><tr><th>#</th><th>الكود</th><th>اسم المنتج</th><th>التصنيف</th><th>اللون</th><th>المقاس</th><th>الكمية</th><th>تكلفة الوحدة ₪</th><th>سعر البيع ₪</th>@if(\App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()))<th>الحد الأدنى ₪</th>@endif<th>حذف</th></tr></thead>
                     <tbody id="quickOpeningStockTableBody"></tbody>
                 </table>
             </div>

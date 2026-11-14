@@ -23,6 +23,11 @@ class Expense extends Model
         return $this->hasMany(ExpensePayment::class);
     }
 
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(ExpenseAllocation::class);
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

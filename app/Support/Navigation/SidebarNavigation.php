@@ -17,7 +17,7 @@ class SidebarNavigation
                 ['customers.index', 'العملاء والتحصيل', 'fa-users', ['sales.customers'], ['customers.*']],
             ]],
             ['inventory', 'المنتجات والمخزون', 'fa-boxes-stacked', [
-                ['inventory.operation.index', 'حالة تشغيل المحل', 'fa-toggle-on', ['inventory.close_setup', 'sales.view_cost'], ['inventory.operation.*']],
+                ['inventory.operation.index', 'حالة تشغيل المحل', 'fa-toggle-on', ['inventory.operation.view'], ['inventory.operation.*']],
                 ['inventory.index', 'إدارة المخزون والمنتجات', 'fa-boxes-stacked', ['inventory.view'], ['inventory.index', 'inventory.products.*', 'inventory.update', 'catalog.swatches.*']],
                 ['catalog.attributes.index', 'التصنيفات والألوان والمقاسات', 'fa-tags', ['inventory.manage_catalog'], ['catalog.attributes.*']],
                 ['inventory.opening-stock.index', 'البضاعة الافتتاحية', 'fa-box-open', ['inventory.correct_setup', 'sales.view_cost'], ['inventory.opening-stock.*']],

@@ -15,7 +15,7 @@ class MinimumPriceController extends Controller
 {
     public function edit(Request $request, int $product): View
     {
-        abort_unless(AccessPermissions::isOwner($request->user()), 403);
+        abort_unless(AccessPermissions::canManageMinimumPrices($request->user()), 403);
 
         return view('store.admin.minimum-prices', ['entry' => app(VisibleProductsQuery::class)->execute($request->user())
             ->with(['variants.color', 'variants.size'])->findOrFail($product)]);

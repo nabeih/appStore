@@ -140,9 +140,11 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::put('/finance/chart/{account}', [ChartOfAccountsController::class, 'update'])->whereNumber('account')->middleware(['can:finance.view', 'can:sales.view_cost', 'can:sales.manage_accounts'])->name('finance.chart.update');
     Route::get('/finance/inventory-reconciliation', [ChartOfAccountsController::class, 'reconciliation'])->middleware(['can:finance.view', 'can:sales.view_cost', 'can:inventory.view'])->name('finance.inventory-reconciliation');
     Route::get('/finance/expenses', [ExpenseController::class, 'index'])->middleware('can:finance.view')->name('finance.expenses.index');
+    Route::get('/finance/expenses/report', [ExpenseController::class, 'report'])->middleware('can:finance.view')->name('finance.expenses.report');
     Route::post('/finance/expenses', [ExpenseController::class, 'store'])->middleware('can:finance.expenses.manage')->name('finance.expenses.store');
     Route::get('/finance/expenses/{expense}', [ExpenseController::class, 'show'])->middleware('can:finance.view')->whereNumber('expense')->name('finance.expenses.show');
     Route::post('/finance/expenses/{expense}/approve', [ExpenseController::class, 'approve'])->middleware('can:finance.expenses.approve')->whereNumber('expense')->name('finance.expenses.approve');
+    Route::post('/finance/expenses/{expense}/recognize', [ExpenseController::class, 'recognize'])->middleware(['can:finance.expenses.approve', 'throttle:10,1'])->whereNumber('expense')->name('finance.expenses.recognize');
     Route::post('/finance/expenses/{expense}/payments', [ExpenseController::class, 'pay'])->middleware('can:finance.expenses.pay')->whereNumber('expense')->name('finance.expenses.pay');
     Route::post('/finance/expenses/{expense}/reverse', [ExpenseController::class, 'reverse'])->middleware('can:finance.reverse')->whereNumber('expense')->name('finance.expenses.reverse');
     Route::post('/finance/expense-payments/{payment}/reverse', [ExpenseController::class, 'reversePayment'])->middleware('can:finance.reverse')->whereNumber('payment')->name('finance.expense-payments.reverse');
@@ -185,7 +187,9 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::prefix('purchases')->name('purchases.')->middleware(['can:sales.view_cost', 'can:purchases.view'])->group(function () {
         Route::get('/', [PurchaseInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('/create', [PurchaseInvoiceController::class, 'create'])->middleware('can:purchases.manage')->name('invoices.create');
+        Route::get('/product-options', [OpeningStockCatalogController::class, 'options'])->middleware(['can:purchases.manage', 'can:inventory.manage_catalog'])->name('products.options');
         Route::get('/products', [PurchaseCatalogController::class, 'products'])->name('products.index');
+        Route::get('/products/{product}/variants', [PurchaseCatalogController::class, 'variants'])->whereNumber('product')->name('products.variants');
         Route::post('/products', [PurchaseCatalogController::class, 'storeProduct'])->middleware('can:purchases.manage')->name('products.store');
         Route::get('/suppliers', [PurchaseCatalogController::class, 'suppliers'])->name('suppliers.search');
         Route::post('/preview', [PurchaseInvoiceController::class, 'preview'])->name('invoices.preview');

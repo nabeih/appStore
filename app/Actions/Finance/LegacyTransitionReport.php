@@ -49,7 +49,8 @@ class LegacyTransitionReport
         $documents = [];
         $posted = fn ($source, string $event): bool => $journals->contains(fn ($entry): bool => $entry->source_type === $source->getMorphClass() && (int) $entry->source_id === (int) $source->id && $entry->event === $event);
         foreach (OpeningStockEntry::where('status', 'approved')->when($branchIds !== null, fn ($q) => $q->whereIn('branch_id', $branchIds))->get() as $entry) {
-            $documents[] = ['kind' => 'opening', 'id' => $entry->id, 'branch_id' => $entry->branch_id, 'date' => $entry->opening_date?->toDateString(), 'label' => 'أول مدة '.$entry->number, 'posted' => $posted($entry, 'opening')];
+            $documents[] = ['kind' => 'opening', 'id' => $entry->id, 'branch_id' => $entry->branch_id, 'date' => $entry->opening_date?->toDateString(), 'label' => 'أول مدة '.$entry->number,
+                'quantity' => $entry->total_quantity, 'amount_text' => $entry->total_cost, 'posted' => $posted($entry, 'opening')];
         }
         foreach ($invoices as $invoice) {
             $documents[] = ['kind' => 'purchase', 'id' => $invoice->id, 'branch_id' => $invoice->branch_id, 'date' => $invoice->invoice_date->toDateString(), 'label' => 'شراء '.$invoice->number, 'posted' => $posted($invoice, 'purchase')];

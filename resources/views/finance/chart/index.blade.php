@@ -4,6 +4,7 @@
 @push('styles')<link rel="stylesheet" href="{{ asset('assets/admin/css/pages/finance/chart.css') }}">@endpush
 @section('content')
 <div class="sale-page chart-page"><header class="sale-header"><div><h1>شجرة الحسابات</h1><p class="sale-muted">نفس حسابات الدفتر الحالي، مرتبة دون تغيير القيود أو الأرصدة.</p></div><a class="btn btn-outline" href="{{ route('finance.treasury.index') }}">الصناديق</a></header>
+<p class="sale-notice">تعريف حساب في هذه الشجرة لا يسجل مصروفًا أو دفعًا ولا يغير حساب الترحيل تلقائيًا. الكهرباء والإيجار من شاشة المصروفات، والصندوق والبنك من الحسابات المالية؛ لكل عملية مستندها.</p>
 @if(session('success'))<p class="sale-notice" role="status">{{ session('success') }}</p>@endif
 @if(!$installed)<p class="sale-notice">العرض متاح من الحسابات القائمة. الإضافة والتعديل ينتظران تطبيق تحديث شجرة الحسابات المعتمد.</p>@endif
 <form class="sale-panel sale-filters" method="get"><label>رمز الحساب أو اسمه<input name="q" maxlength="100" value="{{ request('q') }}"></label><label>الفرع<select name="branch_id"><option value="">جميع الفروع المسموحة</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected($branchId===$branch->id)>{{ $branch->name }}</option>@endforeach</select></label><button class="btn btn-primary">بحث وعرض</button><a class="btn btn-outline" href="{{ route('finance.chart.index') }}">مسح</a></form>

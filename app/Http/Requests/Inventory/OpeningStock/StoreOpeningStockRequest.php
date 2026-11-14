@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Inventory\OpeningStock;
 
 use App\Actions\Inventory\ProgressiveOperation;
+use App\Support\Access\AccessPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
@@ -69,7 +70,7 @@ class StoreOpeningStockRequest extends FormRequest
             'opening_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'rows' => ['required', 'array', 'list', 'min:1', 'max:300'],
-            'rows.*' => ['required', 'array:name,code,category_id,color_id,size_id,qty,cost,price,image'],
+            'rows.*' => ['required', 'array:name,code,category_id,color_id,size_id,qty,cost,price,minimum_selling_price,image'],
             'rows.*.name' => ['required', 'string', 'max:200'],
             'rows.*.code' => ['nullable', 'string', 'max:50', 'regex:/^[A-Z0-9_-]+$/'],
             'rows.*.category_id' => ['required', 'integer', 'min:1'],
@@ -78,6 +79,7 @@ class StoreOpeningStockRequest extends FormRequest
             'rows.*.qty' => ['required', 'integer', 'min:1', 'max:1000000'],
             'rows.*.cost' => $money,
             'rows.*.price' => $money,
+            'rows.*.minimum_selling_price' => [Rule::prohibitedIf(fn (): bool => ! AccessPermissions::canManageMinimumPrices($this->user())), 'nullable', 'regex:/\A\d{1,7}(?:\.\d{1,2})?\z/'],
             'rows.*.image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ];
     }

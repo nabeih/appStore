@@ -31,6 +31,13 @@
     let productId = null;
     let optionsRequest;
     let productCatalog = null;
+    const variantsDialog = document.getElementById('purchase-variants-dialog');
+    const variantsForm = document.getElementById('purchase-variants-form');
+    let variantRequest;
+    let selectedProduct;
+    let quickVariants = [];
+    const combinations = new Map();
+    let attributeType;
     const quickImages = new Map();
     let quickExistingImages = new Map();
     const rowUploads = new Map();
@@ -135,6 +142,8 @@
         document.getElementById('preview-total').textContent = '—';
         document.getElementById('preview-remaining').textContent = '—';
         document.getElementById('preview-quantity').textContent = '—';
+        document.getElementById('preview-paid').textContent = '—';
+        document.getElementById('preview-products').textContent = new Set(state.rows.map(row => String(row.product_id))).size;
         rowsElement.querySelectorAll('[data-line-total]').forEach(cell => cell.textContent = '—');
         document.getElementById('preview-status').textContent = state.rows.length ? 'جارٍ مراجعة الحساب...' : 'أضف الأصناف لحساب الإجمالي.';
         if (state.rows.length && state.supplier_id) previewTimer = setTimeout(preview, 400);
@@ -149,7 +158,8 @@
             document.getElementById('preview-total').textContent = data.total;
             document.getElementById('preview-remaining').textContent = data.remaining;
             document.getElementById('preview-quantity').textContent = data.quantity;
-            rowsElement.querySelectorAll('[data-line-total]').forEach((cell, index) => cell.textContent = data.lines[index]);
+            document.getElementById('preview-paid').textContent = data.paid;
+            rowsElement.querySelectorAll('[data-line-total]').forEach(cell => cell.textContent = data.lines[Number(cell.dataset.lineIndex)]);
             document.getElementById('preview-status').textContent = 'تمت مراجعة الحساب.';
         } catch (error) {
             if (error.name !== 'AbortError' && version === previewVersion) document.getElementById('preview-status').textContent = error.message;
@@ -164,8 +174,22 @@
             row.append(cell);
             rowsElement.append(row);
         }
+        const groups = new Map();
         state.rows.forEach((row, index) => {
+            const key = String(row.product_id);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push({ row, index });
+        });
+        groups.forEach(entries => {
+            const group = element('tr', 'purchase-product-group');
+            const heading = element('td'); heading.colSpan = 6;
+            const title = element('strong', '', entries[0].row.name);
+            const choose = element('button', 'btn btn-outline btn-sm', 'الألوان والمقاسات / إضافة تركيبات'); choose.type = 'button';
+            choose.addEventListener('click', () => openVariants(entries[0].row));
+            heading.append(title, element('small', '', `${entries.length} تركيبة في الفاتورة`), choose); group.append(heading); rowsElement.append(group);
+            entries.forEach(({ row, index }) => {
             const tr = element('tr');
+            tr.dataset.variantId = row.product_variant_id;
             const name = element('td', '', row.name);
             name.append(element('small', '', row.sku));
             const choice = element('td', '', `${row.color} / ${row.size}`);
@@ -184,19 +208,27 @@
             cost.setAttribute('aria-label', `تكلفة ${row.name} ${row.color} ${row.size}`);
             cost.addEventListener('input', () => { row.unit_cost = cost.value; dirty = true; invalidatePreview(); });
             costCell.append(cost);
-            const total = element('td', '', '—'); total.dataset.lineTotal = ''; total.dataset.label = 'المجموع ₪';
+            const total = element('td', '', '—'); total.dataset.lineTotal = ''; total.dataset.lineIndex = index; total.dataset.label = 'المجموع ₪';
             const action = element('td');
             const remove = element('button', 'line-remove', '×'); remove.type = 'button';
             remove.setAttribute('aria-label', `حذف ${row.name} من المسودة`);
             remove.addEventListener('click', () => { state.rows.splice(index, 1); dirty = true; renderRows(); invalidatePreview(); });
             action.append(remove); tr.append(name, choice, quantityCell, costCell, total, action); rowsElement.append(tr);
+            });
         });
         renderRowImages();
     }
     const addRows = rows => {
-        const additional = rows.filter(row => !state.rows.some(current => current.product_variant_id === row.product_variant_id));
+        const known = new Set(state.rows.map(row => String(row.product_variant_id)));
+        const additional = rows.filter(row => {
+            const key = String(row.product_variant_id);
+            if (known.has(key)) return false;
+            known.add(key); return true;
+        });
         if (state.rows.length + additional.length > 300) throw new Error('الحد الأقصى 300 صنف في الفاتورة.');
-        additional.forEach(row => state.rows.push({ ...row, quantity: 1, unit_cost: row.unit_cost || '0.00' }));
+        additional.forEach(row => state.rows.push({ ...row, quantity: row.quantity ?? 1, unit_cost: row.unit_cost || '0.00' }));
+        const notice = document.getElementById('purchase-line-notice'); notice.hidden = false;
+        notice.textContent = `أضيفت ${additional.length} تركيبة. ${rows.length > additional.length ? 'التركيبات الموجودة في الفاتورة لم تتكرر؛ عدّل كميتها في الجدول.' : 'راجع كمية وتكلفة كل سطر قبل الحفظ.'}`;
         dirty = true;
         renderRows();
         invalidatePreview();
@@ -223,8 +255,12 @@
                 const data = await request(`${url}?${params}`, { signal: controller.signal });
                 if (input.value.trim() !== query) return;
                 results.replaceChildren();
-                if (!data.data.length) results.append(element('p', 'trade-muted', 'لا توجد نتائج. يمكنك الإضافة بزر جديد.'));
-                data.data.forEach(item => render(item, results));
+                if (!data.data.length && !data.catalog_products?.length) results.append(element('p', 'trade-muted', 'لا توجد نتائج مسموحة. جرّب الكود أو SKU وتأكد من تفعيل المنتج ولونه ومقاسه.'));
+                                    data.data.forEach(item => render(item, results));
+                    if (kind === 'products' && config.canManageCatalog) (data.catalog_products || []).forEach(product => {
+                        const button = element('button', '', `${product.name} — اختيار الألوان والمقاسات`); button.type = 'button';
+                        button.addEventListener('click', () => openProduct(product)); results.append(button);
+                    });
                 results.hidden = false;
             } catch (error) {
                 if (error.name !== 'AbortError') { results.replaceChildren(element('p', 'trade-muted', error.message)); results.hidden = false; }
@@ -241,18 +277,17 @@
             button.addEventListener('click', () => selectSupplier(supplier)); container.append(button);
         });
     });
-    productSearch.addEventListener('input', () => runSearch('products', productSearch, productResults, config.productsUrl, (row, container) => {
+    productSearch.addEventListener('input', () => {
+        const shown = new Set();
+        runSearch('products', productSearch, productResults, config.productsUrl, (row, container) => {
+        if (shown.has(row.product_id)) return;
+        shown.add(row.product_id);
         const wrapper = element('div', 'trade-result-row');
-        const select = element('button', '', `${row.name} — ${row.color} / ${row.size}`); select.type = 'button';
-        select.append(element('small', '', row.sku));
-        select.addEventListener('click', () => {
-            try {
-                addRows([row]); productResults.hidden = true; productSearch.value = ''; productSearch.focus();
-            } catch (error) { showError(error.message); }
+        const select = element('button', '', row.name); select.type = 'button';
+        select.append(element('small', '', `${row.code} — عرض الألوان والمقاسات واختيار الكميات`));
+        select.addEventListener('click', () => openVariants(row)); wrapper.append(select); container.append(wrapper);
         });
-        const add = element('button', '', 'خيارات إضافية'); add.type = 'button';
-        add.addEventListener('click', () => openProduct(row)); wrapper.append(select, add); container.append(wrapper);
-    }));
+    });
     for (const [input, results] of [[productSearch, productResults], [supplierSearch, supplierResults]]) {
         input.addEventListener('keydown', event => {
             if (event.key !== 'Enter') return;
@@ -278,12 +313,127 @@
         } catch (error) { message.textContent = error.message; message.hidden = false; }
         finally { button.disabled = false; }
     });
+    async function fetchVariants(existing, signal) {
+        let url = config.variantsUrl.replace('__PRODUCT__', encodeURIComponent(existing.product_id)) + '?branch_id=' + encodeURIComponent(document.getElementById('purchase-branch').value);
+        const result = { product: null, data: [] };
+        while (url) {
+            const page = await request(url, { signal });
+            result.product = page.product; result.data.push(...page.data); url = page.next_page_url;
+        }
+        return result;
+    }
+    async function openVariants(existing) {
+        variantRequest?.abort(); variantRequest = new AbortController();
+        const current = variantRequest;
+        const body = document.getElementById('purchase-variants-rows'); body.replaceChildren();
+        const message = document.getElementById('purchase-variants-error'); message.hidden = true;
+        document.getElementById('purchase-variants-title').textContent = existing.name;
+        document.getElementById('purchase-variants-code').textContent = 'جارٍ تحميل جميع التركيبات المسموحة...';
+        document.getElementById('purchase-add-variants').disabled = true;
+        const extend = document.getElementById('purchase-extend-product'); if (extend) extend.disabled = true;
+        productResults.hidden = true; variantsDialog.showModal();
+        try {
+            const data = await fetchVariants(existing, current.signal);
+            if (current.signal.aborted) return;
+            selectedProduct = { ...data.product, ...data.data[0], product_id: data.product.product_id, name: data.product.name };
+            document.getElementById('purchase-variants-code').textContent = `${data.product.code} — ${data.data.length} تركيبة متاحة ضمن صلاحياتك`;
+            data.data.forEach(variant => {
+                const row = element('tr'); row.dataset.variantId = variant.product_variant_id;
+                const choice = element('td'); const checkbox = element('input'); checkbox.type = 'checkbox';
+                const included = state.rows.some(line => String(line.product_variant_id) === String(variant.product_variant_id));
+                checkbox.disabled = included; checkbox.setAttribute('aria-label', `اختيار ${variant.color} ${variant.size}`);
+                choice.append(checkbox);
+                if (included) choice.append(element('small', '', 'موجود في الفاتورة'));
+                const quantity = element('input'); quantity.type = 'number'; quantity.min = 1; quantity.max = 1000000; quantity.step = 1; quantity.value = 1;
+                quantity.required = true; quantity.disabled = true; quantity.setAttribute('aria-label', `كمية ${variant.color} ${variant.size}`);
+                const cost = element('input'); cost.type = 'text'; cost.inputMode = 'decimal'; cost.value = variant.unit_cost; cost.required = true; cost.disabled = true;
+                cost.pattern = '\\d{1,12}(?:\\.\\d{1,2})?'; cost.setAttribute('aria-label', `تكلفة ${variant.color} ${variant.size}`);
+                const quantityCell = element('td'); quantityCell.append(quantity); const costCell = element('td'); costCell.append(cost);
+                checkbox.addEventListener('change', () => { quantity.disabled = cost.disabled = !checkbox.checked; });
+                row.purchaseVariant = variant;
+                row.append(choice, element('td', '', `${variant.color || 'عام'} / ${variant.size || 'عام'}`), element('td', '', variant.sku), quantityCell, costCell);
+                body.append(row);
+            });
+            if (!data.data.length) { const row = element('tr'); const cell = element('td', 'trade-empty', 'لا توجد تركيبات فعالة مسموحة لهذا المنتج.'); cell.colSpan = 5; row.append(cell); body.append(row); }
+            document.getElementById('purchase-add-variants').disabled = !data.data.length;
+            if (extend) extend.disabled = false;
+        } catch (error) { if (error.name !== 'AbortError') { message.textContent = error.message; message.hidden = false; } }
+    }
+    variantsForm.addEventListener('submit', event => {
+        event.preventDefault();
+        const selected = [...document.querySelectorAll('#purchase-variants-rows tr')].filter(row => row.querySelector('input[type="checkbox"]:checked'));
+        const message = document.getElementById('purchase-variants-error');
+        if (!selected.length) { message.textContent = 'اختر تركيبة واحدة على الأقل؛ عدّل الأسطر الموجودة من جدول الفاتورة.'; message.hidden = false; return; }
+        try {
+            addRows(selected.map(row => ({ ...row.purchaseVariant, quantity: row.querySelector('input[type="number"]').value, unit_cost: row.querySelector('input[inputmode="decimal"]').value })));
+            variantsDialog.close(); productSearch.value = '';
+        } catch (error) { message.textContent = error.message; message.hidden = false; }
+    });
+    document.getElementById('purchase-extend-product')?.addEventListener('click', () => { variantsDialog.close(); openProduct(selectedProduct); });
+    variantsDialog.addEventListener('close', () => variantRequest?.abort());
+    document.getElementById('purchase-branch').addEventListener('change', () => {
+        variantRequest?.abort(); optionsRequest?.abort(); searches.products?.abort(); clearTimeout(searchTimers.products);
+        variantsDialog.close(); productDialog.close(); productResults.hidden = true; productSearch.value = '';
+    });
+    function renderCombinations() {
+        const body = document.getElementById('new-product-combinations'); body.replaceChildren();
+        const colors = [...document.getElementById('new-product-colors').selectedOptions];
+        const sizes = [...document.getElementById('new-product-sizes').selectedOptions];
+        colors.forEach(color => sizes.forEach(size => {
+            const key = `${color.value}:${size.value}`;
+            const existing = quickVariants.find(variant => String(variant.color_id) === color.value && String(variant.size_id) === size.value);
+            if (!combinations.has(key)) combinations.set(key, { quantity: '1', unit_cost: existing?.unit_cost || '0.00' });
+            const values = combinations.get(key); const row = element('tr');
+            row.append(element('td', '', `${color.textContent} / ${size.textContent}`), element('td', '', existing ? 'تركيبة موجودة' : 'تركيبة جديدة'));
+            for (const [field, label] of [['quantity', 'الكمية'], ['unit_cost', 'تكلفة الوحدة']]) {
+                const cell = element('td'); const input = element('input'); input.required = true; input.value = values[field];
+                input.type = field === 'quantity' ? 'number' : 'text'; input.inputMode = field === 'quantity' ? 'numeric' : 'decimal';
+                if (field === 'quantity') { input.min = 1; input.max = 1000000; input.step = 1; } else input.pattern = '\\d{1,12}(?:\\.\\d{1,2})?';
+                input.setAttribute('aria-label', `${label} ${color.textContent} ${size.textContent}`);
+                input.addEventListener('input', () => { values[field] = input.value; }); cell.append(input); row.append(cell);
+            }
+            body.append(row);
+        }));
+        if (!colors.length || !sizes.length) { const row = element('tr'); const cell = element('td', 'trade-empty', 'اختر الألوان والمقاسات لعرض جدول التركيبات.'); cell.colSpan = 4; row.append(cell); body.append(row); }
+    }
+    document.querySelectorAll('[data-add-attribute]').forEach(button => button.addEventListener('click', () => {
+        attributeType = button.dataset.addAttribute;
+        document.getElementById('purchase-attribute-editor').hidden = false;
+        document.getElementById('purchase-attribute-title').textContent = attributeType === 'color' ? 'تعريف لون جديد' : 'تعريف مقاس جديد';
+        document.getElementById('purchase-attribute-hex-label').hidden = attributeType !== 'color';
+        document.getElementById('purchase-attribute-name').value = document.getElementById('purchase-attribute-code').value = '';
+        document.getElementById('purchase-attribute-error').hidden = true; document.getElementById('purchase-attribute-name').focus();
+    }));
+    document.getElementById('purchase-attribute-cancel').addEventListener('click', () => { document.getElementById('purchase-attribute-editor').hidden = true; });
+    document.getElementById('purchase-attribute-save').addEventListener('click', async event => {
+        const button = event.currentTarget; button.disabled = true;
+        const message = document.getElementById('purchase-attribute-error'); message.hidden = true;
+        const type = attributeType;
+        try {
+            const saved = await request(type === 'color' ? config.colorStoreUrl : config.sizeStoreUrl, jsonOptions({
+                name: document.getElementById('purchase-attribute-name').value.trim(), code: document.getElementById('purchase-attribute-code').value.trim().toUpperCase(),
+                ...(type === 'color' ? { hex_code: document.getElementById('purchase-attribute-hex').value } : {}),
+            }));
+            const catalog = await request(config.optionsUrl); productCatalog = catalog;
+            for (const key of ['colors', 'sizes']) {
+                const select = document.getElementById('new-product-' + key);
+                const selected = new Set([...select.selectedOptions].map(option => option.value));
+                if (key === (type === 'color' ? 'colors' : 'sizes')) selected.add(String(saved.id));
+                select.replaceChildren(...catalog[key].map(item => new Option(item.name, item.id, false, selected.has(String(item.id)))));
+            }
+            document.getElementById('purchase-attribute-editor').hidden = true; renderQuickImages(); renderCombinations();
+        } catch (error) { message.textContent = error.message; message.hidden = false; }
+        finally { button.disabled = false; }
+    });
     async function openProduct(existing = null) {
         optionsRequest?.abort();
         optionsRequest = new AbortController();
         const currentRequest = optionsRequest;
         clearQuickImages(); quickExistingImages = new Map();
+        quickVariants = []; combinations.clear();
         productForm.reset();
+        document.getElementById('purchase-attribute-editor').hidden = true;
+        document.getElementById('new-product-combinations').replaceChildren();
         document.getElementById('new-product-images-section').hidden = true;
         productId = existing?.product_id || null;
         productDialog.querySelector('[data-dialog-errors]').hidden = true;
@@ -294,11 +444,14 @@
         const button = productForm.querySelector('[type="submit"]'); button.disabled = true;
         productDialog.showModal();
         try {
-            const [data, imageData] = await Promise.all([
+            const [data, imageData, variants] = await Promise.all([
                 request(config.optionsUrl, { signal: currentRequest.signal }),
                 existing?.images_url ? request(existing.images_url, { signal: currentRequest.signal }) : Promise.resolve({ data: [] }),
+                existing ? fetchVariants(existing, currentRequest.signal) : Promise.resolve({ data: [] }),
             ]);
+            if (currentRequest.signal.aborted) return;
             productCatalog = data;
+            quickVariants = variants.data;
             quickExistingImages = new Map(imageData.data.map(image => [String(image.color_id), image.url]));
             for (const [key, target] of [['categories', category], ['colors', document.getElementById('new-product-colors')], ['sizes', document.getElementById('new-product-sizes')]]) {
                 target.replaceChildren();
@@ -306,19 +459,22 @@
                 data[key].forEach(item => target.append(new Option(item.name, item.id)));
             }
             if (existing) category.value = existing.category_id;
-            renderQuickImages();
+            renderQuickImages(); renderCombinations();
             button.disabled = false;
         } catch (error) { if (error.name !== 'AbortError') { const message = productDialog.querySelector('[data-dialog-errors]'); message.textContent = error.message; message.hidden = false; } }
     }
     document.getElementById('new-product-colors').addEventListener('change', renderQuickImages);
+    document.getElementById('new-product-colors').addEventListener('change', renderCombinations);
+    document.getElementById('new-product-sizes').addEventListener('change', renderCombinations);
     document.getElementById('new-product-name').addEventListener('input', renderQuickImages);
-    document.getElementById('add-product').addEventListener('click', () => openProduct());
+    document.getElementById('add-product')?.addEventListener('click', () => openProduct());
     productForm.addEventListener('submit', async event => {
         event.preventDefault(); const button = productForm.querySelector('[type="submit"]'); if (button.disabled) return;
         button.disabled = true; const message = productDialog.querySelector('[data-dialog-errors]'); message.hidden = true;
         const data = { product_id: productId, name: document.getElementById('new-product-name').value, code: document.getElementById('new-product-code').value || null,
             category_id: document.getElementById('new-product-category').value, colors: [...document.getElementById('new-product-colors').selectedOptions].map(option => Number(option.value)),
             sizes: [...document.getElementById('new-product-sizes').selectedOptions].map(option => Number(option.value)), selling_price: document.getElementById('new-product-price').value };
+        const minimum = document.getElementById('new-product-minimum')?.value.trim(); if (minimum) data.minimum_selling_price = minimum;
         try {
             const multipart = new FormData();
             for (const [key, value] of Object.entries(data)) {
@@ -336,7 +492,7 @@
             });
             const result = await request(config.productStoreUrl, { method: 'POST', body: multipart });
             clearQuickImages();
-            addRows(result.data); productDialog.close(); productResults.hidden = true;
+            addRows(result.data.map(variant => ({ ...variant, ...combinations.get(`${variant.color_id}:${variant.size_id}`) }))); productDialog.close(); productResults.hidden = true;
         } catch (error) { message.textContent = error.message; message.hidden = false; }
         finally { button.disabled = false; }
     });

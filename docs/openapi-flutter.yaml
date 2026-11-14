@@ -1613,7 +1613,7 @@ components:
         below_minimum_confirmed:
           type: boolean
           default: false
-          description: 'Explicit user confirmation after reviewing an effective price below minimum. Does not grant below-cost or discount-override permissions.'
+          description: 'Below-minimum approval requires this confirmation, live sales.override_price permission and a documented reason of at least3 characters. Cashier self-confirmation is insufficient. Does not grant below-cost or discount-override permissions.'
       required:
         - payment_mode
         - rows
@@ -1848,6 +1848,7 @@ components:
               $ref: '#/components/schemas/ProductUpdate'
           required: []
     OpeningOperation:
+      description: 'Uses shared opening approval. An accepted sync receipt may contain result.status=draft when approval fails; no stock or journal is posted. Review the saved document in Web and pull after approval; do not submit a new UUID.'
       allOf:
         -
           $ref: '#/components/schemas/OperationBase'

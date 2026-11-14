@@ -85,7 +85,7 @@ class SetupCompletionTest extends SalesTestCase
         $this->assertTrue($report['can_close']);
         $this->assertSame(0, $report['reconciliation']['inventory']['difference_minor']);
         $this->get(route('inventory.review.index'))->assertOk()->assertSee('مراجعة إنهاء الإعداد');
-        $export = $this->get(route('inventory.review.export', ['setup' => 1, 'branch_id' => $this->branchId]))->assertOk()->assertDownload('setup-readiness.json');
+        $export = $this->get(route('inventory.review.export', ['setup' => 1, 'branch_id' => $this->branchId, 'format' => 'json']))->assertOk()->assertDownload('setup-readiness.json');
         $this->assertSame(20000, json_decode($export->streamedContent(), true, 512, JSON_THROW_ON_ERROR)['branches'][0]['reconciliation']['inventory']['stock_minor']);
         $data = $this->closeData();
         $before = DB::table('journal_entries')->count();

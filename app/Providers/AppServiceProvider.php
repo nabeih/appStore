@@ -9,6 +9,7 @@ use App\Contracts\Search\ImageEmbeddingProvider;
 use App\Models\ProductImage;
 use App\Models\User;
 use App\Observers\Search\ProductImageEmbeddingObserver;
+use App\Support\Access\AccessPermissions;
 use App\Support\Access\ActivePasswordUserProvider;
 use App\Support\Sales\SalesAccess;
 use App\Support\Search\EmbeddingExecutionContext;
@@ -61,5 +62,6 @@ class AppServiceProvider extends ServiceProvider
         foreach (SalesAccess::PERMISSIONS as $ability => $label) {
             Gate::define($ability, fn (User $user): bool => SalesAccess::allows($user, $ability));
         }
+        Gate::define('inventory.operation.view', fn (User $user): bool => AccessPermissions::canViewOperation($user));
     }
 }

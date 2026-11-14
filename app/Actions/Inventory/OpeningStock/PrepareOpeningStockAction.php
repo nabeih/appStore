@@ -110,6 +110,10 @@ class PrepareOpeningStockAction
             $variant = $product?->variants->first(fn ($variant): bool => $variant->color_id === $color->id && $variant->size_id === $size->id);
             $costMinor = DecimalAmount::minorUnits((string) $row['cost']);
             $priceMinor = DecimalAmount::minorUnits((string) $row['price']);
+            $minimum = filled($row['minimum_selling_price'] ?? null) ? DecimalAmount::minorUnits((string) $row['minimum_selling_price']) : null;
+            if ($minimum !== null && $minimum > $priceMinor) {
+                $fail('minimum_selling_price', 'الحد الأدنى لا يتجاوز سعر البيع المعتاد.');
+            }
             if ($variant) {
                 if (! $variant->is_active) {
                     $fail('color_id', 'تركيبة اللون والمقاس غير فعالة.');
@@ -119,6 +123,9 @@ class PrepareOpeningStockAction
                 }
                 if ($priceMinor !== DecimalAmount::minorUnits($variant->selling_price)) {
                     $fail('price', 'سعر بيع الصنف الموجود هو '.$variant->selling_price.'؛ الرصيد الافتتاحي لا يغيّر سعره في الفروع الأخرى.');
+                }
+                if ($minimum !== null && ($variant->minimum_selling_price === null || $minimum !== DecimalAmount::minorUnits($variant->minimum_selling_price))) {
+                    $fail('minimum_selling_price', 'الافتتاحي لا يغيّر حد الصنف الموجود في الفروع الأخرى؛ عدله من شاشة التسعير المخوّلة.');
                 }
             } elseif (blank($color->code) || blank($size->code)) {
                 $fail('color_id', 'يجب تعريف كود اللون والمقاس قبل إنشاء الصنف.');
@@ -135,7 +142,7 @@ class PrepareOpeningStockAction
             }
             $quantity = (int) $row['qty'];
             $lineMinor = $quantity * $costMinor;
-            $rows[] = ['index' => $index, 'group_key' => $groupKey, 'category' => $category, 'color' => $color, 'size' => $size, 'variant' => $variant, 'quantity' => $quantity, 'unit_cost' => DecimalAmount::format($costMinor), 'selling_price' => DecimalAmount::format($priceMinor), 'line_total' => DecimalAmount::format($lineMinor), 'image' => $row['image'] ?? null];
+            $rows[] = ['index' => $index, 'group_key' => $groupKey, 'category' => $category, 'color' => $color, 'size' => $size, 'variant' => $variant, 'quantity' => $quantity, 'unit_cost' => DecimalAmount::format($costMinor), 'selling_price' => DecimalAmount::format($priceMinor), 'minimum_selling_price' => $minimum === null ? null : DecimalAmount::format($minimum), 'line_total' => DecimalAmount::format($lineMinor), 'image' => $row['image'] ?? null];
             $totalQuantity += $quantity;
             $totalMinor += $lineMinor;
         }

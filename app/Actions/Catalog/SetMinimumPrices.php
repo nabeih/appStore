@@ -12,7 +12,7 @@ class SetMinimumPrices
 {
     public function execute(int $id, array $data, User $actor): Product
     {
-        abort_unless(AccessPermissions::isOwner($actor) && $actor->can('inventory.manage_catalog'), 403);
+        abort_unless(AccessPermissions::canManageMinimumPrices($actor), 403);
 
         return OperationContext::run(function () use ($id, $data, $actor): Product {
             $product = app(VisibleProductsQuery::class)->execute($actor)->whereKey($id)->lockForUpdate()->firstOrFail();

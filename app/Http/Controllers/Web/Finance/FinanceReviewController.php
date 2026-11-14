@@ -8,6 +8,7 @@ use App\Actions\Finance\LegacyFinanceTransitionAction;
 use App\Actions\Finance\LegacyTransitionReport;
 use App\Actions\Finance\ReversePurchaseAction;
 use App\Actions\Finance\ReverseSupplierPaymentAction;
+use App\Actions\Inventory\ReadinessWorkbook;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Finance\LegacyTransitionRequest;
 use App\Models\AuditEvent;
@@ -17,10 +18,15 @@ use App\Models\JournalLine;
 use App\Models\PurchaseInvoice;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Support\ExcelDownload;
 use App\Support\Sales\SalesReports;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class FinanceReviewController extends Controller
 {
@@ -44,18 +50,45 @@ class FinanceReviewController extends Controller
         return response()->json(['journal_id' => $reversal->id, 'message' => 'عُكس انتقال المصدر بقيد مستقل محفوظ في السجل؛ يلزم مراجعة الجاهزية مجددًا.']);
     }
 
-    public function index(Request $request): View|JsonResponse
+    public function index(Request $request): View|JsonResponse|BinaryFileResponse
     {
+        $filters = $request->validate(['branch_id' => ['nullable', 'integer', 'min:1']]);
         $branches = SalesReports::branches($request->user(), false);
+        if (! empty($filters['branch_id'])) {
+            abort_unless($branches->contains('id', (int) $filters['branch_id']), 403);
+            $branches = $branches->where('id', (int) $filters['branch_id']);
+        }
         $transition = app(LegacyTransitionReport::class)->build($branches->modelKeys());
         if ($request->boolean('export')) {
+            if (! $request->expectsJson() && $request->query('format') !== 'json') {
+                return app(ExcelDownload::class)->download('financial-transition.xlsx', app(ReadinessWorkbook::class)->transition($transition));
+            }
+
             return response()->json($transition, 200, ['Content-Disposition' => 'attachment; filename="financial-transition.json"']);
         }
 
         $accounts = FinancialAccount::whereIn('branch_id', $branches->modelKeys())->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get(['id', 'name', 'branch_id']);
         $transitionAudits = AuditEvent::whereIn('branch_id', $branches->modelKeys())->where('action', 'finance.legacy_posted')->latest('id')->limit(100)->get();
+        $openingRows = [];
+        foreach ($transition['documents'] as $document) {
+            if ($document['kind'] !== 'opening') {
+                continue;
+            }
+            try {
+                $plan = app(LegacyFinanceTransitionAction::class)->preview(['source_kind' => 'opening', 'source_id' => $document['id'],
+                    'branch_id' => $document['branch_id'], 'posting_date' => $document['date'] ?? '', 'evidence' => 'فحص أولي فقط؛ يلزم دليل صاحب المحل'], $request->user());
+                $openingRows[] = $document + ['status' => $plan['status'], 'issues' => $plan['issues']];
+            } catch (ValidationException $exception) {
+                $openingRows[] = $document + ['status' => 'rejected', 'issues' => $exception->validator->errors()->all()];
+            } catch (AuthorizationException) {
+                $openingRows[] = $document + ['status' => 'rejected', 'issues' => ['لا تملك صلاحية اعتماد هذا المستند أو فرعه.']];
+            } catch (HttpExceptionInterface $exception) {
+                $openingRows[] = $document + ['status' => 'rejected', 'issues' => [$exception->getStatusCode() === 403
+                    ? 'لا تملك صلاحية اعتماد هذا المستند أو فرعه.' : 'تعذر فحص المستند؛ راجع صلاحية المصدر والبنية المالية.']];
+            }
+        }
 
-        return view('finance.review.index', compact('branches', 'transition', 'accounts', 'transitionAudits'));
+        return view('finance.review.index', compact('branches', 'transition', 'accounts', 'transitionAudits', 'openingRows'));
     }
 
     public function supplier(Request $request, Supplier $supplier): View

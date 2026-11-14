@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Inventory\Setup;
 
 use App\Actions\Inventory\InventoryReadinessReport;
+use App\Actions\Inventory\ReadinessWorkbook;
 use App\Actions\Inventory\ReviewInventoryAction;
 use App\Actions\Inventory\SetupReadinessReport;
 use App\Actions\Search\ModuleSearch;
@@ -11,17 +12,31 @@ use App\Http\Requests\Inventory\Setup\InventoryReviewRequest;
 use App\Http\Requests\Search\SearchRequest;
 use App\Models\Branch;
 use App\Models\Inventory;
+use App\Support\ExcelDownload;
 use App\Support\Sales\SalesReports;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryReviewController extends Controller
 {
-    public function export(SearchRequest $request, ReviewInventoryAction $review, ModuleSearch $search): StreamedResponse
+    public function export(SearchRequest $request, ReviewInventoryAction $review, ModuleSearch $search): StreamedResponse|BinaryFileResponse
     {
+        if (! $request->expectsJson() && $request->query('format') !== 'json') {
+            $workbook = app(ReadinessWorkbook::class);
+            if ($request->boolean('setup')) {
+                abort_unless($request->user()->can('inventory.close_setup'), 403);
+                $branches = SalesReports::branches($request->user())->when($request->filled('branch_id'), fn ($items) => $items->where('id', (int) $request->input('branch_id')));
+                $sheets = $workbook->setup($branches->map(fn (Branch $branch): array => app(SetupReadinessReport::class)->build($branch)));
+            } else {
+                $sheets = $workbook->inventory($search->inventory($review->query(), $request->validated(), $request->user()));
+            }
+
+            return app(ExcelDownload::class)->download($request->boolean('setup') ? 'setup-readiness.xlsx' : 'inventory-readiness.xlsx', $sheets);
+        }
         if ($request->boolean('setup')) {
             abort_unless($request->user()->can('inventory.close_setup'), 403);
             $branches = SalesReports::branches($request->user())->when($request->filled('branch_id'), fn ($items) => $items->where('id', (int) $request->input('branch_id')));

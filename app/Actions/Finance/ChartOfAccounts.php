@@ -21,7 +21,7 @@ class ChartOfAccounts
     public static function classification(string $code, string $type): ?array
     {
         $group = match (true) {
-            in_array($type, ['cash', 'bank', 'wallet'], true), in_array($code, ['inventory', 'quarantine', 'receivables', 'courier_receivables'], true) => 'asset',
+            in_array($type, ['cash', 'bank', 'wallet'], true), in_array($code, ['inventory', 'quarantine', 'receivables', 'courier_receivables', 'prepaid_expenses'], true) => 'asset',
             in_array($code, ['supplier_payables', 'expense_payables', 'customer_credit'], true) => 'liability',
             in_array($code, ['owner_equity', 'opening_equity'], true) => 'equity',
             in_array($code, ['sales', 'sales_returns', 'delivery_revenue'], true) => 'revenue',

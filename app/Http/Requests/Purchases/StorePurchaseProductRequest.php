@@ -2,13 +2,27 @@
 
 namespace App\Http\Requests\Purchases;
 
+use App\Actions\Catalog\VisibleProductsQuery;
+use App\Support\Access\AccessPermissions;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StorePurchaseProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->can('purchases.manage') && $this->user()->can('inventory.manage_catalog') && $this->user()->can('sales.view_cost');
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if (! $validator->errors()->has('product_id') && filled($this->input('product_id'))
+                && ! app(VisibleProductsQuery::class)->execute($this->user())->whereKey($this->input('product_id'))->exists()) {
+                $validator->errors()->add('product_id', 'المنتج غير متاح ضمن صلاحياتك؛ اختر منتجًا مسموحًا من البحث.');
+            }
+        }];
     }
 
     protected function prepareForValidation(): void
@@ -28,6 +42,7 @@ class StorePurchaseProductRequest extends FormRequest
             'images' => ['sometimes', 'array', 'list', 'max:20'],
             'images.*' => ['required', 'array:color_id,image'], 'images.*.color_id' => ['required', 'integer', 'min:1', 'distinct'],
             'images.*.image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'minimum_selling_price' => [Rule::prohibitedIf(fn (): bool => ! AccessPermissions::canManageMinimumPrices($this->user())), 'nullable', 'regex:/\A\d{1,7}(?:\.\d{1,2})?\z/', 'lte:selling_price'],
             'selling_price' => ['required', 'numeric', 'min:0', 'regex:/\A\d{1,7}(\.\d{1,2})?\z/']];
     }
 

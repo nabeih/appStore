@@ -45,6 +45,18 @@ class AccessPermissions
         return $actor->is_active && ! $actor->trashed() && $actor->role?->is_active && $actor->role->name === 'sales_owner';
     }
 
+    public static function canViewOperation(User $actor): bool
+    {
+        return self::isOwner($actor) && SalesAccess::allows($actor, 'inventory.close_setup')
+            && SalesAccess::allows($actor, 'sales.view_cost');
+    }
+
+    public static function canManageMinimumPrices(User $actor): bool
+    {
+        return SalesAccess::allows($actor, 'inventory.manage_catalog')
+            && (self::isOwner($actor) || (SalesAccess::allows($actor, 'sales.override_price') && SalesAccess::allows($actor, 'sales.all_branches')));
+    }
+
     public static function group(string $permission): string
     {
         return match (true) {

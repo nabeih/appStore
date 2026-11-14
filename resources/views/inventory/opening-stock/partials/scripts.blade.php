@@ -11,6 +11,7 @@
         'draftUrl' => route('inventory.opening-stock.drafts.store'),
         'saveUrl' => route('inventory.opening-stock.store'),
         'csrf' => csrf_token(),
+        'canManageMinimum' => \App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()),
     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
     <script src="{{ asset('assets/admin/js/pages/inventory/opening-stock.js') }}" defer></script>
 @endpush

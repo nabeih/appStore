@@ -6,6 +6,7 @@ use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\PostJournalAction;
 use App\Models\Expense;
 use App\Models\ExpensePayment;
+use App\Models\FinancialAccount;
 use App\Models\JournalEntry;
 use App\Models\User;
 use App\Support\Sales\OperationContext;
@@ -23,7 +24,15 @@ class ManageExpenseAction
             }
             $start = CarbonImmutable::parse($data['period_start']);
             $end = CarbonImmutable::parse($data['period_end']);
-            if ($start > $end || $start->format('Y-m') !== $end->format('Y-m') || $data['transaction_date'] < $data['period_start'] || $data['transaction_date'] > $data['period_end']) {
+            $prepaid = ($data['recognition_method'] ?? 'immediate') === 'prepaid';
+            $schedule = [];
+            if ($prepaid) {
+                abort_unless(RecognizePrepaidExpense::installed(), 503, 'تحديث توزيع المصروفات لم يطبق؛ لا يمكن تسجيل مصروف متعدد الأشهر بعد.');
+                if ($data['transaction_date'] > $data['period_start']) {
+                    FinanceContext::fail('إثبات المصروف المقدم يجب أن يسبق بداية الاستفادة أو يوافقها؛ المستند المتأخر يحتاج مراجعة مستقلة.');
+                }
+                $schedule = app(ExpenseSchedule::class)->build($data['period_start'], $data['period_end'], FinanceContext::amount($data['amount']));
+            } elseif ($start > $end || $start->format('Y-m') !== $end->format('Y-m') || $data['transaction_date'] < $data['period_start'] || $data['transaction_date'] > $data['period_end']) {
                 FinanceContext::fail('هذه الشاشة لمصروف فترة واحدة. المصروف المقدم متعدد الأشهر يحتاج جدول توزيع؛ لا تسجله كاملًا في شهر واحد.');
             }
             if (! in_array($data['category'], ['rent', 'utilities', 'maintenance', 'transport', 'supplies', 'other'], true)) {
@@ -32,6 +41,10 @@ class ManageExpenseAction
             $expense = Expense::create(['client_uuid' => $data['client_uuid'], 'request_hash' => $hash, 'branch_id' => $data['branch_id'], 'created_by' => $actor->id,
                 'title' => trim($data['title']), 'category' => $data['category'], 'payee' => $data['payee'] ?? null, 'period_start' => $data['period_start'], 'period_end' => $data['period_end'],
                 'transaction_date' => $data['transaction_date'], 'amount_minor' => FinanceContext::amount($data['amount']), 'reference' => $data['reference'] ?? null, 'notes' => $data['notes'] ?? null]);
+            if ($prepaid) {
+                $expense->update(['recognition_method' => 'prepaid']);
+                $expense->allocations()->createMany($schedule);
+            }
             OperationContext::audit($expense, $actor, 'expense.drafted');
 
             return $expense;
@@ -47,9 +60,27 @@ class ManageExpenseAction
                 return $current;
             }
             abort_unless($current->status === 'draft', 409, 'هذا المستند غير قابل للاعتماد.');
+            $debitAccount = 'operating_expenses';
+            if ($current->recognition_method === 'prepaid') {
+                $rows = $current->allocations()->orderBy('month')->lockForUpdate()->get();
+                app(ExpenseSchedule::class)->assertMatches($current, $rows);
+                if ($rows->contains(fn ($row): bool => $row->posted_at !== null)) {
+                    FinanceContext::fail('جدول التوزيع تغير أو لا يطابق المستند؛ أوقف الاعتماد وراجع المسؤول.');
+                }
+                $account = FinancialAccount::firstOrNew(['code' => 'prepaid_expenses']);
+                if (! $account->exists) {
+                    $account->forceFill(['name' => 'مصروفات مدفوعة مقدمًا', 'type' => 'system', 'is_active' => true,
+                        'account_group' => 'asset', 'normal_balance' => 'debit', 'is_posting' => true, 'is_protected' => true])->save();
+                }
+                if ($account->type !== 'system' || $account->branch_id !== null || ! $account->is_active || ! $account->is_posting
+                    || $account->account_group !== 'asset' || ! $account->is_protected) {
+                    FinanceContext::fail('رمز حساب المصروف المقدم مستخدم بتعريف غير صالح؛ يلزم مراجعة دون تعديل الحساب القائم تلقائيًا.');
+                }
+                $debitAccount = 'prepaid_expenses';
+            }
             $dimension = ['expense_id' => $current->id];
             app(PostJournalAction::class)->execute($current, 'expense', $current->branch_id, $actor, $date, [
-                ['account' => 'operating_expenses', 'amount' => (int) $current->amount_minor] + $dimension,
+                ['account' => $debitAccount, 'amount' => (int) $current->amount_minor] + $dimension,
                 ['account' => 'expense_payables', 'amount' => -(int) $current->amount_minor] + $dimension], 'إثبات مصروف '.$current->number);
             $current->update(['status' => 'approved', 'approved_by' => $actor->id, 'posted_at' => now()]);
             OperationContext::audit($current, $actor, 'expense.approved');
@@ -125,6 +156,14 @@ class ManageExpenseAction
                 FinanceContext::fail('اعكس سندات الصرف التابعة أولًا.');
             }
             if ($current->status === 'approved') {
+                if ($current->recognition_method === 'prepaid') {
+                    $rows = $current->allocations()->orderBy('month')->lockForUpdate()->get();
+                    app(RecognizePrepaidExpense::class)->assertFinancialSupport($current, $rows);
+                    foreach ($rows->whereNotNull('posted_at') as $row) {
+                        $recognition = JournalEntry::where('source_type', $row->getMorphClass())->where('source_id', $row->id)->where('event', 'expense_recognition')->firstOrFail();
+                        app(PostJournalAction::class)->reverse($recognition, $actor, $reason, $date);
+                    }
+                }
                 $entry = JournalEntry::where('source_type', $current->getMorphClass())->where('source_id', $current->id)->where('event', 'expense')->firstOrFail();
                 app(PostJournalAction::class)->reverse($entry, $actor, $reason, $date);
             }

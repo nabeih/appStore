@@ -2,8 +2,10 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Inventory\OpeningStock\OpeningFinancialSupport;
 use App\Models\AuditEvent;
 use App\Models\Inventory;
+use App\Models\InventorySetupChange;
 use App\Models\JournalEntry;
 use App\Models\OpeningStockItem;
 use App\Models\PurchaseInvoiceItem;
@@ -12,6 +14,7 @@ use App\Models\SaleReturnItem;
 use App\Models\StockMovement;
 use App\Support\Sales\Money;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class ProgressiveStockProof
 {
@@ -29,6 +32,9 @@ class ProgressiveStockProof
         $journals = JournalEntry::where('branch_id', $branchId)->with('lines.account')->get();
         $bySource = $journals->groupBy(fn ($journal) => $journal->source_type.':'.$journal->source_id.':'.$journal->event);
         $reversals = $journals->whereNotNull('reversal_of_id')->groupBy('reversal_of_id');
+        $correctedOpenings = InventorySetupChange::whereIn('opening_stock_entry_id', $sources[OpeningStockItem::class]->pluck('opening_stock_entry_id'))
+            ->pluck('opening_stock_entry_id')->flip();
+        $openingSupport = [];
         $confirmations = AuditEvent::where('subject_type', Inventory::class)->whereIn('subject_id', $stocks->modelKeys())
             ->whereIn('action', ['operation.zero_opening_confirmed', 'operation.zero_cost_confirmed'])->get()->groupBy('subject_id');
         $rows = [];
@@ -69,8 +75,21 @@ class ProgressiveStockProof
                         $matches = $journal ? $reversals->get($journal->id, collect()) : collect();
                         $journal = $matches->count() === 1 ? $matches->first() : null;
                     }
-                    $valid = $journal && $journal->lines->sum('debit_minor') === $journal->lines->sum('credit_minor')
-                        && $this->inventoryAmount($journal->lines) === $proof['document_value']
+                    $financialMatch = $journal && $journal->lines->sum('debit_minor') === $journal->lines->sum('credit_minor')
+                        && $this->inventoryAmount($journal->lines) === $proof['document_value'];
+                    if ($source instanceof OpeningStockItem && $correctedOpenings->has($proof['document']->id)) {
+                        $documentId = $proof['document']->id;
+                        if (! array_key_exists($documentId, $openingSupport)) {
+                            try {
+                                app(OpeningFinancialSupport::class)->assertValid($proof['document']);
+                                $openingSupport[$documentId] = true;
+                            } catch (ValidationException) {
+                                $openingSupport[$documentId] = false;
+                            }
+                        }
+                        $financialMatch = $openingSupport[$documentId];
+                    }
+                    $valid = $financialMatch
                         && (int) $proof['document']->branch_id === $branchId
                         && in_array($proof['document']->status, ['approved', 'reversed'], true);
                 }

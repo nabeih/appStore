@@ -3,23 +3,44 @@
 namespace Tests\Feature;
 
 use App\Models\ProductImage;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use LogicException;
 use Tests\TestCase;
 
 class LegacyImageRecoveryCommandTest extends TestCase
 {
     private string $legacyRoot;
 
+    private string $originalConnection;
+
+    private string $originalStoragePath;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->legacyRoot = storage_path('app/public/testing/legacy-image-roots/test-assets');
-        config(['app.legacy_image_roots' => [$this->legacyRoot]]);
+        $source = DB::connection();
+        if (! app()->environment('testing') || app()->configurationIsCached() || $source->getDriverName() !== 'mysql'
+            || $source->getDatabaseName() !== 'appstore_golive_20261031_tests' || $source->getConfig('host') !== '127.0.0.1'
+            || (string) $source->getConfig('port') !== '3306' || $source->getConfig('url') || $source->getConfig('read') || $source->getConfig('write')) {
+            throw new LogicException('Legacy image fixtures require the explicitly isolated local MySQL sandbox.');
+        }
+        $this->originalConnection = DB::getDefaultConnection();
+        $database = 'appstore_legacy_images_'.bin2hex(random_bytes(8));
+        $source->statement('CREATE DATABASE '.$database.' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+        config(['database.connections.legacy_images_fixture' => array_replace($source->getConfig(), ['database' => $database, 'url' => null, 'name' => 'legacy_images_fixture'])]);
+        DB::setDefaultConnection('legacy_images_fixture');
+        $this->assertSame($database, DB::selectOne('SELECT DATABASE() AS name')->name);
+        $this->originalStoragePath = storage_path();
+        app()->useStoragePath($this->originalStoragePath.'/framework/testing/'.$database);
+        $this->legacyRoot = storage_path('app/public');
+        config(['app.legacy_image_roots' => [$this->legacyRoot.'/products/colors/legacy_raw_images'],
+            'filesystems.disks.public.root' => $this->legacyRoot, 'product_search.indexing_enabled' => false]);
+        Storage::forgetDisk('public');
 
         Schema::create('colors', function (Blueprint $table): void {
             $table->id();
@@ -110,7 +131,7 @@ class LegacyImageRecoveryCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertSame(
-            'testing/legacy-image-roots/test-assets/products/colors/legacy_raw_images/Logo.png',
+            'products/colors/legacy_raw_images/Logo.png',
             ProductImage::find($image->id)->image_path
         );
     }
@@ -130,7 +151,7 @@ class LegacyImageRecoveryCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertSame(
-            'testing/legacy-image-roots/test-assets/products/colors/legacy_raw_images/CaseLogo.png',
+            'products/colors/legacy_raw_images/CaseLogo.png',
             ProductImage::find($image->id)->image_path
         );
     }
@@ -227,6 +248,14 @@ class LegacyImageRecoveryCommandTest extends TestCase
     protected function tearDown(): void
     {
         config(['app.legacy_image_roots' => null]);
+        if (isset($this->originalConnection)) {
+            DB::purge('legacy_images_fixture');
+            DB::setDefaultConnection($this->originalConnection);
+        }
+        if (isset($this->originalStoragePath)) {
+            app()->useStoragePath($this->originalStoragePath);
+        }
+        Storage::forgetDisk('public');
         parent::tearDown();
     }
 

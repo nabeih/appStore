@@ -49,8 +49,11 @@ class FinanceContext
         }
     }
 
-    public static function amount(string|int $amount): int
+    public static function amount(string|int|float $amount): int
     {
+        if (is_float($amount)) {
+            throw ValidationException::withMessages(['amount' => 'أرسل المبلغ العشري كنص مثل 100.99 للحفاظ على الكسور دون تقريب أو اقتطاع.']);
+        }
         $minor = Money::minor($amount);
         if ($minor <= 0) {
             self::fail('أدخل مبلغًا موجبًا.');

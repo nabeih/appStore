@@ -30,7 +30,7 @@ class ProgressiveOperationController extends Controller
 
     public function index(Request $request, ProgressiveOperation $operation): View
     {
-        abort_unless(AccessPermissions::isOwner($request->user()), 403);
+        abort_unless(AccessPermissions::canViewOperation($request->user()), 403);
         $filters = $request->validate(['branch_id' => ['nullable', 'integer', 'min:1'], 'q' => ['nullable', 'string', 'max:100'], 'status' => ['nullable', 'in:ready,not_ready']]);
         $branches = SalesReports::branches($request->user(), false);
         $branch = $branches->firstWhere('id', (int) ($filters['branch_id'] ?? $branches->first()?->id));

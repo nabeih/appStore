@@ -61,6 +61,7 @@ class SavePurchaseProductAction
                             }
                             $pending[] = ['product_id' => $product->id, 'color_id' => $color->id, 'size_id' => $size->id,
                                 'sku' => strtoupper($product->code.'-'.$color->code.'-'.$size->code), 'selling_price' => DecimalAmount::format(DecimalAmount::minorUnits((string) $data['selling_price'])),
+                                'minimum_selling_price' => filled($data['minimum_selling_price'] ?? null) ? DecimalAmount::format(DecimalAmount::minorUnits((string) $data['minimum_selling_price'])) : null,
                                 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
                         }
                     }

@@ -2,7 +2,7 @@
 @section('title','مراجعة جاهزية المخزون')
 @include('sales.partials.assets')
 @section('content')
-<div class="sale-page"><header class="sale-header"><h1>مراجعة جاهزية المخزون</h1><div class="sale-actions"><a class="btn btn-outline" href="{{ route('inventory.review.export',request()->query()) }}">تصدير التقرير</a><a class="btn btn-outline" href="{{ route('inventory.index') }}">المخزون</a></div></header>
+<div class="sale-page"><header class="sale-header"><h1>مراجعة جاهزية المخزون</h1><div class="sale-actions"><a class="btn btn-outline" href="{{ route('inventory.review.export',request()->query()) }}">تنزيل التقرير Excel</a><a class="btn btn-outline" href="{{ route('inventory.index') }}">المخزون</a></div></header>
 <p class="sale-notice">التقرير للقراءة والمراجعة. غياب القيمة لا يعني تكلفة صفرًا. لا نستنتج تكلفة افتتاحية من سعر بيع أو سعر شراء حالي، ولا نعدّل الكمية أو القيود تلقائيًا.</p>
 <section class="sale-panel" data-search-region="readiness">
 @include('search.partials.filters',['searchKind'=>'readiness','placeholder'=>'اسم المنتج أو كوده أو SKU'])

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Finance\Expenses\RecognizePrepaidExpense;
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Models\AuditEvent;
@@ -148,6 +149,7 @@ class SetupReadinessReport
         };
         $add(! DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists(), 'sales_not_initialized', 'تهيئة حسابات وصلاحيات المبيعات لم تكتمل.');
         $add(! FinanceContext::installed(), 'finance_schema_pending', 'التحديث المالي لم يُنشر بعد؛ لا يمكن اعتماد اكتمال الدفتر.');
+        $add(RecognizePrepaidExpense::overdue([$branch->id]) > 0, 'due_expense_allocations', 'توجد حصص مصروفات مستحقة لم ترحل؛ راجع جدول توزيع المصروفات قبل إنهاء الإعداد.');
         $add(collect($opening)->contains('status', 'draft'), 'opening_drafts', 'توجد مسودات أول مدة؛ اعتمدها أو ألغها من مستندها.');
         $add(collect($purchases)->contains('status', 'draft'), 'purchase_drafts', 'توجد مسودات شراء؛ احسم وضعها قبل تاريخ البدء.');
         $add(collect($inventory)->contains(fn (array $row): bool => $row['difference'] !== 0), 'quantity_mismatch', 'توجد كميات لا تطابق الحركات؛ التصحيح من المستند المصدر بعد مراجعة الدليل.');

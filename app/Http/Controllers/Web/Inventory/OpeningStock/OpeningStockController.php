@@ -69,7 +69,12 @@ class OpeningStockController extends Controller
         $entry = $post->execute($request->validated(), $request->user()?->getAuthIdentifier());
 
         return response()->json([
-            'message' => $entry->status === 'approved' ? 'تم اعتماد الرصيد الافتتاحي وتسجيل المخزون والحركات بنجاح.' : 'المستند ملغى سابقًا؛ لم يتغير المخزون.',
+            'message' => match ($entry->status) {
+                'approved' => 'تم اعتماد البضاعة',
+                'draft' => 'البضاعة محفوظة كمسودة. يلزم إكمال تجهيز الحسابات أو مراجعة سبب منع الاعتماد.',
+                default => 'المستند ملغى سابقًا؛ لم يتغير المخزون.',
+            },
+            'status' => $entry->status,
             'number' => $entry->number, 'total_quantity' => $entry->total_quantity, 'total_cost' => $entry->total_cost,
             'url' => route('inventory.opening-stock.show', $entry), 'replayed' => ! $entry->wasRecentlyCreated,
         ], $entry->wasRecentlyCreated ? 201 : 200);
@@ -80,7 +85,7 @@ class OpeningStockController extends Controller
         OperationContext::branch($request->user(), (int) $request->validated('branch_id'), 'inventory.correct_setup');
         $entry = $post->execute($request->validated(), $request->user()->id, true);
 
-        return response()->json(['url' => route('inventory.opening-stock.show', $entry), 'message' => $entry->status === 'draft' ? 'حفظت مسودة الأصناف وصورها؛ لم تدخل الكميات المخزون.' : 'هذا المستند معتمد سابقًا؛ لم تُكرر الحركة.']);
+        return response()->json(['url' => route('inventory.opening-stock.show', $entry), 'message' => $entry->status === 'draft' ? 'تم حفظ البضاعة كمسودة' : 'هذا المستند معتمد سابقًا؛ لم تُكرر الحركة.']);
     }
 
     public function updateDraft(Request $request, OpeningStockEntry $entry, ManageOpeningDraftAction $manage): JsonResponse
@@ -98,6 +103,6 @@ class OpeningStockController extends Controller
         $data = $request->validate(['version' => ['required', 'integer', 'min:1']] + ProgressiveOperation::openingRules());
         $manage->approve($entry, (int) $data['version'], $request->user(), $data['progressive_opening'] ?? []);
 
-        return response()->json(['url' => route('inventory.opening-stock.show', $entry), 'message' => 'اعتمد المستند ودخلت البضاعة المخزون.']);
+        return response()->json(['url' => route('inventory.opening-stock.show', $entry), 'message' => 'تم اعتماد البضاعة']);
     }
 }

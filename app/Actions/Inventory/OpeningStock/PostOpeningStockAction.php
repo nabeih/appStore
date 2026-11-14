@@ -4,16 +4,14 @@ namespace App\Actions\Inventory\OpeningStock;
 
 use App\Actions\Catalog\AllocateProductCodesAction;
 use App\Actions\Catalog\ProcessProductImageAction;
-use App\Actions\Finance\PostJournalAction;
 use App\Models\Branch;
-use App\Models\Inventory;
 use App\Models\OpeningStockEntry;
 use App\Models\OpeningStockItem;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
-use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Access\AccessPermissions;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
 use App\Support\Sales\OperationContext;
 use Illuminate\Database\QueryException;
@@ -28,6 +26,24 @@ class PostOpeningStockAction
 
     public function execute(array $data, ?int $actorId = null, bool $draft = false): OpeningStockEntry
     {
+        if (! $draft) {
+            $entry = $this->execute($data, $actorId, true);
+            if ($entry->status !== 'draft') {
+                return $entry;
+            }
+            abort_unless($entry->wasRecentlyCreated && $entry->version === 1, 409, 'المستند محفوظ كمسودة. افتحه وراجعه ثم اعتمده من صفحة المستند.');
+            try {
+                $approved = app(ManageOpeningDraftAction::class)->approve($entry, $entry->version, User::findOrFail($actorId));
+                $approved->wasRecentlyCreated = $entry->wasRecentlyCreated;
+
+                return $approved;
+            } catch (Throwable $error) {
+                report($error);
+                $entry->setAttribute('approval_pending', true);
+
+                return $entry;
+            }
+        }
         $savedFiles = [];
         $hash = $this->fingerprint($data);
         try {
@@ -36,6 +52,9 @@ class PostOpeningStockAction
                 DB::table('product_code_counters')->where('id', 1)->increment('lock_version');
                 if ($actorId) {
                     OperationContext::branch(User::findOrFail($actorId), (int) $data['branch_id'], 'inventory.correct_setup');
+                }
+                if (collect($data['rows'])->contains(fn (array $row): bool => filled($row['minimum_selling_price'] ?? null))) {
+                    abort_unless($actorId && AccessPermissions::canManageMinimumPrices(User::findOrFail($actorId)), 403);
                 }
                 $counter = DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
                 $branch = Branch::whereKey($data['branch_id'])->where('is_active', true)->lockForUpdate()->firstOrFail();
@@ -73,41 +92,24 @@ class PostOpeningStockAction
                 if (isset($data['progressive_opening'])) {
                     OperationContext::audit($entry, User::findOrFail($actorId), 'operation.opening_snapshot_recorded', $data['progressive_opening']['evidence'], ['declaration' => $data['progressive_opening']]);
                 }
-                $inventories = $movements = [];
-                $timestamp = now();
                 foreach ($plan['rows'] as $row) {
                     $product = $groups[$row['group_key']]['product'];
                     $variant = $row['variant'] ?? ProductVariant::create([
                         'product_id' => $product->id, 'color_id' => $row['color']->id, 'size_id' => $row['size']->id,
                         'sku' => strtoupper($product->code.'-'.$row['color']->code.'-'.$row['size']->code),
-                        'selling_price' => $row['selling_price'], 'is_active' => true,
+                        'selling_price' => $row['selling_price'], 'minimum_selling_price' => $row['minimum_selling_price'], 'is_active' => true,
                     ]);
-                    $item = OpeningStockItem::create([
+                    OpeningStockItem::create([
                         'opening_stock_entry_id' => $entry->id, 'product_variant_id' => $variant->id,
                         'product_code' => $product->code, 'product_name' => $product->name,
                         'category_name' => $row['category']->name, 'color_name' => $row['color']->name, 'size_name' => $row['size']->name,
                         'sku' => $variant->sku, 'quantity' => $row['quantity'], 'unit_cost' => $row['unit_cost'],
                         'selling_price' => $variant->selling_price, 'line_total' => $row['line_total'],
                     ]);
-                    $inventories[] = ['branch_id' => $data['branch_id'], 'product_variant_id' => $variant->id, 'quantity' => $row['quantity'], 'average_cost' => $row['unit_cost'], 'value_minor' => $row['quantity'] * DecimalAmount::minorUnits($row['unit_cost']), 'created_at' => $timestamp, 'updated_at' => $timestamp];
-                    $movements[] = ['branch_id' => $data['branch_id'], 'product_variant_id' => $variant->id, 'user_id' => $actorId,
-                        'movement_type' => 'opening_stock', 'quantity_change' => $row['quantity'], 'unit_cost' => $row['unit_cost'],
-                        'value_change_minor' => $row['quantity'] * DecimalAmount::minorUnits($row['unit_cost']), 'stock_bucket' => 'available', 'effective_date' => $data['opening_date'],
-                        'source_type' => $item->getMorphClass(), 'source_id' => $item->id, 'note' => $entry->number, 'created_at' => $timestamp];
                     if ($row['image']) {
                         $paths = app(ProcessProductImageAction::class)->upload($row['image']);
                         array_push($savedFiles, ...array_values($paths));
                         ProductImage::create(['product_id' => $product->id, 'color_id' => $row['color']->id] + $paths);
-                    }
-                }
-                if (! $draft) {
-                    Inventory::insert($inventories);
-                    StockMovement::insert($movements);
-                    if ($actorId && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
-                        $amount = DecimalAmount::minorUnits($entry->total_cost);
-                        app(PostJournalAction::class)->execute($entry, 'opening', $entry->branch_id, User::findOrFail($actorId), $data['opening_date'], [
-                            ['account' => 'inventory', 'amount' => $amount], ['account' => 'opening_equity', 'amount' => -$amount],
-                        ], $entry->number);
                     }
                 }
 
@@ -129,7 +131,8 @@ class PostOpeningStockAction
                 'category_id' => (int) $row['category_id'], 'color_id' => (int) $row['color_id'], 'size_id' => (int) $row['size_id'],
                 'qty' => (int) $row['qty'], 'cost' => DecimalAmount::format(DecimalAmount::minorUnits((string) $row['cost'])),
                 'price' => DecimalAmount::format(DecimalAmount::minorUnits((string) $row['price'])),
-                'image' => empty($row['image']) ? null : hash_file('sha256', $row['image']->getRealPath())];
+                'image' => empty($row['image']) ? null : hash_file('sha256', $row['image']->getRealPath())]
+                + (filled($row['minimum_selling_price'] ?? null) ? ['minimum_selling_price' => DecimalAmount::format(DecimalAmount::minorUnits((string) $row['minimum_selling_price']))] : []);
         }, $data['rows']);
 
         $payload = ['branch_id' => (int) $data['branch_id'], 'opening_date' => $data['opening_date'], 'notes' => $data['notes'] ?? null, 'rows' => $rows];

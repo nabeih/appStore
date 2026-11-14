@@ -85,8 +85,14 @@ class PrepareSaleAction
             $row['invoice_discount_minor'] = $allocations[$index];
             $row['net_minor'] -= $allocations[$index];
             $row['minimum_snapshot_minor'] = intdiv($row['minimum_minor'], $row['quantity']);
-            if ($row['net_minor'] < $row['minimum_minor'] && ! ($data['below_minimum_confirmed'] ?? false)) {
-                throw ValidationException::withMessages(['below_minimum_confirmed' => 'السعر الفعلي بعد جميع الخصومات أقل من الحد الأدنى. أكد التجاوز أو ارجع لتعديل السلة.']);
+            if ($row['net_minor'] < $row['minimum_minor']) {
+                if (! ($data['below_minimum_confirmed'] ?? false)) {
+                    throw ValidationException::withMessages(['below_minimum_confirmed' => 'السعر بعد جميع الخصومات أقل من الحد الأدنى. عدّل السلة، أو اطلب من مسؤول يملك صلاحية تغيير السعر اعتماد البيع بحسابه وسبب موثق.']);
+                }
+                abort_unless(SalesAccess::allows($actor, 'sales.override_price'), 403, 'تجاوز الحد الأدنى يحتاج مسؤولًا مخوّلًا بتغيير السعر؛ تأكيد الكاشير وحده غير كافٍ.');
+                if (mb_strlen(trim($row['price_reason'] ?? $data['reason'] ?? '')) < 3) {
+                    throw ValidationException::withMessages(['reason' => 'دوّن سبب موافقة المسؤول على تجاوز الحد الأدنى.']);
+                }
             }
             if ($row['net_minor'] < $row['cost_minor']) {
                 if (! SalesAccess::allows($actor, 'sales.below_cost')) {

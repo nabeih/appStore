@@ -10,7 +10,9 @@ use App\Actions\Store\StorePricing;
 use App\Models\AuditEvent;
 use App\Models\DeliveryZone;
 use App\Models\Inventory;
+use App\Models\JournalEntry;
 use App\Models\MobileOperation;
+use App\Models\OpeningStockEntry;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductImage;
@@ -29,6 +31,33 @@ use Illuminate\Support\Str;
 
 class MobileSynchronizationTest extends MobileTestCase
 {
+    public function test_opening_sync_receipt_exposes_draft_when_financial_approval_fails_without_stock_or_duplicate_retry(): void
+    {
+        $payload = $this->productPayload();
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null]);
+        $this->mobileLogin();
+        $product = $this->operation('product.create', $payload);
+        $opening = $this->operation('opening_stock.create', ['opening_date' => now()->toDateString(),
+            'rows' => [['variant_uuid' => $payload['variants'][0]['client_uuid'], 'qty' => 3, 'cost' => '20.00', 'price' => '35.00']]], [$product['operation_uuid']]);
+        $before = [Inventory::count(), DB::table('stock_movements')->count(), JournalEntry::count()];
+        JournalEntry::creating(fn () => throw new \RuntimeException('Isolated mobile approval failure'));
+        try {
+            $results = collect($this->push([$product, $opening])->json('results'))->keyBy('operation_uuid');
+        } finally {
+            JournalEntry::flushEventListeners();
+        }
+        $this->assertSame('accepted', $results[$opening['operation_uuid']]['status']);
+        $this->assertSame('draft', $results[$opening['operation_uuid']]['result']['status']);
+        $this->assertSame($before, [Inventory::count(), DB::table('stock_movements')->count(), JournalEntry::count()]);
+        $draft = OpeningStockEntry::where('client_uuid', $opening['operation_uuid'])->firstOrFail();
+        $this->assertSame('draft', $draft->status);
+        $replay = collect($this->push([$product, $opening])->json('results'))->keyBy('operation_uuid');
+        $this->assertSame('already_applied', $replay[$opening['operation_uuid']]['status']);
+        $this->assertSame('draft', $replay[$opening['operation_uuid']]['result']['status']);
+        $this->assertSame(1, OpeningStockEntry::where('client_uuid', $opening['operation_uuid'])->count());
+        $this->assertSame($before, [Inventory::count(), DB::table('stock_movements')->count(), JournalEntry::count()]);
+    }
+
     public function test_bootstrap_is_paginated_and_pull_captures_raw_sql_updates_soft_delete_and_replay(): void
     {
         $variant = $this->stock();

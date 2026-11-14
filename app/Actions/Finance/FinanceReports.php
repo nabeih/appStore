@@ -2,6 +2,7 @@
 
 namespace App\Actions\Finance;
 
+use App\Actions\Finance\Expenses\RecognizePrepaidExpense;
 use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\AuditEvent;
 use App\Models\Branch;
@@ -64,12 +65,13 @@ class FinanceReports
                 ->orWhereRaw('stock.value_minor <> COALESCE(history.value_minor,0)')->orWhere('history.unknown_values', '>', 0))->count();
         $progressiveIds = AuditEvent::where('subject_type', Branch::class)->where('action', 'operation.progressive_started')
             ->whereIn('subject_id', Branch::whereNull('opening_stock_closed_at')->when($branchIds !== null, fn ($q) => $q->whereIn('id', $branchIds))->select('id'))->distinct()->pluck('subject_id')->all();
-        $complete = $invoices === 0 && $payments === 0 && $openings === 0 && $unknownAccounts === 0 && $missingAccounts === [] && $unreadyStocks === 0 && $progressiveIds === [];
+        $dueAllocations = RecognizePrepaidExpense::overdue($branchIds);
+        $complete = $invoices === 0 && $payments === 0 && $openings === 0 && $unknownAccounts === 0 && $missingAccounts === [] && $unreadyStocks === 0 && $progressiveIds === [] && $dueAllocations === 0;
 
         return ['complete' => $complete, 'legacy_invoices' => $invoices, 'legacy_payments' => $payments,
             'legacy_openings' => $openings, 'unknown_account_openings' => $unknownAccounts, 'missing_system_accounts' => array_values($missingAccounts),
-            'unready_inventory_positions' => $unreadyStocks, 'progressive_branches' => $progressiveIds,
-            'message' => $progressiveIds !== [] ? ProgressiveOperation::WARNING : (! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.')];
+            'unready_inventory_positions' => $unreadyStocks, 'progressive_branches' => $progressiveIds, 'due_expense_allocations' => $dueAllocations,
+            'message' => $dueAllocations > 0 ? 'توجد حصص مصروفات مستحقة غير مرحلة؛ راجع توزيع المصروفات قبل اعتماد نتائج الفترة.' : ($progressiveIds !== [] ? ProgressiveOperation::WARNING : (! $complete ? 'بيانات مالية غير مكتملة: توجد مصادر بلا قيد فعال أو أرصدة بداية غير معتمدة. الأرقام جزئية وليست رصيدًا أو ربحًا نهائيًا؛ راجع الانتقال وجاهزية المخزون.' : 'المصادر المسجلة مدمجة؛ مطابقة الرصيد بالنقد وكشف البنك حكم مستقل.'))];
     }
 
     public function periodFor(User $actor, array $filters): array

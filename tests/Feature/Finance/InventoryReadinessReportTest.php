@@ -40,7 +40,7 @@ class InventoryReadinessReportTest extends SalesTestCase
         $this->assertSame(20000, $report['reconstructed_value_minor']);
         $this->assertNull($stock->fresh()->value_minor);
         $this->assertDatabaseCount('journal_entries', $journalCount);
-        $this->get(route('inventory.review.export'))->assertOk()->assertDownload('inventory-readiness.json');
+        $this->get(route('inventory.review.export', ['format' => 'json']))->assertOk()->assertDownload('inventory-readiness.json');
         $stock->load('productVariant.product');
         $this->postJson(route('inventory.review.baseline', $stock), [
             'revision' => InventoryState::revision($stock, $stock->productVariant, $stock->productVariant->product),

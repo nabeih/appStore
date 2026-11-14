@@ -24,6 +24,7 @@ use App\Models\DeliveryZone;
 use App\Models\FinancialAccount;
 use App\Models\Inventory;
 use App\Models\JournalEntry;
+use App\Models\OpeningStockEntry;
 use App\Models\ProductVariant;
 use App\Models\SaleInvoice;
 use App\Models\StoreListing;
@@ -113,6 +114,10 @@ class ProgressiveOperationTest extends MobileTestCase
         $ready = $this->stock('35', '20', 5, 'READY');
         DB::table('sales_controls')->where('id', 1)->update(['activated_at' => null]);
         $bad = $this->stock('35', '10', 25, 'UNPOSTED');
+        $legacyEntryId = DB::table('opening_stock_items')->where('product_variant_id', $bad->id)->value('opening_stock_entry_id');
+        $legacyJournal = JournalEntry::where('source_type', OpeningStockEntry::class)->where('source_id', $legacyEntryId)->firstOrFail();
+        $legacyJournal->lines()->delete();
+        $legacyJournal->delete();
         DB::table('sales_controls')->where('id', 1)->update(['activated_at' => now()]);
         $proof = app(ProgressiveStockProof::class)->build($this->branchId);
         $this->assertTrue($proof['rows'][$ready->id]['ready']);

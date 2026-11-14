@@ -82,7 +82,7 @@ class OpeningStockCatalogController extends Controller
             'swatch_manage_url' => route('catalog.swatches.index', $product),
             'images' => $product->images->map(fn ($image): array => ['color_id' => $image->color_id, 'url' => $image->url]),
             'variants' => $product->variants->where('is_active', true)->values()->map(fn ($variant): array => [
-                'color_id' => $variant->color_id, 'size_id' => $variant->size_id, 'selling_price' => $variant->selling_price,
+                'color_id' => $variant->color_id, 'size_id' => $variant->size_id, 'selling_price' => $variant->selling_price, 'minimum_selling_price' => $variant->minimum_selling_price,
             ]),
         ])]);
     }

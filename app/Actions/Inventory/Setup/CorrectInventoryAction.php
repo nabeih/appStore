@@ -3,6 +3,7 @@
 namespace App\Actions\Inventory\Setup;
 
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Inventory\OpeningStock\OpeningFinancialSupport;
 use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\Branch;
 use App\Models\Category;
@@ -18,6 +19,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
 use App\Support\Inventory\Setup\InventoryState;
+use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +41,9 @@ class CorrectInventoryAction
 
     private function mutate(Inventory $inventory, array $data, bool $delete, ?int $actorId): ?Inventory
     {
-        if ($actorId) {
-            Gate::forUser(User::findOrFail($actorId))->authorize('inventory.correct_setup');
-        }
+        abort_unless($actorId, 403, 'يلزم مستخدم مخوّل لتصحيح البضاعة المعتمدة.');
+        $actor = User::findOrFail($actorId);
+        Gate::forUser($actor)->authorize('inventory.correct_setup');
         abort_unless(config('inventory.allow_setup_changes'), 403, 'انتهت مرحلة تصحيح إدخال البضاعة.');
 
         try {
@@ -77,10 +79,10 @@ class CorrectInventoryAction
                 if (! $item) {
                     $this->fail('هذا رصيد قديم بلا مستند افتتاحي موثّق. راجع جاهزية المخزون؛ لا تُعدّل الكمية والتكلفة كأرقام مستقلة.');
                 }
-                if ($current->value_minor === null && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
+                if ($current->value_minor === null) {
                     $this->fail('اعتمد مراجعة قيمة الرصيد القديم قبل تصحيح مستنده.');
                 }
-                $oldValue = $current->value_minor === null ? (int) $current->quantity * DecimalAmount::minorUnits((string) $current->average_cost) : (int) $current->value_minor;
+                $oldValue = (int) $current->value_minor;
                 $entry = null;
                 if ($movements->isNotEmpty() || $items->isNotEmpty()) {
                     if ($items->count() !== 1 || $movements->count() !== 1 || ! $item) {
@@ -91,15 +93,14 @@ class CorrectInventoryAction
                         $this->fail('لا يمكن تعديل أو حذف صنف عليه حركة بيع أو شراء أو حركة مخزون لاحقة.');
                     }
                     $entry = OpeningStockEntry::whereKey($item->opening_stock_entry_id)->lockForUpdate()->firstOrFail();
-                    if (DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()
-                        && ! DB::table('journal_entries')->where('source_type', $entry->getMorphClass())->where('source_id', $entry->id)->where('event', 'opening')->exists()) {
-                        $this->fail('المستند الافتتاحي لم يُرحّل ماليًا. أكمل مراجعة انتقاله أولًا؛ لا يُثبت فرق تصحيح قبل إثبات أصل الرصيد.');
-                    }
+                    app(OpeningFinancialSupport::class)->assertValid($entry, true);
                     OperationContext::date($branch, $entry->opening_date?->toDateString() ?? substr((string) $entry->created_at, 0, 10), false);
-                    if ($entry->status !== 'approved' || (int) $current->quantity !== $item->quantity
+                    if ($entry->status !== 'approved' || $current->average_cost === null || (int) $current->quantity !== $item->quantity
                         || DecimalAmount::minorUnits((string) $current->average_cost) !== DecimalAmount::minorUnits($item->unit_cost)
                         || $movement->quantity_change !== $item->quantity
-                        || $movement->unit_cost === null || DecimalAmount::minorUnits($movement->unit_cost) !== DecimalAmount::minorUnits($item->unit_cost)) {
+                        || $movement->unit_cost === null || DecimalAmount::minorUnits($movement->unit_cost) !== DecimalAmount::minorUnits($item->unit_cost)
+                        || $oldValue !== Money::minor($item->line_total)
+                        || $movement->value_change_minor === null || (int) $movement->value_change_minor !== $oldValue) {
                         $this->fail('الرصيد الحالي لا يطابق المستند الافتتاحي. راجع السجل قبل إجراء التصحيح.');
                     }
                 }
@@ -170,14 +171,15 @@ class CorrectInventoryAction
                     foreach ($skus as $variantId => $sku) {
                         $variants->firstWhere('id', $variantId)->update(['sku' => $sku]);
                     }
-                    $current->update(['quantity' => $quantity, 'average_cost' => $cost, 'value_minor' => $quantity * DecimalAmount::minorUnits($cost)]);
+                    $newValue = Money::multiply($quantity, DecimalAmount::minorUnits($cost));
+                    $current->update(['quantity' => $quantity, 'average_cost' => $cost, 'value_minor' => $newValue]);
                     $variant->update(['color_id' => $color->id, 'size_id' => $size->id, 'selling_price' => $price]);
                     if ($item) {
                         $item->update(['quantity' => $quantity, 'unit_cost' => $cost, 'selling_price' => $price,
                             'product_name' => $product->name, 'product_code' => $product->code, 'category_name' => $category->name,
                             'color_name' => $color->name, 'size_name' => $size->name, 'sku' => $variant->sku,
-                            'line_total' => DecimalAmount::format($quantity * DecimalAmount::minorUnits($cost))]);
-                        $movements->first()->update(['quantity_change' => $quantity, 'unit_cost' => $cost, 'value_change_minor' => $quantity * DecimalAmount::minorUnits($cost)]);
+                            'line_total' => Money::format($newValue)]);
+                        $movements->first()->update(['quantity_change' => $quantity, 'unit_cost' => $cost, 'value_change_minor' => $newValue]);
                     }
                     $after = InventoryState::snapshot($current, $variant, $product) + ['category_name' => $category->name, 'color_name' => $color->name, 'size_name' => $size->name];
                 } else {
@@ -191,7 +193,7 @@ class CorrectInventoryAction
                     $totalQuantity = $totalMinor = 0;
                     foreach ($remaining as $remainingItem) {
                         $totalQuantity += $remainingItem->quantity;
-                        $totalMinor += DecimalAmount::minorUnits($remainingItem->line_total);
+                        $totalMinor = Money::add($totalMinor, DecimalAmount::minorUnits($remainingItem->line_total));
                     }
                     $entry->update(['total_quantity' => $totalQuantity, 'total_cost' => DecimalAmount::format($totalMinor), 'status' => $remaining->isEmpty() ? 'cancelled' : 'approved']);
                 }
@@ -204,12 +206,10 @@ class CorrectInventoryAction
                     'before_state' => $before, 'after_state' => $after,
                 ]);
 
-                if ($actorId && DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists()) {
-                    $delta = ($delete ? 0 : (int) $current->value_minor) - $oldValue;
-                    app(PostJournalAction::class)->execute($change, 'opening_correction', $branch->id, User::findOrFail($actorId), OperationContext::today(), [
-                        ['account' => 'inventory', 'amount' => $delta], ['account' => 'opening_equity', 'amount' => -$delta],
-                    ], $change->reason);
-                }
+                $delta = Money::add($delete ? 0 : (int) $current->value_minor, -$oldValue);
+                app(PostJournalAction::class)->execute($change, 'opening_correction', $branch->id, User::findOrFail($actorId), OperationContext::today(), [
+                    ['account' => 'inventory', 'amount' => $delta], ['account' => 'opening_equity', 'amount' => -$delta],
+                ], $change->reason);
 
                 return $delete ? null : $current;
             });

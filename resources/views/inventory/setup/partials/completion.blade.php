@@ -1,7 +1,7 @@
 <section class="sale-panel">
     <h2>مراجعة إنهاء الإعداد واعتماد أرصدة البدء</h2>
     <p class="sale-notice">وضع الإعداد فقط يمنع البيع. التشغيل التدريجي المعتمد يسمح بالجاهز فقط. الإنهاء لا يضيف بضاعة أو دفعات أو قيودًا؛ يعتمد لقطة الأرصدة بعد المطابقة فقط. لا تعتمد رصيدًا مجهولًا كصفر.</p>
-    <a class="btn btn-outline" href="{{ route('inventory.operation.index') }}">حالة تشغيل المحل وفحص الجاهزية</a>
+    @can('inventory.operation.view')<a class="btn btn-outline" href="{{ route('inventory.operation.index') }}">حالة تشغيل المحل وفحص الجاهزية</a>@endcan
     @foreach($setupReports as $setup)
         <details @if(count($setupReports) === 1) open @endif>
             <summary>{{ $setup['branch'] }} — {{ $setup['setup_open'] ? (app(\App\Actions\Inventory\ProgressiveOperation::class)->activation($setup['branch_id'])?'تشغيل تدريجي والإعداد مفتوح':'إعداد فقط والبيع ممنوع') : 'تشغيل كامل والإعداد مغلق' }}</summary>
@@ -16,7 +16,7 @@
             @empty
                 <p>اجتازت الأرصدة المطابقة الداخلية؛ يلزم تأكيد شمولها والمطابقة الخارجية وتاريخ البدء.</p>
             @endforelse
-            <a class="btn btn-outline" href="{{ route('inventory.review.export', ['branch_id'=>$setup['branch_id'], 'setup'=>1]) }}">تصدير تقرير الأرصدة والمطابقة والأدلة</a>
+            <a class="btn btn-outline" href="{{ route('inventory.review.export', ['branch_id'=>$setup['branch_id'], 'setup'=>1]) }}">تنزيل Excel للأرصدة والمطابقة والأدلة</a>
             <h3>المخزون والدفتر</h3>
             <div class="sale-table-wrap">
                 <table class="sale-table sale-mobile-table">

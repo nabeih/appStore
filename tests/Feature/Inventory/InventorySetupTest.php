@@ -54,7 +54,7 @@ class InventorySetupTest extends TestCase
 
     private function setupInventory(): Inventory
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
 
         return Inventory::firstOrFail();
     }
@@ -96,7 +96,7 @@ class InventorySetupTest extends TestCase
 
     public function test_update_synchronizes_the_opening_item_movement_and_document_totals(): void
     {
-        $entry = app(PostOpeningStockAction::class)->execute($this->openingPayload(true));
+        $entry = app(PostOpeningStockAction::class)->execute($this->openingPayload(true), auth()->id());
         $inventory = Inventory::orderBy('id')->firstOrFail();
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory))->assertOk();
         $entry->refresh();
@@ -125,7 +125,7 @@ class InventorySetupTest extends TestCase
 
     public function test_deleting_one_opening_row_recalculates_totals_and_keeps_the_document(): void
     {
-        $entry = app(PostOpeningStockAction::class)->execute($this->openingPayload(true));
+        $entry = app(PostOpeningStockAction::class)->execute($this->openingPayload(true), auth()->id());
         $inventory = Inventory::orderBy('id')->firstOrFail();
         $this->deleteJson(route('inventory.destroy', $inventory), ['revision' => $this->revision($inventory)])->assertOk();
         $this->assertDatabaseCount('opening_stock_items', 1);
@@ -140,7 +140,7 @@ class InventorySetupTest extends TestCase
     public function test_deleting_the_last_row_cancels_the_document_and_replaying_does_not_restore_stock(): void
     {
         $payload = $this->openingPayload();
-        $entry = app(PostOpeningStockAction::class)->execute($payload);
+        $entry = app(PostOpeningStockAction::class)->execute($payload, auth()->id());
         $inventory = Inventory::firstOrFail();
         $this->deleteJson(route('inventory.destroy', $inventory), ['revision' => $this->revision($inventory)])->assertOk();
         $entry->refresh();
@@ -157,7 +157,7 @@ class InventorySetupTest extends TestCase
     public function test_a_corrected_document_replay_does_not_reset_the_correction(): void
     {
         $payload = $this->openingPayload();
-        app(PostOpeningStockAction::class)->execute($payload);
+        app(PostOpeningStockAction::class)->execute($payload, auth()->id());
         $inventory = Inventory::firstOrFail();
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory))->assertOk();
         $this->postJson(route('inventory.opening-stock.store'), $payload)->assertOk()->assertJsonPath('total_cost', '0.40');
@@ -166,7 +166,7 @@ class InventorySetupTest extends TestCase
 
     public function test_stock_with_subsequent_movements_cannot_be_edited_or_deleted(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
         $inventory = Inventory::firstOrFail();
         StockMovement::create(['branch_id' => $this->branchId, 'product_variant_id' => $inventory->product_variant_id,
             'movement_type' => 'sale', 'quantity_change' => -1, 'source_type' => 'sale', 'source_id' => 123]);
@@ -228,7 +228,7 @@ class InventorySetupTest extends TestCase
 
     public function test_zero_quantity_and_zero_cost_are_valid_setup_corrections(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
         $inventory = Inventory::firstOrFail();
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, ['quantity' => 0, 'average_cost' => '0', 'selling_price' => '0']))->assertOk();
         $this->assertDatabaseHas('opening_stock_entries', ['total_quantity' => 0, 'status' => 'approved']);
@@ -237,7 +237,7 @@ class InventorySetupTest extends TestCase
 
     public function test_an_audit_write_failure_rolls_back_stock_price_and_document_changes(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
         $inventory = Inventory::firstOrFail();
         InventorySetupChange::creating(function (): void {
             throw new RuntimeException('Audit failure');
@@ -259,7 +259,7 @@ class InventorySetupTest extends TestCase
 
     public function test_existing_api_updates_follow_the_same_document_and_audit_rules(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
         $inventory = Inventory::firstOrFail();
         $response = $this->getJson('/api/inventories')->assertOk();
         $this->putJson('/api/inventories/'.$this->branchId.'/'.$inventory->product_variant_id, [
@@ -278,7 +278,7 @@ class InventorySetupTest extends TestCase
 
     public function test_product_fields_and_all_variant_skus_are_corrected_with_document_snapshots(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload(true));
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(true), auth()->id());
         $inventory = Inventory::orderBy('id')->firstOrFail();
         $category = Category::create(['name' => 'أطفال']);
         $color = Color::create(['name' => 'أحمر', 'code' => 'RED']);
@@ -309,7 +309,7 @@ class InventorySetupTest extends TestCase
 
     public function test_duplicate_product_codes_and_variant_combinations_are_rejected(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload(true));
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(true), auth()->id());
         $inventory = Inventory::orderBy('id')->firstOrFail();
         Product::create(['name' => 'آخر', 'code' => 'TAKEN', 'category_id' => $this->category->id]);
         $this->putJson(route('inventory.update', $inventory), $this->updateData($inventory, ['code' => 'TAKEN']))->assertUnprocessable()->assertJsonValidationErrors('code');
@@ -320,7 +320,7 @@ class InventorySetupTest extends TestCase
 
     public function test_shared_product_changes_are_blocked_after_any_variant_has_later_movements(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload(true));
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(true), auth()->id());
         $inventory = Inventory::orderBy('id')->firstOrFail();
         $otherVariant = ProductVariant::where('id', '!=', $inventory->product_variant_id)->firstOrFail();
         StockMovement::create(['branch_id' => $this->branchId, 'product_variant_id' => $otherVariant->id,
@@ -364,7 +364,7 @@ class InventorySetupTest extends TestCase
 
     public function test_a_failure_after_delete_restores_stock_document_items_and_movements(): void
     {
-        app(PostOpeningStockAction::class)->execute($this->openingPayload());
+        app(PostOpeningStockAction::class)->execute($this->openingPayload(), auth()->id());
         $inventory = Inventory::firstOrFail();
         InventorySetupChange::creating(function (): void {
             throw new RuntimeException('Delete audit failure');

@@ -6,7 +6,7 @@
     <div id="screen-inventory" class="screen active">
         <header style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;">
             <div><h1 class="section-title"><i class="fas fa-boxes text-primary"></i> إدارة المخزون</h1><p class="section-subtitle">الكميات الحالية للأصناف حسب الفرع.</p></div>
-            @can('purchases.view')<div style="display:flex;gap:10px;flex-wrap:wrap;">@can('purchases.manage')<a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة شراء جديدة</a>@endcan<a class="btn btn-outline" href="{{ route('purchases.invoices.index') }}">سجل فواتير الشراء</a></div>@endcan
+            @if(auth()->user()->can('purchases.view') && auth()->user()->can('sales.view_cost'))<div style="display:flex;gap:10px;flex-wrap:wrap;">@can('purchases.manage')<a class="btn btn-primary" href="{{ route('purchases.invoices.create') }}">فاتورة شراء جديدة</a>@endcan<a class="btn btn-outline" href="{{ route('purchases.invoices.index') }}">سجل فواتير الشراء</a></div>@endif
         </header>
         @include('search.partials.product-search', ['inputId' => 'inventory-product-query'])
         <div id="purchSubtab-stock" data-search-region="inventory" style="display:block;">
@@ -20,10 +20,10 @@
                         قائمة المنتجات والكميات الحالية
                     </h3>
 
-                    @can('inventory.correct_setup')<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
+                    @if(auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
                         style="background:linear-gradient(135deg,#4f46e5,#4338ca);font-weight:700;">
                         <i class="fas fa-boxes"></i> إدخال بضاعة أول المدة
-                    </button>@endcan
+                    </button>@endif
                 </div>
 
                 <div style="padding:0 16px">@include('search.partials.filters',['searchKind'=>'inventory','placeholder'=>'اسم المنتج أو كوده أو SKU'])<p class="module-search-help">نتائج البحث في جميع السجلات: {{ $inventories->total() }}</p></div>
@@ -124,7 +124,7 @@
 
 
     </div>
-    @can('inventory.correct_setup')@include('inventory.opening-stock.partials.form')@endcan
+    @if(auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))@include('inventory.opening-stock.partials.form')@endif
     @can('inventory.manage_catalog')@include('inventory.setup.partials.product-details')@endcan
     @if($setupChangesEnabled && auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))
         @include('inventory.setup.partials.dialog')

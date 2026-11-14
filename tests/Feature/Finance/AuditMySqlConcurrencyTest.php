@@ -30,8 +30,11 @@ use App\Models\TreasuryDocument;
 use App\Models\User;
 use App\Support\Inventory\Setup\InventoryState;
 use App\Support\Sales\OperationContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
@@ -144,11 +147,15 @@ $document=match($data['operation']??getenv('FINANCE_RACE_OPERATION')){
 'baseline'=>app(App\Actions\Inventory\ReviewInventoryAction::class)->baseline(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor),
 'correct_source'=>app(App\Actions\Inventory\Setup\CorrectInventoryAction::class)->update(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor->id),
 'sale'=>app(App\Actions\Sales\PostSaleAction::class)->execute(App\Models\SaleInvoice::findOrFail($data['id']),$actor),
+'opening_approve'=>app(App\Actions\Inventory\OpeningStock\ManageOpeningDraftAction::class)->approve(App\Models\OpeningStockEntry::findOrFail($data['id']),$data['version'],$actor),
+'opening_correct'=>(function()use($data,$actor){config(['inventory.allow_setup_changes'=>true]);$stock=App\Models\Inventory::findOrFail($data['id']);$action=app(App\Actions\Inventory\Setup\CorrectInventoryAction::class);if($data['delete']){$action->delete($stock,$data['payload'],$actor->id);}else{$action->update($stock,$data['payload'],$actor->id);}return App\Models\InventorySetupChange::latest('id')->firstOrFail();})(),
 'receipt'=>app(App\Actions\Customers\RecordCustomerReceiptAction::class)->execute($data,$actor),
 'exchange'=>app(App\Actions\Sales\ExchangeSaleAction::class)->execute(App\Models\SaleInvoice::findOrFail($data['id']),$data['payload'],$actor),
 'return'=>app(App\Actions\Sales\ReturnSaleAction::class)->execute(App\Models\SaleInvoice::findOrFail($data['id']),$data['payload'],$actor),
 'supplier'=>app(App\Actions\Purchases\RecordSupplierPaymentAction::class)->execute(App\Models\PurchaseInvoice::findOrFail($data['id']),$data['payload'],$actor->id),
 'expense'=>app(App\Actions\Finance\Expenses\ManageExpenseAction::class)->pay(App\Models\Expense::findOrFail($data['id']),$data['payload'],$actor),
+'expense_recognition'=>tap(App\Models\Expense::findOrFail($data['id']),fn($expense)=>app(App\Actions\Finance\Expenses\RecognizePrepaidExpense::class)->execute($expense,$actor)),
+'expense_reverse'=>app(App\Actions\Finance\Expenses\ManageExpenseAction::class)->reverse(App\Models\Expense::findOrFail($data['id']),$actor,'عكس عقد اختبار متزامن'),
 'transfer'=>app(App\Actions\Finance\Treasury\ManageTreasuryAction::class)->post($data,$actor),
 };
 echo json_encode(['ok'=>true,'id'=>$document->id],JSON_THROW_ON_ERROR);
@@ -176,6 +183,57 @@ PHP;
     {
         $this->assertCount(1, array_filter($results, fn (array $row): bool => $row['ok']));
         $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
+    }
+
+    public static function openingCorrectionRaceCases(): array
+    {
+        return ['two updates' => [false, false], 'two deletes' => [true, true], 'update against delete' => [false, true]];
+    }
+
+    #[DataProvider('openingCorrectionRaceCases')]
+    public function test_mysql_opening_corrections_compete_for_one_revision_without_duplicate_financial_effects(bool $firstDelete, bool $secondDelete): void
+    {
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null, 'opening_stock_closed_by' => null]);
+        DB::table('sales_controls')->where('id', 1)->update(['activated_at' => null]);
+        $stock = Inventory::with('productVariant.product')->firstOrFail();
+        $variant = $stock->productVariant;
+        $product = $variant->product;
+        $data = ['revision' => InventoryState::revision($stock, $variant, $product), 'name' => $product->name, 'code' => $product->code,
+            'category_id' => $product->category_id, 'color_id' => $variant->color_id, 'size_id' => $variant->size_id,
+            'quantity' => 2, 'average_cost' => '15.00', 'selling_price' => $variant->selling_price, 'reason' => 'Isolated concurrent correction'];
+        $jobs = [['id' => $stock->id, 'delete' => $firstDelete, 'payload' => $data],
+            ['id' => $stock->id, 'delete' => $secondDelete, 'payload' => array_replace($data, ['quantity' => 3, 'average_cost' => '12.00'])]];
+        $results = $this->race('opening_correct', $jobs);
+        $this->assertOne($results);
+        $rejected = array_values(array_filter($results, fn ($row): bool => ! $row['ok']))[0];
+        $this->assertContains($rejected['error'], [HttpException::class, ModelNotFoundException::class]);
+        $value = (int) Inventory::sum('value_minor');
+        $this->assertContains($value, [0, 3000, 3600]);
+        $this->assertSame($value, app(PostJournalAction::class)->balance(FinancialAccount::where('code', 'inventory')->value('id')));
+        $this->assertSame(1, DB::table('inventory_setup_changes')->count());
+        $this->assertSame(1, JournalEntry::where('event', 'opening_correction')->count());
+        $this->assertSame($value === 0 ? 0 : 1, DB::table('stock_movements')->count());
+        $this->assertSame(100000, app(PostJournalAction::class)->balance($this->cash->id));
+        $this->assertNull(DB::table('sales_controls')->value('activated_at'));
+    }
+
+    public function test_mysql_duplicate_opening_approval_receives_and_posts_once(): void
+    {
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null, 'opening_stock_closed_by' => null]);
+        DB::table('sales_controls')->where('id', 1)->update(['activated_at' => null]);
+        $draft = app(PostOpeningStockAction::class)->execute(['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId,
+            'opening_date' => OperationContext::today(), 'rows' => [['name' => 'Opening race fixture', 'code' => 'OPEN-RACE',
+                'category_id' => Category::firstOrFail()->id, 'color_id' => Color::firstOrFail()->id, 'size_id' => Size::firstOrFail()->id,
+                'qty' => 4, 'cost' => '12.50', 'price' => '35']]], $this->owner->id, true);
+        $before = DB::table('stock_movements')->count();
+        $results = $this->race('opening_approve', [['id' => $draft->id, 'version' => $draft->version], ['id' => $draft->id, 'version' => $draft->version]]);
+        $this->assertCount(2, array_filter($results, fn ($row) => $row['ok']));
+        $this->assertSame($results[0]['id'], $results[1]['id']);
+        $this->assertSame($before + 1, DB::table('stock_movements')->count());
+        $this->assertSame(1, JournalEntry::where('source_type', OpeningStockEntry::class)->where('source_id', $draft->id)->where('event', 'opening')->count());
+        $this->assertSame(4, (int) Inventory::where('product_variant_id', $draft->items()->first()->product_variant_id)->value('quantity'));
+        $this->assertNull(DB::table('sales_controls')->value('activated_at'));
+        $this->assertSame(1, DB::table('audit_events')->where('action', 'opening.approved')->where('subject_id', $draft->id)->count());
     }
 
     public function test_mysql_progressive_two_sales_compete_for_last_piece(): void
@@ -263,6 +321,48 @@ PHP;
         $data = ['account_id' => $this->cash->id, 'amount' => '50', 'reason' => 'سداد اختبار'];
         $this->assertOne($this->race('expense', [['id' => $expense->id, 'payload' => ['client_uuid' => (string) Str::uuid()] + $data], ['id' => $expense->id, 'payload' => ['client_uuid' => (string) Str::uuid()] + $data]]));
         $this->assertDatabaseCount('expense_payments', 1);
+    }
+
+    public function test_mysql_prepaid_recognition_is_once_under_two_real_processes(): void
+    {
+        $start = now()->startOfMonth()->subMonth()->toDateString();
+        $end = now()->startOfMonth()->subDay()->toDateString();
+        $service = app(ManageExpenseAction::class);
+        $expense = $service->save(['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId, 'title' => 'استفادة سباق معزول',
+            'category' => 'rent', 'recognition_method' => 'prepaid', 'amount' => '50', 'transaction_date' => $start,
+            'period_start' => $start, 'period_end' => $end], $this->owner);
+        $service->approve($expense, $this->owner);
+        $results = $this->race('expense_recognition', [['id' => $expense->id], ['id' => $expense->id]]);
+        $this->assertSame([true, true], array_column($results, 'ok'), json_encode($results));
+        $this->assertSame(1, $expense->allocations()->whereNotNull('posted_at')->count());
+        $this->assertSame(1, JournalEntry::where('event', 'expense_recognition')->count());
+        $this->assertSame(0, app(PostJournalAction::class)->balance(FinancialAccount::where('code', 'prepaid_expenses')->value('id')));
+        $this->assertDatabaseCount('expense_payments', 0);
+    }
+
+    public function test_mysql_prepaid_recognition_competing_with_reversal_leaves_no_asset_or_expense(): void
+    {
+        $start = now()->startOfMonth()->subMonth()->toDateString();
+        $service = app(ManageExpenseAction::class);
+        $expense = $service->save(['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId, 'title' => 'عقد سباق عكس',
+            'category' => 'rent', 'recognition_method' => 'prepaid', 'amount' => '50', 'transaction_date' => $start,
+            'period_start' => $start, 'period_end' => now()->startOfMonth()->subDay()->toDateString()], $this->owner);
+        $service->approve($expense, $this->owner);
+        $results = $this->race('expense_recognition', [['id' => $expense->id], ['id' => $expense->id, 'operation' => 'expense_reverse']]);
+        $this->assertTrue($results[1]['ok'], json_encode($results));
+        if (! $results[0]['ok']) {
+            $this->assertSame(HttpException::class, $results[0]['error']);
+        }
+        $this->assertSame('reversed', $expense->fresh()->status);
+        foreach (['prepaid_expenses', 'operating_expenses', 'expense_payables'] as $code) {
+            $this->assertSame(0, app(PostJournalAction::class)->balance(FinancialAccount::where('code', $code)->value('id')));
+        }
+        $this->assertLessThanOrEqual(1, JournalEntry::where('event', 'expense_recognition')->count());
+        foreach (JournalEntry::with('lines')->get() as $journal) {
+            $this->assertSame((int) $journal->lines->sum('debit_minor'), (int) $journal->lines->sum('credit_minor'));
+        }
+        $this->assertDatabaseCount('expense_payments', 0);
+        $this->assertSame(100000, app(PostJournalAction::class)->balance($this->cash->id));
     }
 
     private function setupCloseData(): array
