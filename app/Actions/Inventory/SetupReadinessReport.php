@@ -64,7 +64,7 @@ class SetupReadinessReport
             'quantity' => (int) $entry->total_quantity, 'value' => (string) $entry->total_cost, 'version' => $entry->version,
             'updated_at' => $entry->updated_at?->toIso8601String(),
         ])->all();
-        $invoices = PurchaseInvoice::where('branch_id', $branch->id)->with(['payments', 'supplier', 'items'])->orderBy('id')->get();
+        $invoices = PurchaseInvoice::where('branch_id', $branch->id)->with(['payments', 'supplier', 'items', 'corrections'])->orderBy('id')->get();
         $documentMovementIssues = [];
         foreach ([
             [OpeningStockItem::class, 'opening_stock_items', 'opening_stock_entries', 'opening_stock_entry_id'],
@@ -102,7 +102,7 @@ class SetupReadinessReport
 
             return ['id' => $invoice->id, 'number' => $invoice->number, 'status' => $invoice->status, 'date' => $invoice->invoice_date->toDateString(),
                 'supplier_id' => $invoice->supplier_id, 'supplier' => $invoice->supplier_name, 'total_minor' => (int) $invoice->total_minor,
-                'paid_minor' => (int) $invoice->paid_minor, 'payments_minor' => $paid, 'due_minor' => (int) $invoice->total_minor - (int) $invoice->paid_minor,
+                'paid_minor' => (int) $invoice->paid_minor, 'payments_minor' => $paid, 'due_minor' => $invoice->effective_total_minor - (int) $invoice->paid_minor,
                 'financial_posted' => $invoice->financial_posted_at !== null && in_array($invoice->id, $purchaseJournals, true),
                 'ledger_due_minor' => (int) ($invoiceLedger[$invoice->id] ?? 0),
                 'items_match' => (int) $invoice->total_quantity === (int) $invoice->items->sum('quantity')

@@ -36,7 +36,7 @@ class ManageFinancialAccountsAction
             $account = FinancialAccount::create(['code' => 'ACC-'.Str::upper(Str::random(16)), 'name' => trim($data['name']),
                 'type' => $data['type'], 'branch_id' => $branch->id, 'reference' => $data['reference'] ?? null]);
             $opening = Money::minor($data['opening_balance'] ?? '0');
-            if ($opening > 0) {
+            if ($opening > 0 || ! empty($data['confirm_opening'])) {
                 if (! ($data['confirm_opening'] ?? false) || blank($data['reason'] ?? null)) {
                     throw ValidationException::withMessages(['opening_balance' => 'تأكيد الرصيد الافتتاحي وسبب اعتماده مطلوبان.']);
                 }
@@ -113,8 +113,9 @@ class ManageFinancialAccountsAction
             $current = FinancialAccount::whereKey($account->id)->lockForUpdate()->firstOrFail();
             $opening = JournalEntry::where('source_type', $current->getMorphClass())->where('source_id', $current->id)->where('event', 'opening')->first();
             if ($opening) {
+                abort_if($opening->reversals()->exists(), 409, 'قيد البداية معكوس؛ يحتاج مراجعة موثقة ولا يعاد اعتماده تلقائيًا.');
                 $existingAmount = (int) $opening->lines()->where('financial_account_id', $current->id)->sum('debit_minor');
-                abort_unless($existingAmount === Money::minor($data['opening_balance']), 409, 'رصيد البداية معتمد بالفعل بمبلغ مختلف.');
+                abort_unless($existingAmount === Money::minor($data['opening_balance']), 409, $current->name.' #'.$current->id.': رصيد البداية المعتمد '.Money::format($existingAmount).' ₪؛ لا يمكن استبداله بمبلغ مختلف.');
 
                 return;
             }

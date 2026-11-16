@@ -34,7 +34,7 @@
     @can('inventory.manage_catalog')
         <button type="button" class="btn btn-outline btn-sm" data-product-details="{{ json_encode($details) }}">بيانات المنتج</button>
     @endcan
-    @if($setupChangesEnabled && auth()->user()->can('sales.view_cost'))
+    @if($setupChangesEnabled && !$inventory->branch?->opening_stock_closed_at && !app(\App\Actions\Inventory\ProgressiveOperation::class)->activation($inventory->branch_id) && auth()->user()->can('sales.view_cost'))
         @can('inventory.correct_setup')
             <button type="button" class="btn btn-outline btn-sm" data-inventory-action="edit" aria-label="تصحيح افتتاحي {{ $setupData['name'] }}">تصحيح أول المدة</button>
             <button type="button" class="btn btn-danger btn-sm" data-inventory-action="delete" aria-label="حذف {{ $setupData['name'] }} من {{ $setupData['branch'] }}">حذف افتتاحي</button>

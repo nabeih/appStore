@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Finance\StoreFinancialAccountRequest;
 use App\Http\Requests\Search\SearchRequest;
 use App\Models\FinancialAccount;
+use App\Models\JournalEntry;
 use App\Support\Sales\SalesReports;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,8 +25,10 @@ class FinancialAccountController extends Controller
             ->withCount('lines')->withSum('lines as debits_minor', 'debit_minor')->withSum('lines as credits_minor', 'credit_minor')->orderBy('name')->paginate(20)->withQueryString();
 
         $completeness = app(FinanceReports::class)->completeness($branches->modelKeys());
+        $accountOpenings = JournalEntry::where('source_type', FinancialAccount::class)->where('event', 'opening')
+            ->whereIn('source_id', $entries->modelKeys())->whereDoesntHave('reversals')->with('lines')->get()->groupBy('source_id');
 
-        return view('finance.accounts.index', compact('branches', 'entries', 'filters', 'completeness'));
+        return view('finance.accounts.index', compact('branches', 'entries', 'filters', 'completeness', 'accountOpenings'));
     }
 
     public function store(StoreFinancialAccountRequest $request, ManageFinancialAccountsAction $manage): JsonResponse

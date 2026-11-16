@@ -1,4 +1,4 @@
-@if($entry->status === 'draft')
+@if($entry->status === 'draft' && !$entry->branch->opening_stock_closed_at)
 @include('sales.partials.assets')
 @php($accountIssues = app(\App\Actions\Inventory\OpeningStock\ManageOpeningDraftAction::class)->approvalIssues($entry))
 <section class="sale-page sale-panel os-no-print"><h2>{{ $accountIssues === [] ? 'جاهزة للاعتماد' : 'مسودة' }}</h2><p class="sale-notice">تم حفظ البضاعة كمسودة. الكميات والقيمة لا تدخل المخزون إلا عند الاعتماد. تُجهّز الحسابات النظامية الناقصة عند الاعتماد دون فتح الكاشير.</p>

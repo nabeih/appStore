@@ -2557,6 +2557,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        adjusted_total_minor:
+          type: integer
+          format: int64
+          description: 'Original total plus approved independent document corrections.'
+        remaining_minor:
+          type: integer
+          format: int64
+          description: 'Adjusted total minus approved payments; original invoice fields remain unchanged.'
         id:
           type: integer
           format: int64

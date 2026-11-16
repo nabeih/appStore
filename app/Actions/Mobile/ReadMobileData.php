@@ -110,7 +110,7 @@ class ReadMobileData
             'receipts' => CustomerReceipt::where('branch_id', $branch),
             'accounts' => FinancialAccount::where('branch_id', $branch)->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true),
             'suppliers' => Supplier::query(),
-            'purchases' => PurchaseInvoice::where('branch_id', $branch)->with('items'),
+            'purchases' => PurchaseInvoice::where('branch_id', $branch)->with(['items', 'corrections']),
             'openings' => OpeningStockEntry::where('branch_id', $branch)->with('items'),
             default => abort(404),
         };
@@ -193,6 +193,8 @@ class ReadMobileData
             $itemFields = $entity === 'sales' ? ['id', 'product_variant_id', 'product_name', 'product_code', 'sku', 'color_name', 'size_name', 'quantity', 'unit_price_minor', 'net_minor', 'returned_quantity']
                 : ['id', 'product_variant_id', 'product_name', 'product_code', 'sku', 'color_name', 'size_name', 'quantity', 'unit_cost', 'line_total'];
             if ($entity === 'purchases') {
+                $data['adjusted_total_minor'] = $record->effective_total_minor;
+                $data['remaining_minor'] = $record->effective_total_minor - (int) $record->paid_minor;
                 array_push($itemFields, 'unit_cost_minor', 'line_total_minor');
             }
             if ($actor->can('sales.view_cost') && $entity === 'sales') {

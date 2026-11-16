@@ -18,6 +18,7 @@ class RecordSupplierPaymentAction
             $actor = User::findOrFail($actorId);
             $date = FinanceContext::authorize($actor, $invoice->branch_id, 'finance.supplier_pay', $data['payment_date']);
             $current = PurchaseInvoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $current->load(['corrections' => fn ($query) => $query->lockForUpdate()]);
             $hash = OperationContext::hash([$current->id, $data]);
             if ($existing = SupplierPayment::where('client_uuid', $data['client_uuid'])->first()) {
                 return OperationContext::replay($existing, $hash);
@@ -28,7 +29,7 @@ class RecordSupplierPaymentAction
                 FinanceContext::fail('الفاتورة خارج الدفتر الموحد أو غير معتمدة؛ راجع خطة الانتقال دون ترحيل قديم تلقائي.');
             }
             $amount = FinanceContext::amount($data['amount']);
-            if ($amount > $current->total_minor - $current->paid_minor || $date < $current->invoice_date->toDateString()) {
+            if ($amount > $current->effective_total_minor - $current->paid_minor || $date < $current->invoice_date->toDateString()) {
                 FinanceContext::fail('السداد يتجاوز المتبقي أو يسبق الفاتورة.');
             }
             $account = FinanceContext::account((int) ($data['account_id'] ?? 0), $current->branch_id);

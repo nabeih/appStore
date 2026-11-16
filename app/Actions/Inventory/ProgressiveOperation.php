@@ -60,7 +60,7 @@ class ProgressiveOperation
         foreach (ManageFinancialAccountsAction::SYSTEM as $code => $name) {
             $account = $accounts->get($code);
             if (! $account || ! $account->is_active || $account->is_posting === false || $account->branch_id !== null) {
-                $blockers[] = 'حساب مشترك غير جاهز: '.$name;
+                $blockers[] = 'حساب مشترك غير جاهز: '.$name.' ['.$code.'] #'.($account?->id ?? 'غير موجود');
             }
         }
         if (DB::table('journal_lines')->select('journal_entry_id')->groupBy('journal_entry_id')->havingRaw('SUM(debit_minor) <> SUM(credit_minor)')->exists()) {
@@ -94,7 +94,8 @@ class ProgressiveOperation
             if ($balance < 0) {
                 $reasons[] = 'رصيد الحساب سالب؛ لا توجد سياسة معتمدة للسحب المكشوف.';
             }
-            $result[$account->id] = ['id' => $account->id, 'name' => $account->name, 'type' => $account->type, 'ready' => $reasons === [],
+            $openingAmount = $opening ? Money::sum($opening->lines()->where('financial_account_id', $account->id)->get()->map(fn ($line): int => (int) $line->debit_minor - (int) $line->credit_minor)->all()) : null;
+            $result[$account->id] = ['id' => $account->id, 'name' => $account->name, 'type' => $account->type, 'ready' => $reasons === [], 'opening_minor' => $openingAmount,
                 'opening_date' => $opening?->transaction_date->toDateString(), 'balance_minor' => $balance, 'reasons' => $reasons];
         }
 
@@ -200,7 +201,7 @@ class ProgressiveOperation
         $rows = $this->accountRows($branchId);
         foreach ($ids as $id) {
             if (! isset($rows[$id]) || ! $rows[$id]['ready']) {
-                $this->fail(['حساب القبض أو الصرف #'.$id.' غير جاهز؛ اعتمد بداية الحساب وراجع حركاته.']);
+                $this->fail(['حساب القبض أو الصرف '.($rows[$id]['name'] ?? 'غير متاح').' #'.$id.' غير جاهز؛ اعتمد بداية الحساب وراجع حركاته.']);
             }
         }
     }

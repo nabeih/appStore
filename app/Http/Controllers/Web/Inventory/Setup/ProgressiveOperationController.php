@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\Inventory\Setup;
 
 use App\Actions\Inventory\ProgressiveOperation;
+use App\Actions\Sales\CompleteSalesSetupAction;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Support\Access\AccessPermissions;
@@ -15,6 +16,14 @@ use Illuminate\View\View;
 
 class ProgressiveOperationController extends Controller
 {
+    public function completeSalesSetup(Request $request, Branch $branch, CompleteSalesSetupAction $setup): JsonResponse
+    {
+        $data = $request->validate(['confirmed' => ['required', 'accepted'], 'account_id' => ['nullable', 'integer', 'min:1']]);
+        $account = $setup->execute($request->user(), $branch->id, isset($data['account_id']) ? (int) $data['account_id'] : null);
+
+        return response()->json(['url' => route('inventory.operation.index', ['branch_id' => $branch->id]), 'message' => 'اكتملت تهيئة المبيعات باستخدام '.$account->name.' #'.$account->id.' دون اعتماد رصيد بداية أو إغلاق الإعداد.']);
+    }
+
     public function status(Request $request, ProgressiveOperation $operation): JsonResponse
     {
         $data = $request->validate(['branch_id' => ['required', 'integer', 'min:1']]);

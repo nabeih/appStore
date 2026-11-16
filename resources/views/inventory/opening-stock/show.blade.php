@@ -34,4 +34,5 @@
         </div>
     @endif
 </article>
+@include('inventory.setup.partials.document-corrections',['correctionDocument'=>$entry,'correctionKind'=>'opening'])
 @endsection

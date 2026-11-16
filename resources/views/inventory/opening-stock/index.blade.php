@@ -2,7 +2,7 @@
 @section('title', 'البضاعة الافتتاحية')
 @section('content')
 <div class="screen active os-page" data-search-region="openings">
-    <header class="os-page-title"><div><h1 class="section-title">البضاعة الافتتاحية</h1><p class="section-subtitle">بضاعتك الموجودة، بدون فاتورة شراء.</p></div><button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">+ إدخال بضاعة</button></header>
+    <header class="os-page-title"><div><h1 class="section-title">سجل البضاعة الافتتاحية</h1><p class="section-subtitle">بضاعتك الموجودة، بدون فاتورة شراء. يبقى السجل متاحًا للعرض والطباعة بعد الإغلاق.</p></div>@if($openingStockBranches->isNotEmpty())<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">+ إدخال بضاعة</button>@endif</header>
     <details class="card document-filters" @if(array_filter($filters)) open @endif>
         <summary><span><i class="fas fa-sliders-h" aria-hidden="true"></i> تصفية المستندات</span><small>الفرع والتاريخ</small></summary>
         <form method="get" data-module-search class="os-filter-form document-filter-grid"><label>بحث<input name="q" type="search" maxlength="100" value="{{ $filters['q'] ?? '' }}" placeholder="رقم المستند أو المنتج أو SKU"></label><label>الحالة<select name="status"><option value="">الكل</option>@foreach(['draft'=>'مسودة','approved'=>'معتمد','cancelled'=>'ملغى'] as $value=>$label)<option value="{{ $value }}" @selected(($filters['status'] ?? '')===$value)>{{ $label }}</option>@endforeach</select></label>
@@ -26,9 +26,9 @@
                 <td class="record-action"><a class="btn btn-outline btn-sm" href="{{ route('inventory.opening-stock.show', $entry) }}">عرض المستند</a></td>
             </tr>
         @empty
-            <tr class="record-empty"><td colspan="8" class="empty"><strong>لا توجد بضاعة افتتاحية بعد</strong><p>ابدأ بإدخال البضاعة الموجودة لديك.</p><button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">إدخال بضاعة</button></td></tr>
+            <tr class="record-empty"><td colspan="8" class="empty"><strong>لا توجد بضاعة افتتاحية بعد</strong>@if($openingStockBranches->isNotEmpty())<p>ابدأ بإدخال البضاعة الموجودة لديك.</p><button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">إدخال بضاعة</button>@endif</td></tr>
         @endforelse
     </tbody></table></div><x-pagination :paginator="$entries" /></section>
 </div>
-@include('inventory.opening-stock.partials.form')
+@if($openingStockBranches->isNotEmpty())@include('inventory.opening-stock.partials.form')@endif
 @endsection

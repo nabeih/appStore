@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Support\Inventory\OpeningStock\DecimalAmount;
+use App\Support\Sales\Money;
 use Database\Factories\PurchaseInvoiceFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,7 +41,32 @@ class PurchaseInvoice extends Model
 
     public function getRemainingAmountAttribute(): string
     {
-        return DecimalAmount::format($this->total_minor - $this->paid_minor);
+        return DecimalAmount::format($this->effective_total_minor - $this->paid_minor);
+    }
+
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(AuditEvent::class, 'subject_id')->where('subject_type', self::class)->where('action', 'inventory.document_corrected');
+    }
+
+    public function getEffectiveTotalMinorAttribute(): int
+    {
+        return Money::add((int) $this->total_minor, (int) $this->corrections->sum(fn ($event): int => (int) ($event->data['document_delta_minor'] ?? 0)));
+    }
+
+    /** @return array<int,int> */
+    public static function correctionTotalsBySupplier(Builder $invoices): array
+    {
+        $events = AuditEvent::where('subject_type', self::class)->where('action', 'inventory.document_corrected')
+            ->whereIn('subject_id', (clone $invoices)->select('purchase_invoices.id'))->get(['subject_id', 'data']);
+        $suppliers = (clone $invoices)->whereIn('id', $events->pluck('subject_id'))->pluck('supplier_id', 'id');
+        $totals = [];
+        foreach ($events as $event) {
+            $id = (int) $suppliers[$event->subject_id];
+            $totals[$id] = Money::add($totals[$id] ?? 0, (int) $event->data['document_delta_minor']);
+        }
+
+        return $totals;
     }
 
     public function supplier(): BelongsTo

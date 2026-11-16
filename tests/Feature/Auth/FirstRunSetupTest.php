@@ -5,8 +5,10 @@ namespace Tests\Feature\Auth;
 use App\Actions\Access\FirstRun\BootstrapOwnerAction;
 use App\Actions\Access\FirstRun\InstallationReadiness;
 use App\Actions\Access\FirstRun\PrepareSetupTokenAction;
+use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Models\ApplicationInstallation;
 use App\Models\AuditEvent;
+use App\Models\FinancialAccount;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Access\AccessPermissions;
@@ -90,6 +92,7 @@ class FirstRunSetupTest extends TestCase
         $this->assertSame('owner@example.test', $owner->email);
         $this->assertFalse($owner->hasVerifiedEmail());
         $this->assertTrue(AccessPermissions::isOwner($owner));
+        $this->assertSame(count(ManageFinancialAccountsAction::SYSTEM), FinancialAccount::where('type', 'system')->count());
         $this->assertSame(count(AccessPermissions::defaults()), Role::count());
         $this->assertEqualsCanonicalizing(array_keys(SalesAccess::PERMISSIONS), $owner->role->permissions->pluck('name')->all());
         $state = ApplicationInstallation::findOrFail(1);

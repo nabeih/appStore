@@ -3,6 +3,7 @@
 namespace App\Actions\Access\FirstRun;
 
 use App\Actions\Access\InitializeAccessAction;
+use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Models\ApplicationInstallation;
 use App\Models\Role;
 use App\Models\User;
@@ -30,6 +31,7 @@ class BootstrapOwnerAction
                 throw ValidationException::withMessages(['setup_token' => 'رمز الإعداد غير صحيح أو انتهت صلاحيته. راجع مسؤول النشر.']);
             }
             $this->initialize->execute();
+            ManageFinancialAccountsAction::provision();
             $role = Role::where('name', 'sales_owner')->where('is_active', true)->firstOrFail();
             $owner = new User(['name' => $data['name'], 'username' => $data['username'], 'email' => $data['email'] ?? null, 'password' => Hash::make($data['password'])]);
             $owner->forceFill(['role_id' => $role->id, 'is_active' => true])->save();

@@ -5,6 +5,7 @@ namespace App\Actions\Inventory\OpeningStock;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
 use App\Models\AuditEvent;
+use App\Models\Branch;
 use App\Models\FinancialAccount;
 use App\Models\Inventory;
 use App\Models\JournalEntry;
@@ -67,6 +68,7 @@ class ManageOpeningDraftAction
     {
         return OperationContext::run(function () use ($entry, $version, $actor, $declaration): OpeningStockEntry {
             $branch = OperationContext::branch($actor, $entry->branch_id, 'inventory.correct_setup');
+            $branch = Branch::whereKey($branch->id)->lockForUpdate()->firstOrFail();
             $current = OpeningStockEntry::whereKey($entry->id)->lockForUpdate()->firstOrFail();
             if ($current->status === 'approved') {
                 abort_unless($current->version === $version + 1, 409, 'اعتماد سابق يخص إصدارًا آخر.');
@@ -118,6 +120,7 @@ class ManageOpeningDraftAction
     {
         return OperationContext::run(function () use ($entry, $data, $actor): OpeningStockEntry {
             $branch = OperationContext::branch($actor, $entry->branch_id, 'inventory.correct_setup');
+            $branch = Branch::whereKey($branch->id)->lockForUpdate()->firstOrFail();
             if ($branch->opening_stock_closed_at) {
                 throw ValidationException::withMessages(['opening' => 'أُغلق إعداد أول المدة.']);
             }

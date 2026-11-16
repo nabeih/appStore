@@ -23,6 +23,7 @@ use App\Http\Controllers\Web\Finance\ExpenseController;
 use App\Http\Controllers\Web\Finance\FinanceReviewController;
 use App\Http\Controllers\Web\Finance\FinancialAccountController;
 use App\Http\Controllers\Web\Finance\TreasuryController;
+use App\Http\Controllers\Web\Inventory\DocumentCorrectionController;
 use App\Http\Controllers\Web\Inventory\InventoryController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockCatalogController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockController;
@@ -167,6 +168,7 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::get('/inventory/readiness', [InventoryReviewController::class, 'index'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.index');
     Route::get('/inventory/operation', [ProgressiveOperationController::class, 'index'])->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.index');
     Route::post('/inventory/branches/{branch}/operation', [ProgressiveOperationController::class, 'activate'])->whereNumber('branch')->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.activate');
+    Route::post('/inventory/branches/{branch}/sales-setup', [ProgressiveOperationController::class, 'completeSalesSetup'])->whereNumber('branch')->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.sales-setup');
     Route::post('/inventory/branches/{branch}/operation/zero/{kind}/{record}', [ProgressiveOperationController::class, 'confirmZero'])->whereNumber(['branch', 'record'])->middleware(['can:inventory.close_setup', 'can:sales.view_cost'])->name('inventory.operation.zero');
     Route::post('/inventory/{inventory}/baseline', [InventoryReviewController::class, 'baseline'])->whereNumber('inventory')->name('inventory.review.baseline');
     Route::post('/inventory/branches/{branch}/close-setup', [InventoryReviewController::class, 'close'])->whereNumber('branch')->middleware('can:inventory.close_setup')->name('inventory.review.close');
@@ -217,6 +219,8 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     });
 
     Route::get('/inventory', [InventoryController::class, 'index'])->middleware('can:inventory.view')->name('inventory.index');
+    Route::get('/inventory/document-corrections/{kind}/{document}/{item}', [DocumentCorrectionController::class, 'show'])->whereIn('kind', ['opening', 'purchase'])->whereNumber(['document', 'item'])->middleware('can:sales.view_cost')->name('inventory.document-corrections.show');
+    Route::post('/inventory/document-corrections/{kind}/{document}/{item}', [DocumentCorrectionController::class, 'store'])->whereIn('kind', ['opening', 'purchase'])->whereNumber(['document', 'item'])->middleware('can:sales.view_cost')->name('inventory.document-corrections.store');
     Route::get('/inventory/products/{product}', [ProductDetailsController::class, 'show'])->whereNumber('product')->middleware('can:inventory.view')->name('inventory.products.show');
     Route::prefix('inventory/opening-stock')->name('inventory.opening-stock.')->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->group(function () {
         Route::get('/', [OpeningStockController::class, 'index'])->name('index');

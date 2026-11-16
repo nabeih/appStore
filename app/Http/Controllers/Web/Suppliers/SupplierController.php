@@ -10,6 +10,7 @@ use App\Models\PurchaseInvoice;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
+use App\Support\Sales\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,10 @@ class SupplierController extends Controller
             ->where(fn ($query) => app(ModuleSearch::class)->contacts($query, $filters['q'] ?? '', true))
             ->withCount(['invoices' => fn ($query) => app(ModuleSearch::class)->branches($query, $request->user())])->withSum(['invoices as balance_minor' => fn ($query) => app(ModuleSearch::class)->branches($query, $request->user())->where('status', 'approved')], DB::raw('total_minor - paid_minor'))
             ->latest('id')->paginate(20)->withQueryString();
+        $deltas = PurchaseInvoice::correctionTotalsBySupplier(app(ModuleSearch::class)->branches(PurchaseInvoice::whereIn('supplier_id', $entries->modelKeys())->where('status', 'approved'), $request->user()));
+        foreach ($entries as $supplier) {
+            $supplier->balance_minor = Money::add((int) $supplier->balance_minor, $deltas[$supplier->id] ?? 0);
+        }
 
         return view('suppliers.index', compact('entries', 'filters'));
     }
@@ -64,11 +69,13 @@ class SupplierController extends Controller
         $search = app(ModuleSearch::class);
         $entries = $search->documents($search->branches($supplier->invoices(), $request->user()),
             array_replace($filters, ['q' => $filters['invoices_q'] ?? '']), 'PI', ['supplier_name', 'supplier_invoice_number', 'notes'])
-            ->latest('invoice_date')->latest('id')->paginate(20)->withQueryString();
+            ->with('corrections')->latest('invoice_date')->latest('id')->paginate(20)->withQueryString();
         $payments = $search->receipts($supplier->payments(), array_replace($filters, ['q' => $filters['payments_q'] ?? '']),
             $request->user(), true)->with('invoice:id,invoice_date')->latest('payment_date')->latest('id')->paginate(20, ['*'], 'payments_page')->withQueryString();
         $totals = $search->branches($supplier->invoices(), $request->user())->where('status', 'approved')
             ->selectRaw('COALESCE(SUM(total_minor),0) AS purchases, COALESCE(SUM(paid_minor),0) AS paid')->first();
+        $deltas = PurchaseInvoice::correctionTotalsBySupplier($search->branches(PurchaseInvoice::where('supplier_id', $supplier->id)->where('status', 'approved'), $request->user()));
+        $totals->purchases = Money::add((int) $totals->purchases, $deltas[$supplier->id] ?? 0);
         $purchases = DecimalAmount::format((int) $totals->purchases);
         $paid = DecimalAmount::format((int) $totals->paid);
         $balance = DecimalAmount::format((int) $totals->purchases - (int) $totals->paid);
@@ -81,7 +88,8 @@ class SupplierController extends Controller
     {
         DB::transaction(function () use ($supplier): void {
             $current = Supplier::whereKey($supplier->id)->lockForUpdate()->firstOrFail();
-            $hasBalance = PurchaseInvoice::where('supplier_id', $current->id)->where('status', 'approved')->whereColumn('total_minor', '>', 'paid_minor')->exists();
+            $hasBalance = PurchaseInvoice::where('supplier_id', $current->id)->where('status', 'approved')->with('corrections')->get()
+                ->contains(fn ($invoice): bool => $invoice->effective_total_minor > (int) $invoice->paid_minor);
             if ($hasBalance) {
                 throw ValidationException::withMessages(['supplier' => 'لا يمكن أرشفة مورد لديه مبالغ غير مسددة.']);
             }

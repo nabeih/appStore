@@ -20,7 +20,7 @@
                         قائمة المنتجات والكميات الحالية
                     </h3>
 
-                    @if(auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
+                    @if($openingStockBranches->isNotEmpty() && auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()"
                         style="background:linear-gradient(135deg,#4f46e5,#4338ca);font-weight:700;">
                         <i class="fas fa-boxes"></i> إدخال بضاعة أول المدة
                     </button>@endif
@@ -124,7 +124,7 @@
 
 
     </div>
-    @if(auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))@include('inventory.opening-stock.partials.form')@endif
+    @if($openingStockBranches->isNotEmpty() && auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))@include('inventory.opening-stock.partials.form')@endif
     @can('inventory.manage_catalog')@include('inventory.setup.partials.product-details')@endcan
     @if($setupChangesEnabled && auth()->user()->can('inventory.correct_setup') && auth()->user()->can('sales.view_cost'))
         @include('inventory.setup.partials.dialog')

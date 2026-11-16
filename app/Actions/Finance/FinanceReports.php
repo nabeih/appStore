@@ -25,7 +25,8 @@ class FinanceReports
     public function supplier(int $supplierId, int $branchId): array
     {
         FinanceContext::ready();
-        $operational = (int) PurchaseInvoice::where('supplier_id', $supplierId)->where('branch_id', $branchId)->where('status', 'approved')->selectRaw('COALESCE(SUM(total_minor),0)-COALESCE(SUM(paid_minor),0) AS due')->value('due');
+        $operational = (int) PurchaseInvoice::where('supplier_id', $supplierId)->where('branch_id', $branchId)->where('status', 'approved')->with('corrections')->get()
+            ->sum(fn ($invoice): int => $invoice->effective_total_minor - (int) $invoice->paid_minor);
         $ledger = Money::integer((string) JournalLine::where('supplier_id', $supplierId)->whereHas('entry', fn ($query) => $query->where('branch_id', $branchId))
             ->whereHas('account', fn ($query) => $query->where('code', 'supplier_payables'))->selectRaw('COALESCE(SUM(credit_minor),0)-COALESCE(SUM(debit_minor),0) AS due')->value('due'));
         $invoices = PurchaseInvoice::where('supplier_id', $supplierId)->where('branch_id', $branchId)->where('status', 'approved')->withSum(['payments as actual_paid' => fn ($query) => $query->where('status', 'approved')], 'amount_minor')->get(['id', 'paid_minor']);

@@ -35,7 +35,7 @@ class PurchaseInvoiceController extends Controller
             ->when($filters['from'] ?? null, fn ($query, $value) => $query->whereDate('invoice_date', '>=', $value))
             ->when($filters['to'] ?? null, fn ($query, $value) => $query->whereDate('invoice_date', '<=', $value));
         app(ModuleSearch::class)->documents($query, $filters, 'PI', ['supplier_name', 'supplier_invoice_number', 'notes']);
-        $entries = $query->latest('id')->paginate(20)->withQueryString();
+        $entries = $query->with('corrections')->latest('id')->paginate(20)->withQueryString();
         $branches = SalesReports::branches($request->user(), false);
 
         return view('purchases.invoices.index', compact('entries', 'filters', 'branches'));

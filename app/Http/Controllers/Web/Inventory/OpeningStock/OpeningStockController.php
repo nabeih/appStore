@@ -34,7 +34,8 @@ class OpeningStockController extends Controller
         app(ModuleSearch::class)->documents($query, $filters, 'OS', ['notes']);
         $entries = $query->latest('id')->paginate(20)->withQueryString();
         $branches = SalesReports::branches($request->user(), false);
-        $openingStockBranches = $branches->where('is_active', true);
+        $openingStockBranches = $branches->where('is_active', true)->whereNull('opening_stock_closed_at')
+            ->when($filters['branch_id'] ?? null, fn ($items, $id) => $items->where('id', (int) $id));
 
         return view('inventory.opening-stock.index', compact('entries', 'branches', 'openingStockBranches', 'filters'));
     }
@@ -49,7 +50,8 @@ class OpeningStockController extends Controller
 
     public function preview(StoreOpeningStockRequest $request, PrepareOpeningStockAction $prepare): JsonResponse
     {
-        OperationContext::branch($request->user(), (int) $request->validated('branch_id'), 'inventory.correct_setup');
+        $branch = OperationContext::branch($request->user(), (int) $request->validated('branch_id'), 'inventory.correct_setup');
+        abort_if($branch->opening_stock_closed_at, 422, 'أُغلق إعداد أول المدة لهذا الفرع؛ السجل متاح للعرض والطباعة فقط.');
         $plan = $prepare->execute($request->validated());
 
         return response()->json([

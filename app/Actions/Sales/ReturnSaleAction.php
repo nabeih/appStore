@@ -5,8 +5,10 @@ namespace App\Actions\Sales;
 use App\Actions\Customers\RecordCustomerReceiptAction;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Inventory\CorrectDocumentItemAction;
 use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
+use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\SaleInvoice;
 use App\Models\SaleReturn;
@@ -42,7 +44,8 @@ class ReturnSaleAction
             $before = (int) $item->returned_quantity;
             $after = $before + $quantity;
             $net = Money::ratio((int) $item->net_minor, $after, $item->quantity) - Money::ratio((int) $item->net_minor, $before, $item->quantity);
-            $rowCost = Money::ratio((int) $item->cost_minor, $after, $item->quantity) - Money::ratio((int) $item->cost_minor, $before, $item->quantity);
+            $effectiveCost = CorrectDocumentItemAction::saleCost($item);
+            $rowCost = Money::ratio($effectiveCost, $after, $item->quantity) - Money::ratio($effectiveCost, $before, $item->quantity);
             $condition = $input['condition'];
             if (! in_array($condition, ['resellable', 'inspection', 'damaged'], true)) {
                 $this->fail('حدد حالة البضاعة المرتجعة.');
@@ -84,6 +87,7 @@ class ReturnSaleAction
                 return OperationContext::replay($existing, $hash);
             }
             $current = SaleInvoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            Branch::whereKey($current->branch_id)->lockForUpdate()->firstOrFail();
             $plan = $this->prepare($current, $data, $actor, $exchange);
             $this->accounts->assertFunds($plan['refund']['parts']);
             $return = SaleReturn::create(['client_uuid' => $data['client_uuid'], 'request_hash' => $hash, 'sale_invoice_id' => $current->id,

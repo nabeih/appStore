@@ -4,8 +4,10 @@ namespace Tests\Feature\Auth;
 
 use App\Actions\Access\FirstRun\PrepareSetupTokenAction;
 use App\Actions\Account\AccountMail;
+use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Models\ApplicationInstallation;
 use App\Models\Branch;
+use App\Models\FinancialAccount;
 use App\Models\User;
 use App\Notifications\Account\ResetAccountPassword;
 use App\Notifications\Account\VerifyAccountEmail;
@@ -109,9 +111,11 @@ class AccountOnboardingTest extends TestCase
         $this->assertSame('shop', $branch->type);
         $this->assertNull($branch->opening_stock_closed_at);
         $this->assertNull(DB::table('sales_controls')->where('id', 1)->value('activated_at'));
-        foreach (['inventories', 'financial_accounts', 'journal_entries', 'stock_movements'] as $table) {
+        foreach (['inventories', 'journal_entries', 'stock_movements'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }
+        $this->assertSame(count(ManageFinancialAccountsAction::SYSTEM), FinancialAccount::where('type', 'system')->count());
+        $this->assertSame(1, FinancialAccount::where('branch_id', $branch->id)->where('type', 'cash')->count());
         $this->assertDatabaseHas('audit_events', ['action' => 'installation.first_branch_completed', 'user_id' => $owner->id, 'branch_id' => $branch->id]);
         $this->get('/dashboard')->assertOk();
         try {
@@ -132,6 +136,8 @@ class AccountOnboardingTest extends TestCase
         $this->assertDatabaseCount('branches', 1);
         DB::table('audit_events')->where('branch_id', $branch->id)->update(['branch_id' => null]);
         DB::table('users')->where('branch_id', $branch->id)->update(['branch_id' => null]);
+        $this->assertDatabaseCount('journal_entries', 0);
+        FinancialAccount::where('branch_id', $branch->id)->delete();
         $branch->delete();
         $this->get(route('onboarding.branch'))->assertNotFound();
         $this->get('/dashboard')->assertOk();

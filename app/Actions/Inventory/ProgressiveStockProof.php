@@ -24,6 +24,7 @@ class ProgressiveStockProof
         $stocks = Inventory::where('branch_id', $branchId)->with(['productVariant.product.category', 'productVariant.color', 'productVariant.size'])->orderBy('id')->get();
         $movements = StockMovement::where('branch_id', $branchId)->where('stock_bucket', 'available')->orderBy('id')->get();
         $sources = [
+            AuditEvent::class => AuditEvent::where('action', 'inventory.document_corrected')->whereIn('id', $movements->where('source_type', AuditEvent::class)->pluck('source_id'))->get()->keyBy('id'),
             OpeningStockItem::class => OpeningStockItem::with('entry.items')->whereIn('id', $movements->where('source_type', OpeningStockItem::class)->pluck('source_id'))->get()->keyBy('id'),
             PurchaseInvoiceItem::class => PurchaseInvoiceItem::with('invoice.items')->whereIn('id', $movements->where('source_type', PurchaseInvoiceItem::class)->pluck('source_id'))->get()->keyBy('id'),
             SaleItem::class => SaleItem::with('invoice.items')->whereIn('id', $movements->where('source_type', SaleItem::class)->pluck('source_id'))->get()->keyBy('id'),
@@ -131,7 +132,17 @@ class ProgressiveStockProof
     {
         $kind = $movement->movement_type;
         $reverse = in_array($kind, ['purchase_reversal', 'sale_reversal', 'sale_return_reversal'], true);
-        if ($item instanceof OpeningStockItem && $kind === 'opening_stock') {
+        if ($item instanceof AuditEvent && $kind === 'document_correction' && $item->action === 'inventory.document_corrected') {
+            $data = $item->data;
+            if (($data['document_delta_minor'] ?? null) !== ($data['inventory_delta_minor'] ?? 0) + ($data['cogs_delta_minor'] ?? 0)) {
+                return null;
+            }
+            $item->setAttribute('status', 'approved');
+            $item->setAttribute('number', 'COR-'.$item->id);
+
+            return ['document' => $item, 'event' => 'document_correction', 'reverse' => false, 'document_value' => (int) $data['inventory_delta_minor'],
+                'variant_id' => (int) $data['variant_id'], 'quantity' => (int) $data['quantity_delta'], 'value' => (int) $data['inventory_delta_minor']];
+        } elseif ($item instanceof OpeningStockItem && $kind === 'opening_stock') {
             $document = $item->entry;
             $event = 'opening';
             $value = Money::minor((string) $item->line_total);

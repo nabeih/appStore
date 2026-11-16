@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web\Sales;
 use App\Actions\Catalog\VisibleProductsQuery;
 use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\ReviewInventoryAction;
+use App\Actions\Sales\CompleteSalesSetupAction;
 use App\Actions\Sales\PrepareSaleAction;
 use App\Actions\Search\ModuleSearch;
 use App\Actions\Search\SearchTerm;
@@ -38,6 +39,8 @@ class CashierController extends Controller
         }
         $branchId = $invoice?->branch_id ?? ($input['branch_id'] ?? $branches->first()?->id);
         $accounts = FinancialAccount::whereIn('branch_id', $branches->pluck('id'))->whereIn('type', ['cash', 'bank', 'wallet'])->where('is_active', true)->get(['id', 'name', 'type', 'branch_id', 'reference']);
+        $selectedDrawers = CompleteSalesSetupAction::selections($branches->modelKeys());
+        $accounts = $accounts->sortBy(fn ($account): int => ($selectedDrawers[$account->branch_id] ?? null) === $account->id ? 0 : 1)->values();
         $capabilities = collect(array_keys(SalesAccess::PERMISSIONS))->mapWithKeys(fn (string $ability): array => [$ability => SalesAccess::allows($request->user(), $ability)])->all();
         $state = ['q' => $input['q'] ?? '', 'client_uuid' => $invoice?->client_uuid ?? (string) Str::uuid(), 'version' => $invoice?->version, 'branch_id' => $branchId,
             'customer_id' => $invoice?->customer_id, 'customer_name' => $invoice?->customer_name, 'notes' => $invoice?->notes ?? '',

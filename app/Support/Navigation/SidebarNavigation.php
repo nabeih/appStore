@@ -20,7 +20,7 @@ class SidebarNavigation
                 ['inventory.operation.index', 'حالة تشغيل المحل', 'fa-toggle-on', ['inventory.operation.view'], ['inventory.operation.*']],
                 ['inventory.index', 'إدارة المخزون والمنتجات', 'fa-boxes-stacked', ['inventory.view'], ['inventory.index', 'inventory.products.*', 'inventory.update', 'catalog.swatches.*']],
                 ['catalog.attributes.index', 'التصنيفات والألوان والمقاسات', 'fa-tags', ['inventory.manage_catalog'], ['catalog.attributes.*']],
-                ['inventory.opening-stock.index', 'البضاعة الافتتاحية', 'fa-box-open', ['inventory.correct_setup', 'sales.view_cost'], ['inventory.opening-stock.*']],
+                ['inventory.opening-stock.index', 'سجل البضاعة الافتتاحية', 'fa-box-open', ['inventory.correct_setup', 'sales.view_cost'], ['inventory.opening-stock.*']],
                 ['inventory.review.index', 'مراجعة وجاهزية المخزون', 'fa-clipboard-check', ['inventory.valuation_review', 'sales.view_cost'], ['inventory.review.*']],
             ]],
             ['purchases', 'المشتريات والموردون', 'fa-truck', [

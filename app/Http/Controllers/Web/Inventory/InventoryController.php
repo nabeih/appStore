@@ -27,7 +27,8 @@ class InventoryController extends Controller
         ]);
         $search->rankInventory($query, $filters['q'] ?? '');
         $inventories = $search->sort($query, $filters, null, 'inventories.id')->paginate(20)->withQueryString();
-        $openingStockBranches = SalesReports::branches($request->user());
+        $openingStockBranches = SalesReports::branches($request->user())->whereNull('opening_stock_closed_at')
+            ->when($filters['branch_id'] ?? null, fn ($items, $id) => $items->where('id', (int) $id));
         $branches = SalesReports::branches($request->user(), false);
         $categories = Category::orderBy('name')->get(['id', 'name']);
         $colors = Color::orderBy('name')->get(['id', 'name']);
