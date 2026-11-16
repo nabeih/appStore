@@ -24,9 +24,7 @@ use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\MessageBag;
 use Illuminate\Support\Str;
-use Illuminate\Support\ViewErrorBag;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\Sales\SalesTestCase;
 
@@ -94,11 +92,12 @@ class StoreCommerceTest extends SalesTestCase
         $this->assertSame('dispatched', $order->fresh()->status);
         $this->assertDatabaseCount('sale_invoices', 0);
         $this->assertSame(1, (int) Inventory::where('product_variant_id', $this->variant->id)->value('reserved_quantity'));
-        $errors = (new ViewErrorBag)->put('default', new MessageBag([
-            'minimum_quote' => json_encode($warning, JSON_THROW_ON_ERROR), 'below_minimum_confirmed' => 'راجع الأسعار وأكد التسليم مجددًا',
-        ]));
-        $this->withSession(['errors' => $errors])->get(route('store.orders.show', $order))->assertOk()
-            ->assertSee('name="below_minimum_confirmation"', false)->assertSee('35.000000')->assertDontSee('minimum_quote');
+        $this->from(route('store.orders.show', $order))->post(route('store.orders.transition', $order), $data)
+            ->assertRedirect()->assertSessionHasErrors(['minimum_quote', 'below_minimum_confirmed']);
+        $review = $this->withCookie(config('session.cookie'), session()->getId())->get(route('store.orders.show', $order))->assertOk();
+        $this->assertTrue(app('view')->shared('errors')->has('minimum_quote'), 'The view must receive the minimum quote from the session.');
+        $this->assertTrue(str_contains($review->getContent(), 'name="below_minimum_confirmation"'), 'The confirmation token input must be rendered.');
+        $review->assertSee('35.000000')->assertDontSee('minimum_quote');
         $this->flushSession();
         $this->actingAs($this->owner);
         $data['below_minimum_confirmation'] = $warning['token'];
