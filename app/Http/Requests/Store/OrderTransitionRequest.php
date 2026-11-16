@@ -23,6 +23,7 @@ class OrderTransitionRequest extends FormRequest
         }
 
         return $base + ['action' => ['required', Rule::in(['confirm', 'dispatch', 'deliver', 'cancel', 'refuse', 'return_received'])],
-            'version' => ['required', 'integer', 'min:1'], 'courier_name' => ['nullable', 'string', 'max:150'], 'below_minimum_confirmed' => ['sometimes', 'boolean']];
+            'version' => ['required', 'integer', 'min:1'], 'courier_name' => ['nullable', 'string', 'max:150'], 'below_minimum_confirmed' => ['sometimes', 'boolean'],
+            'below_minimum_confirmation' => ['nullable', 'string', 'size:64']];
     }
 }

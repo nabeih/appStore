@@ -1613,7 +1613,14 @@ components:
         below_minimum_confirmed:
           type: boolean
           default: false
-          description: 'Below-minimum approval requires this confirmation, live sales.override_price permission and a documented reason of at least3 characters. Cashier self-confirmation is insufficient. Does not grant below-cost or discount-override permissions.'
+          description: 'Cashier confirms the current below-minimum cart using the server challenge token. Does not grant below-cost, price-edit or discount-override permissions.'
+        below_minimum_confirmation:
+          type:
+            - string
+            - 'null'
+          minLength: 64
+          maxLength: 64
+          description: 'Server token from errors.minimum_quote JSON. A changed cart or discount requires a new challenge and explicit confirmation.'
       required:
         - payment_mode
         - rows

@@ -120,7 +120,7 @@ class OwnerWorkflowRegressionTest extends SalesTestCase
         $data['client_uuid'] = (string) Str::uuid();
         $data['discount']['value'] = '1.01';
         $data['below_minimum_confirmed'] = true;
-        $this->postJson(route('sales.invoices.complete'), $data)->assertForbidden();
+        $this->postJson(route('sales.invoices.complete'), $data)->assertUnprocessable()->assertJsonValidationErrors('below_minimum_confirmed');
         $this->assertDatabaseCount('sale_invoices', 1);
     }
 

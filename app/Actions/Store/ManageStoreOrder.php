@@ -61,6 +61,7 @@ class ManageStoreOrder
                 $sale = app(SaveSaleAction::class)->execute(['client_uuid' => $current->sale_uuid, 'branch_id' => $current->branch_id,
                     'customer_id' => $current->customer_id, 'payment_mode' => 'credit', 'payments' => [], 'reason' => 'أسعار طلب الموقع المعتمدة '.$current->id,
                     'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false),
+                    'below_minimum_confirmation' => $data['below_minimum_confirmation'] ?? null,
                     'rows' => $current->items->map(fn ($item): array => ['product_variant_id' => $item->product_variant_id, 'quantity' => $item->quantity,
                         'unit_price' => Money::format($item->unit_price_minor), 'price_reason' => 'سعر الموقع وقت الطلب '.$current->id])->all()], $actor);
                 $sale = app(PostSaleAction::class)->execute($sale, $actor);

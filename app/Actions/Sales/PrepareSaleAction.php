@@ -17,7 +17,7 @@ class PrepareSaleAction
 {
     public function __construct(private StockLedger $stock, private ManageFinancialAccountsAction $accounts) {}
 
-    public function execute(array $data, User $actor, bool $lock = false, bool $checkSettlement = true, array $virtualReturns = []): array
+    public function execute(array $data, User $actor, bool $lock = false, bool $checkSettlement = true, array $virtualReturns = [], bool $preview = false): array
     {
         $branch = OperationContext::branch($actor, (int) $data['branch_id'], 'sales.sell');
         OperationContext::salesStarted($branch);
@@ -85,15 +85,6 @@ class PrepareSaleAction
             $row['invoice_discount_minor'] = $allocations[$index];
             $row['net_minor'] -= $allocations[$index];
             $row['minimum_snapshot_minor'] = intdiv($row['minimum_minor'], $row['quantity']);
-            if ($row['net_minor'] < $row['minimum_minor']) {
-                if (! ($data['below_minimum_confirmed'] ?? false)) {
-                    throw ValidationException::withMessages(['below_minimum_confirmed' => 'السعر بعد جميع الخصومات أقل من الحد الأدنى. عدّل السلة، أو اطلب من مسؤول يملك صلاحية تغيير السعر اعتماد البيع بحسابه وسبب موثق.']);
-                }
-                abort_unless(SalesAccess::allows($actor, 'sales.override_price'), 403, 'تجاوز الحد الأدنى يحتاج مسؤولًا مخوّلًا بتغيير السعر؛ تأكيد الكاشير وحده غير كافٍ.');
-                if (mb_strlen(trim($row['price_reason'] ?? $data['reason'] ?? '')) < 3) {
-                    throw ValidationException::withMessages(['reason' => 'دوّن سبب موافقة المسؤول على تجاوز الحد الأدنى.']);
-                }
-            }
             if ($row['net_minor'] < $row['cost_minor']) {
                 if (! SalesAccess::allows($actor, 'sales.below_cost')) {
                     abort(403, 'السعر بعد الخصم أقل من الحد المسموح. يلزم اعتماد مسؤول مخوّل.');
@@ -115,6 +106,26 @@ class PrepareSaleAction
                 $this->fail('سبب اعتماد الخصم الاستثنائي مطلوب.');
             }
         }
+        $affected = array_values(array_filter($rows, fn (array $row): bool => $row['net_minor'] < $row['minimum_snapshot_minor'] * $row['quantity']));
+        $minimumWarning = null;
+        if ($affected !== []) {
+            $basis = ['actor' => $actor->id, 'branch' => $branch->id, 'date' => $date, 'customer' => (int) ($data['customer_id'] ?? 0),
+                'discount' => $data['discount'] ?? [], 'rows' => array_map(fn (array $row): array => array_intersect_key($row, array_flip([
+                    'product_variant_id', 'quantity', 'unit_price_minor', 'base_price_minor', 'line_discount_minor', 'invoice_discount_minor', 'net_minor', 'minimum_snapshot_minor', 'discount_instructions',
+                ])), $rows)];
+            $token = hash_hmac('sha256', OperationContext::hash($basis), (string) config('app.key'));
+            $minimumWarning = ['token' => $token, 'items' => array_map(fn (array $row): array => [
+                'product_variant_id' => $row['product_variant_id'], 'name' => $row['product_name'], 'sku' => $row['sku'],
+                'color' => $row['color_name'], 'size' => $row['size_name'], 'quantity' => $row['quantity'],
+                'effective_unit' => $this->stock->unitCost($row['net_minor'], $row['quantity']),
+                'effective_total' => Money::format($row['net_minor']), 'minimum_unit' => Money::format($row['minimum_snapshot_minor']),
+            ], $affected)];
+            if (! $preview && (! ($data['below_minimum_confirmed'] ?? false) || ! hash_equals($token, (string) ($data['below_minimum_confirmation'] ?? '')))) {
+                $exception = ValidationException::withMessages(['below_minimum_confirmed' => 'بعض الأصناف أقل من الحد الأدنى. راجع المعاينة وأكد البيع لهذه السلة مجددًا.',
+                    'minimum_quote' => json_encode($minimumWarning, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
+                throw $exception;
+            }
+        }
         $customer = ! empty($data['customer_id']) ? Customer::findOrFail($data['customer_id']) : null;
         $payments = $this->accounts->payments($data['payments'] ?? [], $branch->id, $total, true);
         $mode = $data['payment_mode'] ?? 'paid';
@@ -131,7 +142,7 @@ class PrepareSaleAction
             }
         }
 
-        return ['rows' => $rows, 'payments' => $payments, 'customer' => $customer, 'branch' => $branch,
+        return ['rows' => $rows, 'payments' => $payments, 'customer' => $customer, 'branch' => $branch, 'minimum_warning' => $minimumWarning,
             'attributes' => ['branch_id' => $branch->id, 'customer_id' => $customer?->id, 'customer_name' => $customer?->name ?? 'زبون نقدي',
                 'branch_name' => $branch->name, 'cashier_name' => $actor->name, 'invoice_date' => $date, 'total_quantity' => $quantity,
                 'gross_minor' => $gross, 'line_discount_minor' => $lineDiscount, 'invoice_discount_minor' => $invoiceDiscount,

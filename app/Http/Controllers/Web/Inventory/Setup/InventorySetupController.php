@@ -8,9 +8,15 @@ use App\Http\Requests\Inventory\Setup\DeleteInventoryRequest;
 use App\Http\Requests\Inventory\Setup\UpdateInventoryRequest;
 use App\Models\Inventory;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class InventorySetupController extends Controller
 {
+    public function readiness(Request $request, Inventory $inventory, CorrectInventoryAction $correct): JsonResponse
+    {
+        return response()->json($correct->deletionReadiness($inventory, $request->user()))->header('Cache-Control', 'no-store, private');
+    }
+
     public function update(UpdateInventoryRequest $request, Inventory $inventory, CorrectInventoryAction $correct): JsonResponse
     {
         $correct->update($inventory, $request->validated(), $request->user()?->getAuthIdentifier());

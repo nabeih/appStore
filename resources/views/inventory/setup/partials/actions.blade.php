@@ -14,6 +14,7 @@
         'revision' => \App\Support\Inventory\Setup\InventoryState::revision($inventory, $inventory->productVariant, $inventory->productVariant->product),
         'update_url' => route('inventory.update', $inventory),
         'delete_url' => route('inventory.destroy', $inventory),
+        'readiness_url' => route('inventory.correction-readiness', $inventory),
     ];
     if (auth()->user()->can('sales.view_cost')) {
         $setupData['average_cost'] = (string) $inventory->average_cost;

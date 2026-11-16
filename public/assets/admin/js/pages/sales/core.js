@@ -18,7 +18,7 @@
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
             const message = response.status === 419 || response.status === 401 ? 'انتهت الجلسة. افتح تسجيل الدخول في تبويب آخر ثم أعد المحاولة مع إبقاء هذه الصفحة.'
-                : Object.values(result.errors || {}).flat().join('\n') || result.message || 'تعذر إكمال الطلب. احتفظ بالصفحة وأعد المحاولة.';
+                : Object.entries(result.errors || {}).filter(([key]) => key !== 'minimum_quote').flatMap(([,value]) => value).join('\n') || result.message || 'تعذر إكمال الطلب. احتفظ بالصفحة وأعد المحاولة.';
             throw Object.assign(new Error(message), { fields: result.errors || {}, status: response.status });
         }
         return result;

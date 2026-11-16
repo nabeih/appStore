@@ -4,7 +4,7 @@
     const el = id => document.getElementById(id), form = el('cashier-form'), allowed = key => !!config.capabilities[key];
     let dirty = false, busy = false, products = [], nextPage, selectedProduct, selectedVariant, previousBranch = el('cashier-branch').value;
     let scanBusy = false;
-    el('cashier-minimum-confirm')?.addEventListener('change', () => { lastPreview = null; previewVersion++; clearTimeout(previewTimer); previewRequest?.abort(); el('cashier-complete').disabled = true; preview(); });
+    let minimumConfirmation = null, minimumVersion = null;
     let catalogRequest, catalogTimer, customerRequest, customerTimer, previewRequest, previewTimer, previewVersion = 0, lastPreview;
     const accounts = () => config.accounts.filter(account => String(account.branch_id) === el('cashier-branch').value);
     function addPayment(initial = {}) {
@@ -23,11 +23,11 @@
                 discount: row.discount || { type: 'amount', value: '0' }, price_reason: row.price_reason || null })),
             discount: { type: el('cashier-discount-type').value, value: el('cashier-discount-value').value.trim() || '0' },
             reason: el('cashier-reason').value.trim() || null, notes: el('cashier-notes').value.trim() || null, payment_mode: el('cashier-payment-mode').value,
-            below_minimum_confirmed: !!el('cashier-minimum-confirm')?.checked,
+            below_minimum_confirmed: !!minimumConfirmation, below_minimum_confirmation: minimumConfirmation,
             payments: el('cashier-payment-mode').value === 'credit' ? [] : ui.payments(el('cashier-payments')) };
     }
     function invalidate() {
-        if (el('cashier-minimum-confirm')) el('cashier-minimum-confirm').checked = false;
+        minimumConfirmation = null; minimumVersion = null; el('cashier-minimum-dialog')?.close();
         dirty = true; lastPreview = null; previewVersion++; clearTimeout(previewTimer); previewRequest?.abort();
         ui.error(form,'');
         ['gross','discount','total','paid','due','change','cost','gross-profit'].forEach(key => { const node = el('cashier-'+key); if (node) node.textContent = '—'; });
@@ -195,7 +195,18 @@
         try { const result = await ui.request(complete ? config.completeUrl : config.saveUrl,{ method: complete ? 'POST' : config.saveMethod,data: payload() }); dirty = false; busy = false; location.assign(result.url); }
         catch (failure) { ui.error(form,failure); busy = false; el('cashier-fields').disabled = false; invalidate(); }
     }
-    form.addEventListener('submit',event => { event.preventDefault(); if (lastPreview) save(true); }); el('cashier-save-draft').addEventListener('click',() => save(false));
+    function confirmMinimum() {
+        if (!lastPreview?.minimum_warning) return save(true);
+        const list = el('cashier-minimum-items'); list.replaceChildren();
+        lastPreview.minimum_warning.items.forEach(item => list.append(ui.element('li', '', `${item.name} — ${item.color} / ${item.size} — ${item.quantity} قطعة — صافي القطعة ${item.effective_unit} ₪ — الحد ${item.minimum_unit} ₪`)));
+        minimumVersion = previewVersion; el('cashier-minimum-dialog').showModal();
+    }
+    el('cashier-minimum-review').addEventListener('click', () => { el('cashier-minimum-dialog').close(); minimumConfirmation = null; });
+    el('cashier-minimum-accept').addEventListener('click', () => {
+        if (!lastPreview?.minimum_warning || minimumVersion !== previewVersion || busy) { invalidate(); return; }
+        minimumConfirmation = lastPreview.minimum_warning.token; el('cashier-minimum-dialog').close(); save(true);
+    });
+    form.addEventListener('submit',event => { event.preventDefault(); if (lastPreview && !busy) confirmMinimum(); }); el('cashier-save-draft').addEventListener('click',() => { if (lastPreview?.minimum_warning && !minimumConfirmation) { ui.error(form,'راجع السلة؛ تأكيد التجاوز مطلوب قبل حفظ هذه المسودة.'); return; } save(false); });
     window.addEventListener('beforeunload',event => { if (dirty || busy) { event.preventDefault(); event.returnValue = ''; } });
     el('cashier-discount-type').value = state.discount?.type || 'amount'; el('cashier-discount-value').value = state.discount?.value || '0';
     el('cashier-reason').value = state.reason || ''; el('cashier-notes').value = state.notes || ''; el('cashier-payment-mode').value = state.payment_mode || 'paid';

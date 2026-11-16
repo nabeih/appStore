@@ -3,6 +3,7 @@
 @section('content')
 @php($prefix=request()->routeIs('store.admin.*')?'store.admin.orders.':'store.orders.')
 @php($money=\App\Support\Sales\Money::class)
+@php($minimumQuote=json_decode($errors->first('minimum_quote'),true))
 <div class="screen active commerce-page"><header class="commerce-header"><div><a href="{{ route($prefix.'index') }}">طلبات الموقع /</a><h1>الطلب WEB-{{ $entry->id }}</h1><p>{{ $entry->customer_name }} · <bdi>{{ $entry->phone }}</bdi> · {{ $entry->delivery_snapshot['zone'] }}</p></div><span class="commerce-badge">{{ $entry->status_label }}</span></header>
 @include('store.admin.feedback')
 <div class="commerce-columns"><section class="commerce-card"><h2>العميل والتوصيل</h2><p>{{ $entry->address }}</p><p>{{ $entry->notes }}</p><p>مزوّد الخدمة: {{ $entry->courier_name ?? 'لم يحدد بعد' }}</p><p>البضاعة خرجت: {{ $entry->dispatched_at?->format('Y-m-d H:i') ?? 'لا' }} · عادت فعليًا: {{ $entry->returned_at?->format('Y-m-d H:i') ?? 'لم تُسجل عودة' }}</p>
@@ -13,6 +14,11 @@
 <details><summary>السياسة التي وافق عليها العميل وقت الطلب</summary><p class="commerce-pre">{{ $entry->accepted_policy }}</p><small>{{ $entry->policy_accepted_at->format('Y-m-d H:i') }}</small></details>
 <h2>سجل التغييرات</h2>@foreach($entry->events as $event)<p>{{ $event->created_at->format('Y-m-d H:i') }} · {{ \App\Models\StoreOrder::STATUS_LABELS[$event->from_status]??'—' }} ← {{ \App\Models\StoreOrder::STATUS_LABELS[$event->to_status]??$event->to_status }} · {{ $event->reason }}</p>@endforeach</section>
 <aside class="commerce-card">@can('store.orders.manage')<h2>معالجة الطلب</h2><p class="commerce-muted">الحجز يمنع بيعه في الكاشير. الإلغاء بعد الخروج لا يحرره حتى تأكيد العودة الفعلية.</p><form method="POST" action="{{ route($prefix.'transition',$entry) }}" class="commerce-form">@csrf<input type="hidden" name="operation_uuid" value="{{ old('operation_uuid',(string)\Illuminate\Support\Str::uuid()) }}"><input type="hidden" name="version" value="{{ $entry->version }}">
+@if($minimumQuote)
+<input type="hidden" name="below_minimum_confirmation" value="{{ $minimumQuote['token'] ?? '' }}">
+<p>بعض الأصناف أقل من الحد الأدنى. راجعها ثم اختر التسليم وأكد التجاوز مجددًا.</p>
+<ul>@foreach($minimumQuote['items'] ?? [] as $item)<li>{{ $item['name'] }} — {{ $item['color'] }} / {{ $item['size'] }} — صافي القطعة {{ $item['effective_unit'] }} — الحد {{ $item['minimum_unit'] }}</li>@endforeach</ul>
+@endif
 <label>الإجراء<select name="action" required>@foreach(['confirm'=>'تأكيد وحجز','dispatch'=>'إخراج للتوصيل','deliver'=>'تسليم وربط فاتورة البيع','refuse'=>'رفض الاستلام وإثبات الرسوم','cancel'=>'إلغاء الطلب','return_received'=>'تأكيد استلام البضاعة العائدة'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></label><label>مزوّد التوصيل<input name="courier_name" maxlength="150" value="{{ $entry->courier_name }}"></label><label>السبب<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><label class="commerce-check"><input type="checkbox" name="below_minimum_confirmed" value="1"> أؤكد أي تجاوز للحد الأدنى في أسعار الطلب قبل تسليمه.</label><button class="btn btn-primary">تنفيذ الإجراء</button></form>
 @if(auth()->user()->can('sales.collect') || auth()->user()->can('store.courier_settle'))<h2>القبض والتسوية</h2><form method="POST" action="{{ route($prefix.'payment',$entry) }}" class="commerce-form">@csrf<input type="hidden" name="operation_uuid" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
 <label>العملية<select name="kind">@can('sales.collect')<option value="collect">تحصيل من الزبون</option>@endcan

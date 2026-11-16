@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Actions\Notifications\DispatchAppAlerts;
 use App\Actions\Store\StoreContext;
 use App\Models\Branch;
 use App\Models\Inventory;
@@ -119,9 +120,14 @@ class StockLedger
         }
         $stock->update($changes);
 
-        return StockMovement::create(['branch_id' => $stock->branch_id, 'product_variant_id' => $stock->product_variant_id,
+        $movement = StockMovement::create(['branch_id' => $stock->branch_id, 'product_variant_id' => $stock->product_variant_id,
             'user_id' => $actor->id, 'movement_type' => $type, 'quantity_change' => $quantity, 'value_change_minor' => $value,
             'unit_cost' => Money::format($quantity ? Money::ratio(abs($value), 1, abs($quantity)) : 0),
             'stock_bucket' => $bucket, 'effective_date' => $date, 'source_type' => $source->getMorphClass(), 'source_id' => $source->id]);
+        if ($bucket === 'available') {
+            app(DispatchAppAlerts::class)->stock($stock);
+        }
+
+        return $movement;
     }
 }

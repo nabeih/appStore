@@ -112,12 +112,12 @@ class CashierController extends Controller
 
     public function preview(SaveSaleRequest $request, PrepareSaleAction $prepare): JsonResponse
     {
-        $plan = $prepare->execute($request->validated(), $request->user(), false, false);
+        $plan = $prepare->execute($request->validated(), $request->user(), false, false, [], true);
         $attributes = $plan['attributes'];
         $result = ['gross' => Money::format($attributes['gross_minor']), 'discount' => Money::format($attributes['line_discount_minor'] + $attributes['invoice_discount_minor']),
             'total' => Money::format($attributes['total_minor']), 'paid' => Money::format($plan['payments']['paid']), 'due' => Money::format($attributes['total_minor'] - $plan['payments']['paid']),
             'change' => Money::format($plan['payments']['change']), 'quantity' => $attributes['total_quantity'],
-            'lines' => array_map(fn ($row): string => Money::format($row['net_minor']), $plan['rows'])];
+            'lines' => array_map(fn ($row): string => Money::format($row['net_minor']), $plan['rows']), 'minimum_warning' => $plan['minimum_warning']];
         if (SalesAccess::allows($request->user(), 'sales.view_cost')) {
             $result['cost'] = Money::format($attributes['cost_minor']);
             $result['gross_profit'] = Money::format($attributes['total_minor'] - $attributes['cost_minor']);

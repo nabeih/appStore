@@ -31,6 +31,20 @@
         if (!button || busy) return;
         selected = JSON.parse(button.closest('[data-inventory-details]').dataset.inventoryDetails);
         mode = button.dataset.inventoryAction;
+        if (mode === 'delete') {
+            busy = true; button.disabled = true;
+            try {
+                const response = await fetch(selected.readiness_url, { headers: { Accept: 'application/json' } });
+                const readiness = await response.json();
+                if (!response.ok) throw new Error(readiness.message || 'تعذر فحص صلاحية الحذف.');
+                if (!readiness.allowed) {
+                    feedback(readiness.reason);
+                    if (readiness.review_url) { const link = document.createElement('a'); link.href = readiness.review_url; link.className = 'btn btn-outline'; link.textContent = 'مراجعة جاهزية المخزون'; el('inventorySetupFeedback').append(document.createTextNode(' '), link); }
+                    return;
+                }
+            } catch (failure) { feedback(failure.message); return; }
+            finally { busy = false; button.disabled = false; }
+        }
         el('inventorySetupTitle').textContent = mode === 'delete' ? 'حذف سطر المخزون' : 'تصحيح بيانات المخزون';
         el('inventorySetupProduct').textContent = `${selected.code} — ${selected.name}`;
         el('inventorySetupScope').textContent = `${selected.branch} • ${selected.color} • ${selected.size} • الكمية الحالية: ${selected.quantity}`;

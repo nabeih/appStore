@@ -9,6 +9,7 @@ use App\Actions\Finance\PostJournalAction;
 use App\Actions\Store\ManageStoreContent;
 use App\Actions\Store\StoreOrderFinance;
 use App\Actions\Store\StorePricing;
+use App\Models\AppAlertEvent;
 use App\Models\AuditEvent;
 use App\Models\DeliveryZone;
 use App\Models\Expense;
@@ -23,7 +24,9 @@ use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\MessageBag;
 use Illuminate\Support\Str;
+use Illuminate\Support\ViewErrorBag;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\Sales\SalesTestCase;
 
@@ -78,6 +81,32 @@ class StoreCommerceTest extends SalesTestCase
         $this->getJson(route('store.status', $fresh['client_uuid']))->assertOk()->assertJsonPath('url', $response->json('url'));
         $this->flushSession();
         $this->getJson(route('store.status', $fresh['client_uuid']))->assertNotFound();
+    }
+
+    public function test_delivery_below_minimum_requires_a_cart_bound_confirmation_without_duplicate_sale_or_alert(): void
+    {
+        $order = $this->dispatched();
+        $this->variant->update(['minimum_selling_price' => '36']);
+        $data = ['operation_uuid' => (string) Str::uuid(), 'action' => 'deliver', 'version' => $order->version,
+            'reason' => 'تسليم طلب الموقع', 'below_minimum_confirmed' => true];
+        $response = $this->postJson(route('store.orders.transition', $order), $data)->assertUnprocessable();
+        $warning = json_decode($response->json('errors.minimum_quote.0'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('dispatched', $order->fresh()->status);
+        $this->assertDatabaseCount('sale_invoices', 0);
+        $this->assertSame(1, (int) Inventory::where('product_variant_id', $this->variant->id)->value('reserved_quantity'));
+        $errors = (new ViewErrorBag)->put('default', new MessageBag([
+            'minimum_quote' => json_encode($warning, JSON_THROW_ON_ERROR), 'below_minimum_confirmed' => 'راجع الأسعار وأكد التسليم مجددًا',
+        ]));
+        $this->withSession(['errors' => $errors])->get(route('store.orders.show', $order))->assertOk()
+            ->assertSee('name="below_minimum_confirmation"', false)->assertSee('35.000000')->assertDontSee('minimum_quote');
+        $this->flushSession();
+        $this->actingAs($this->owner);
+        $data['below_minimum_confirmation'] = $warning['token'];
+        $this->post(route('store.orders.transition', $order), $data)->assertRedirect()->assertSessionHasNoErrors();
+        $this->post(route('store.orders.transition', $order), $data)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('sale_invoices', 1);
+        $this->assertSame(1, AppAlertEvent::where('type', 'minimum_price')->count());
+        $this->assertSame(9, (int) Inventory::where('product_variant_id', $this->variant->id)->value('quantity'));
     }
 
     private function step(StoreOrder $order, string $action, array $changes = []): TestResponse

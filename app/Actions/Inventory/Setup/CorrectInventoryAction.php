@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CorrectInventoryAction
 {
@@ -37,6 +38,69 @@ class CorrectInventoryAction
     public function delete(Inventory $inventory, array $data, ?int $actorId = null): void
     {
         $this->mutate($inventory, $data, true, $actorId);
+    }
+
+    /** @return array{allowed:bool,reason:?string,review_url:?string} */
+    public function deletionReadiness(Inventory $inventory, User $actor): array
+    {
+        Gate::forUser($actor)->authorize('inventory.correct_setup');
+        $branch = OperationContext::branch($actor, (int) $inventory->branch_id, 'inventory.correct_setup');
+        $reason = null;
+        try {
+            abort_unless(config('inventory.allow_setup_changes'), 403, 'انتهت مرحلة تصحيح إدخال البضاعة.');
+            app(ProgressiveOperation::class)->guardCorrection($branch->id);
+            if ($branch->opening_stock_closed_at) {
+                $this->fail('أُغلق إعداد أول المدة لهذا الفرع.');
+            }
+            OperationContext::date($branch);
+            $this->source($inventory, $branch, false);
+        } catch (ValidationException $exception) {
+            $reason = implode(' ', $exception->validator->errors()->all());
+        } catch (HttpExceptionInterface $exception) {
+            $reason = $exception->getMessage();
+        }
+
+        return ['allowed' => $reason === null, 'reason' => $reason, 'review_url' => $actor->can('inventory.valuation_review') ? route('inventory.review.index', ['branch_id' => $branch->id]) : null];
+    }
+
+    private function source(Inventory $current, Branch $branch, bool $lock): array
+    {
+        $movements = StockMovement::where('branch_id', $current->branch_id)
+            ->where('product_variant_id', $current->product_variant_id)->when($lock, fn ($query) => $query->lockForUpdate())->get();
+        $items = OpeningStockItem::where('product_variant_id', $current->product_variant_id)
+            ->whereHas('entry', fn ($query) => $query->where('branch_id', $current->branch_id))
+            ->when($lock, fn ($query) => $query->lockForUpdate())->get();
+        $item = $items->first();
+        if (! $item) {
+            $this->fail('هذا رصيد قديم بلا مستند افتتاحي موثّق. راجع جاهزية المخزون؛ لا تُعدّل الكمية والتكلفة كأرقام مستقلة.');
+        }
+        if ($current->value_minor === null) {
+            $this->fail('اعتمد مراجعة قيمة الرصيد القديم قبل تصحيح مستنده.');
+        }
+        $oldValue = (int) $current->value_minor;
+        $entry = null;
+        if ($movements->isNotEmpty() || $items->isNotEmpty()) {
+            if ($items->count() !== 1 || $movements->count() !== 1 || ! $item) {
+                $this->fail('الصنف لديه حركات أو مستندات أخرى. التصحيح المباشر متاح فقط أثناء إدخال البضاعة.');
+            }
+            $movement = $movements->first();
+            if ($movement->movement_type !== 'opening_stock' || $movement->source_type !== $item->getMorphClass() || $movement->source_id !== $item->id) {
+                $this->fail('لا يمكن تعديل أو حذف صنف عليه حركة بيع أو شراء أو حركة مخزون لاحقة.');
+            }
+            $entry = OpeningStockEntry::whereKey($item->opening_stock_entry_id)->when($lock, fn ($query) => $query->lockForUpdate())->firstOrFail();
+            app(OpeningFinancialSupport::class)->assertValid($entry, $lock);
+            OperationContext::date($branch, $entry->opening_date?->toDateString() ?? substr((string) $entry->created_at, 0, 10), false);
+            if ($entry->status !== 'approved' || $current->average_cost === null || (int) $current->quantity !== $item->quantity
+                || DecimalAmount::minorUnits((string) $current->average_cost) !== DecimalAmount::minorUnits($item->unit_cost)
+                || $movement->quantity_change !== $item->quantity
+                || $movement->unit_cost === null || DecimalAmount::minorUnits($movement->unit_cost) !== DecimalAmount::minorUnits($item->unit_cost)
+                || $oldValue !== Money::minor($item->line_total)
+                || $movement->value_change_minor === null || (int) $movement->value_change_minor !== $oldValue) {
+                $this->fail('الرصيد الحالي لا يطابق المستند الافتتاحي. راجع السجل قبل إجراء التصحيح.');
+            }
+        }
+
+        return [$movements, $item, $entry, $oldValue];
     }
 
     private function mutate(Inventory $inventory, array $data, bool $delete, ?int $actorId): ?Inventory
@@ -70,40 +134,7 @@ class CorrectInventoryAction
                 if (! $delete && $product->trashed()) {
                     $this->fail('لا يمكن تعديل مخزون منتج محذوف.');
                 }
-                $movements = StockMovement::where('branch_id', $current->branch_id)
-                    ->where('product_variant_id', $variant->id)->lockForUpdate()->get();
-                $items = OpeningStockItem::where('product_variant_id', $variant->id)
-                    ->whereHas('entry', fn ($query) => $query->where('branch_id', $current->branch_id))
-                    ->lockForUpdate()->get();
-                $item = $items->first();
-                if (! $item) {
-                    $this->fail('هذا رصيد قديم بلا مستند افتتاحي موثّق. راجع جاهزية المخزون؛ لا تُعدّل الكمية والتكلفة كأرقام مستقلة.');
-                }
-                if ($current->value_minor === null) {
-                    $this->fail('اعتمد مراجعة قيمة الرصيد القديم قبل تصحيح مستنده.');
-                }
-                $oldValue = (int) $current->value_minor;
-                $entry = null;
-                if ($movements->isNotEmpty() || $items->isNotEmpty()) {
-                    if ($items->count() !== 1 || $movements->count() !== 1 || ! $item) {
-                        $this->fail('الصنف لديه حركات أو مستندات أخرى. التصحيح المباشر متاح فقط أثناء إدخال البضاعة.');
-                    }
-                    $movement = $movements->first();
-                    if ($movement->movement_type !== 'opening_stock' || $movement->source_type !== $item->getMorphClass() || $movement->source_id !== $item->id) {
-                        $this->fail('لا يمكن تعديل أو حذف صنف عليه حركة بيع أو شراء أو حركة مخزون لاحقة.');
-                    }
-                    $entry = OpeningStockEntry::whereKey($item->opening_stock_entry_id)->lockForUpdate()->firstOrFail();
-                    app(OpeningFinancialSupport::class)->assertValid($entry, true);
-                    OperationContext::date($branch, $entry->opening_date?->toDateString() ?? substr((string) $entry->created_at, 0, 10), false);
-                    if ($entry->status !== 'approved' || $current->average_cost === null || (int) $current->quantity !== $item->quantity
-                        || DecimalAmount::minorUnits((string) $current->average_cost) !== DecimalAmount::minorUnits($item->unit_cost)
-                        || $movement->quantity_change !== $item->quantity
-                        || $movement->unit_cost === null || DecimalAmount::minorUnits($movement->unit_cost) !== DecimalAmount::minorUnits($item->unit_cost)
-                        || $oldValue !== Money::minor($item->line_total)
-                        || $movement->value_change_minor === null || (int) $movement->value_change_minor !== $oldValue) {
-                        $this->fail('الرصيد الحالي لا يطابق المستند الافتتاحي. راجع السجل قبل إجراء التصحيح.');
-                    }
-                }
+                [$movements, $item, $entry, $oldValue] = $this->source($current, $branch, true);
                 $before = InventoryState::snapshot($current, $variant, $product) + [
                     'product_name' => $product->name, 'product_code' => $product->code,
                     'opening_movement' => $movements->first()?->only(['id', 'movement_type', 'quantity_change', 'unit_cost', 'source_type', 'source_id', 'created_at']),

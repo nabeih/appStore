@@ -163,6 +163,7 @@
             ${[['qty', 'الكمية'], ['cost', 'تكلفة الوحدة'], ['price', 'سعر البيع'], ...(config.canManageMinimum ? [['minimum_selling_price', 'الحد الأدنى']] : [])].map(([field, label]) => `<td data-label="${label}"><input type="number" aria-label="${label} السطر ${index + 1}" min="${field === 'qty' ? 1 : 0}" max="${field === 'qty' ? 1000000 : 9999999.99}" step="${field === 'qty' ? 1 : '0.01'}" data-id="${row.id}" data-field="${field}" value="${escape(row[field])}"></td>`).join('')}
             <td><button type="button" class="btn btn-outline btn-sm" data-remove="${row.id}" aria-label="حذف السطر ${index + 1}">✕</button></td>
         </tr>`).join('');
+        if (!rows.length) body.innerHTML = '<tr data-opening-empty><td colspan="12">لا توجد أصناف مدخلة <button type="button" class="btn btn-outline" data-add-empty-row>إضافة سطر</button></td></tr>';
         el('quickStockRowCount').textContent = `${rows.filter(hasData).length} سطر من أصل ${rows.length} — الحد الأقصى 300`;
         refreshColorImages();
     }
@@ -202,10 +203,10 @@
         el('quickStockRowCount').textContent = `${rows.filter(hasData).length} سطر — الحد الأقصى 300`;
     });
     body.addEventListener('click', event => {
+        if (event.target.closest('[data-add-empty-row]')) { el('osAddRow').click(); return; }
         const remove = event.target.closest('[data-remove]');
         if (!remove) return;
         rows = rows.filter(row => row.id !== remove.dataset.remove);
-        if (!rows.length) rows = [blank()];
         invalidate(); render();
     });
     ['openingStockBranch', 'openingStockDate', 'openingStockNotes'].forEach(id => el(id).addEventListener('input', invalidate));

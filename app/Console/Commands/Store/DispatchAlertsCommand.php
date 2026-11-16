@@ -13,6 +13,7 @@ class DispatchAlertsCommand extends Command
 
     public function handle(DispatchAppAlerts $alerts): int
     {
+        $alerts->scan();
         $this->info('Dispatched committed events: '.$alerts->pending());
 
         return self::SUCCESS;

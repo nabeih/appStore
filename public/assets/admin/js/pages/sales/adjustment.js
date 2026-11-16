@@ -2,7 +2,7 @@
     'use strict';
     const config = JSON.parse(document.getElementById('adjustment-config').textContent), ui = SalesUI, el = id => document.getElementById(id), form = el('adjustment-form');
     const exchange = config.mode === 'exchange', clientUuid = ui.uuid(), rows = [];
-    let customerId = config.customerId, timer, request, version = 0, reviewed = false, busy = false, dirty = false, searchTimer, searchRequest, customerTimer, customerRequest;
+    let customerId = config.customerId, timer, request, version = 0, reviewed = false, busy = false, dirty = false, searchTimer, searchRequest, customerTimer, customerRequest, minimumWarning;
     function payment(container, initial = {}) {
         if (container.children.length >= 10) return;
         const row = ui.paymentRow(config.accounts,initial); row.addEventListener('removed',invalidate); container.append(row);
@@ -20,11 +20,12 @@
         let payments = ui.payments(el('exchange-payments'));
         if (el('exchange-settlement-mode').value === 'credit') payments = payments.filter(part => part.amount !== null);
         return { ...common, return_rows: returns, rows: rows.map(row => ({ product_variant_id: row.product_variant_id, quantity: row.quantity,
-            unit_price: row.unit_price, discount: { type: 'amount', value: row.discount || '0' } })), settlement_mode: el('exchange-settlement-mode').value, payments, below_minimum_confirmed: !!el('exchange-minimum-confirm')?.checked };
+            unit_price: row.unit_price, discount: { type: 'amount', value: row.discount || '0' } })), settlement_mode: el('exchange-settlement-mode').value, payments, below_minimum_confirmed: !!el('exchange-minimum-confirm')?.checked,
+            below_minimum_confirmation: el('exchange-minimum-confirm')?.checked ? minimumWarning?.token : null };
     }
     function invalidate() {
         if (el('exchange-minimum-confirm')) el('exchange-minimum-confirm').checked = false;
-        reviewed = false; dirty = true; version++; clearTimeout(timer); request?.abort(); el('adjustment-submit').disabled = true;
+        minimumWarning = null; reviewed = false; dirty = true; version++; clearTimeout(timer); request?.abort(); el('adjustment-submit').disabled = true;
         el('adjustment-summary').replaceChildren(); el('adjustment-preview-status').textContent = 'جارٍ مراجعة التسوية...';
         if (!busy) timer = setTimeout(preview,400);
     }
@@ -38,7 +39,13 @@
             const result = await ui.request(config.previewUrl,{ method: 'POST', data: payload(), signal: controller.signal }); if (current !== version) return;
             const container = el('adjustment-summary'); container.replaceChildren();
             Object.entries(result).forEach(([key,value]) => { if (!labels[key]) return; const cell = ui.element('div','',labels[key]); cell.append(ui.element('strong','',value+' ₪')); container.append(cell); });
-            reviewed = true; el('adjustment-submit').disabled = busy; el('adjustment-preview-status').textContent = 'راجع التسوية ثم أكد استلام القطع وتسليم البدائل عند وجودها.';
+            minimumWarning = result.minimum_warning;
+            if (minimumWarning) {
+                const warning = ui.element('p', 'sale-muted', 'بعض الأصناف أقل من الحد الأدنى. أكد التجاوز بعد مراجعة الأصناف:');
+                minimumWarning.items.forEach(item => warning.append(ui.element('span', '', ` ${item.name} — ${item.color} / ${item.size} — صافي القطعة ${item.effective_unit}، الحد ${item.minimum_unit}.`)));
+                container.append(warning);
+            }
+            reviewed = true; el('adjustment-submit').disabled = busy || (!!minimumWarning && !el('exchange-minimum-confirm')?.checked); el('adjustment-preview-status').textContent = 'راجع التسوية ثم أكد استلام القطع وتسليم البدائل عند وجودها.';
         } catch (failure) { if (failure.name !== 'AbortError' && current === version) el('adjustment-preview-status').textContent = failure.message; }
     }
     el('adjustment-add-refund').addEventListener('click',() => { payment(el('adjustment-refunds')); invalidate(); });

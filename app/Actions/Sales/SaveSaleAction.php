@@ -35,7 +35,8 @@ class SaveSaleAction
             $attributes['cost_minor'] = null;
             $attributes += ['request_hash' => $hash, 'payment_instructions' => ['payments' => $data['payments'] ?? [], 'payment_mode' => $data['payment_mode'] ?? 'paid'],
                 'discount_instructions' => ['discount' => $data['discount'] ?? [], 'reason' => $data['reason'] ?? null,
-                    'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false)], 'notes' => $data['notes'] ?? null];
+                    'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false),
+                    'below_minimum_confirmation' => $data['below_minimum_confirmation'] ?? null], 'notes' => $data['notes'] ?? null];
             if ($invoice) {
                 OperationContext::branch($actor, $invoice->branch_id, 'sales.sell');
                 $attributes['version'] = $invoice->version + 1;

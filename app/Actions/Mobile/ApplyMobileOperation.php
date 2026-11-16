@@ -169,7 +169,7 @@ class ApplyMobileOperation
         $allowed = match ($type) {
             'opening_stock.create' => ['opening_date', 'notes', 'rows', 'progressive_opening'],
             'purchase.create' => ['supplier_id', 'invoice_date', 'supplier_invoice_number', 'notes', 'initial_payment', 'payment_method', 'payment_details', 'rows'],
-            'sale.create' => ['customer_id', 'invoice_date', 'payment_mode', 'payments', 'discount', 'reason', 'notes', 'rows', 'below_minimum_confirmed'],
+            'sale.create' => ['customer_id', 'invoice_date', 'payment_mode', 'payments', 'discount', 'reason', 'notes', 'rows', 'below_minimum_confirmed', 'below_minimum_confirmation'],
         };
         $this->keys($payload, $allowed);
         abort_unless(isset($payload['rows']) && is_array($payload['rows']) && array_is_list($payload['rows']) && count($payload['rows']) > 0 && count($payload['rows']) <= 300, 422, 'بنود المستند غير صالحة.');
