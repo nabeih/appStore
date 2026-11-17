@@ -69,7 +69,7 @@ class ManageStoreContent
                         $data[$field] = empty($data[$field]) ? null : array_values(array_unique(array_map('intval', $data[$field])));
                     }
                 }
-                foreach (['is_active', 'is_open', 'is_published', 'minimum_inclusive'] as $field) {
+                foreach (['is_active', 'is_open', 'announcement_visible', 'is_published', 'minimum_inclusive'] as $field) {
                     if (in_array($field, $model->getFillable(), true)) {
                         $data[$field] = (bool) ($data[$field] ?? false);
                     }

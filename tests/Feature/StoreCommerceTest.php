@@ -145,6 +145,20 @@ class StoreCommerceTest extends SalesTestCase
         $this->get(route('store.admin.orders.show', $order))->assertOk();
     }
 
+    public function test_announcement_text_and_visibility_are_managed_from_site_settings(): void
+    {
+        $this->get(route('store.home'))->assertOk()->assertSee('اختيارات تشبهك، وتفاصيل تحبّها')->assertSee('shop-announcement-track', false);
+        $settings = ['name' => 'متجرنا', 'branch_id' => $this->branchId, 'policy' => $this->settings->policy, 'is_open' => '1'];
+        $this->put(route('store.admin.content.update', ['settings', 1]), $settings + ['announcement' => "شحن مجاني فوق 200\r\n\r\n  <b>خصم</b> الموسم  ", 'announcement_visible' => '1'])->assertRedirect();
+        $this->assertSame(['شحن مجاني فوق 200', '<b>خصم</b> الموسم'], $this->settings->fresh()->announcementPhrases());
+        $this->get(route('store.home'))->assertOk()->assertSee('شحن مجاني فوق 200')->assertSee('&lt;b&gt;خصم&lt;/b&gt; الموسم', false)->assertDontSee('اختيارات تشبهك، وتفاصيل تحبّها');
+        $this->get(route('store.admin.content.edit', ['settings', 1]))->assertOk()->assertSee('name="announcement"', false)->assertSee('شحن مجاني فوق 200');
+        $this->put(route('store.admin.content.update', ['settings', 1]), $settings + ['announcement_visible' => '0'])->assertRedirect();
+        $this->assertFalse($this->settings->fresh()->announcement_visible);
+        $this->get(route('store.home'))->assertOk()->assertDontSee('shop-announcement-track', false);
+        $this->put(route('store.admin.content.update', ['settings', 1]), $settings + ['announcement' => str_repeat('أ', 501)])->assertSessionHasErrors('announcement');
+    }
+
     public function test_new_order_has_no_reservation_or_financial_effect_and_replay_is_once(): void
     {
         $before = [DB::table('journal_entries')->count(), DB::table('stock_movements')->count()];

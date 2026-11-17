@@ -38,7 +38,24 @@
 </div>
 </div>
 </header>
-<div class="shop-announcement">اختيارات تشبهك، وتفاصيل تحبّها <span aria-hidden="true">✦</span> اكتشف التشكيلة</div>
+@if($settings->showsAnnouncement())
+@php
+    $announcementPhrases = $settings->announcementPhrases();
+    $announcementRepeat = max(2, min(30, (int) ceil(270 / max(1, mb_strlen(implode('', $announcementPhrases)) + 3 * count($announcementPhrases)))));
+@endphp
+<div class="shop-announcement">
+    <span class="sr-only">{{ implode('. ', $announcementPhrases) }}</span>
+    <div class="shop-announcement-track" aria-hidden="true">
+        @for ($group = 0; $group < 2; $group++)
+            <div class="shop-announcement-group">
+                @for ($item = 0; $item < $announcementRepeat; $item++)
+                    <div class="shop-announcement-item">@foreach ($announcementPhrases as $phrase){{ $phrase }} <span>✦</span> @endforeach</div>
+                @endfor
+            </div>
+        @endfor
+    </div>
+</div>
+@endif
 <dialog class="shop-menu-dialog" data-menu-dialog aria-label="القائمة الرئيسية"><header><strong>{{ $settings->name }}</strong><button class="shop-icon-button" type="button" data-close-dialog aria-label="إغلاق القائمة">@include('store.public.icon',['name'=>'close'])</button></header><nav><a href="{{ route('store.home') }}">الصفحة الرئيسية</a><details open><summary>تسوّق الأقسام</summary>@forelse($sections as $section)<a href="{{ route('store.section',$section->slug) }}">{{ $section->name }}</a>@empty<p>تشكيلتنا الجديدة قريبًا</p>@endforelse</details><a href="{{ route('store.checkout') }}">حقيبة التسوق</a><a href="#store-contact" data-close-menu>التواصل معنا</a></nav></dialog>
 <main class="live-container" id="store-content">@yield('content')</main>
 <footer class="shop-footer" id="store-contact">

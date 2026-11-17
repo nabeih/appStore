@@ -27,7 +27,7 @@ class StoreContentRequest extends FormRequest
 
         return match ($type) {
             'settings' => $seo + ['name' => $name, 'phone' => ['nullable', 'string', 'max:40'], 'branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('is_active', true)],
-                'policy' => ['required', 'string', 'min:20', 'max:15000'], 'is_open' => ['sometimes', 'boolean']],
+                'policy' => ['required', 'string', 'min:20', 'max:15000'], 'announcement' => ['nullable', 'string', 'max:500'], 'announcement_visible' => ['sometimes', 'boolean'], 'is_open' => ['sometimes', 'boolean']],
             'products' => $seo + ['product_id' => ['required', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at'), Rule::unique($table, 'product_id')->ignore($id)],
                 'store_section_id' => ['nullable', 'integer', 'exists:store_sections,id'], 'slug' => $slug, 'badge' => ['nullable', 'string', 'max:80'],
                 'description' => $base['description'], 'sort_order' => $base['sort_order'], 'is_published' => ['sometimes', 'boolean']],
