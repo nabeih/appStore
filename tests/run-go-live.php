@@ -23,7 +23,7 @@ $app = new Application($root);
 $connection = $app['config']->get('database.connections.mysql');
 $database = $connection['database'];
 if ($app->configurationIsCached() || $app['config']->get('database.default') !== 'mysql'
-    || ! in_array($database, ['appstore_golive_20261031_tests', 'appstore_golive_20261031_snapshot'], true)
+    || ! in_array($database, ['appstore_golive_20261031_tests', 'appstore_golive_20261031_snapshot', 'appstore_account_status_20261118_tests'], true)
     || ! in_array($connection['host'], ['127.0.0.1', 'localhost'], true) || (string) $connection['port'] !== '3306'
     || ! empty($connection['url']) || isset($connection['read']) || isset($connection['write'])) {
     throw new LogicException('Refusing any database except the approved loopback go-live sandboxes.');

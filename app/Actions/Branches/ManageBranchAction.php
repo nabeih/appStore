@@ -42,7 +42,7 @@ class ManageBranchAction
                 return $current;
             });
         } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages(['name' => 'اسم الفرع مستخدم بالفعل؛ اختر اسمًا آخر.']);
+            throw ValidationException::withMessages(['name' => 'اسم الفرع مستخدم بالفعل؛ ابحث عنه في قائمة الفروع لتعديله، أو اختر اسمًا آخر للفرع الجديد.']);
         }
     }
 

@@ -56,7 +56,8 @@
                         <th>المرجع</th>
                         <th>رصيد الدفتر</th>
                         <th>رصيد البداية</th>
-                        <th>تجميد الحساب </th>
+                        <th>الحالة</th>
+                        <th>إدارة الحالة</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,6 +74,8 @@
                                 @if (isset($accountOpenings[$account->id]) && $accountOpenings[$account->id]->count() === 1)
                                     <span>{{ \App\Support\Sales\Money::format((int) $accountOpenings[$account->id]->first()->lines->where('financial_account_id', $account->id)->sum('debit_minor')) }}
                                         ₪</span>
+                                @elseif(!$account->is_active)
+                                    <span class="sale-muted">فعّل الحساب قبل اعتماد رصيد البداية.</span>
                                 @elseif(!$account->lines_count)
                                     <details>
                                         <summary>اعتماد رصيد بداية قبل أول حركة</summary>
@@ -89,7 +92,29 @@
                                 </details>@else<span class="sale-muted">بدأت الحركات؛ لا يُغيّر رصيد البداية.</span>
                                 @endif
                             </td>
-                            <td>ايقاف </td>
+                            <td data-label="الحالة">{{ $account->is_active ? 'نشط' : 'مجمّد' }}</td>
+                            <td data-label="إدارة الحالة">
+                                @can('sales.manage_accounts')
+                                    @if($account->is_posting && $account->branch_id)
+                                        <details>
+                                            <summary class="btn btn-outline">{{ $account->is_active ? 'تجميد الحساب' : 'تفعيل الحساب' }}</summary>
+                                            <p>التجميد يمنع الحركات المالية الجديدة، ويحافظ على الرصيد والقيود السابقة. يلزم التفعيل قبل أي حركة جديدة أو عكس قيد.</p>
+                                            <form action="{{ route('finance.accounts.status', $account) }}" data-simple-form>
+                                                @csrf
+                                                @include('sales.partials.feedback')
+                                                <fieldset>
+                                                    <input type="hidden" name="is_active" value="{{ $account->is_active ? '0' : '1' }}">
+                                                    <label>سبب الإجراء<input name="reason" required minlength="3" maxlength="500"></label>
+                                                    <label class="sale-check"><input type="checkbox" name="confirmed" value="1" required> أؤكد {{ $account->is_active ? 'تجميد' : 'تفعيل' }} هذا الحساب.</label>
+                                                    <button type="submit" class="btn btn-outline">{{ $account->is_active ? 'تجميد الحساب' : 'تفعيل الحساب' }}</button>
+                                                </fieldset>
+                                            </form>
+                                        </details>
+                                    @else
+                                        <span class="sale-muted">حساب محمي</span>
+                                    @endif
+                                @endcan
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

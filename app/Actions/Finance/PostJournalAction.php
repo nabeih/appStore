@@ -35,7 +35,7 @@ class PostJournalAction
         $byId = $resolved->keyBy('id');
         foreach ($lines as $line) {
             $account = is_int($line['account']) ? $byId->get($line['account']) : $accounts->get($line['account']);
-            if (! $account || $account->is_posting === false || (! $account->is_active && $reversalOf === null)
+            if (! $account || $account->is_posting === false || ! $account->is_active
                 || ($account->branch_id !== null && (int) $account->branch_id !== $branchId)) {
                 throw ValidationException::withMessages(['account' => 'الترحيل يتطلب حسابًا تفصيليًا فعالًا ضمن فرع المستند؛ الحساب التجميعي لا يستقبل قيودًا.']);
             }

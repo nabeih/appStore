@@ -11,12 +11,14 @@ use App\Models\User;
 use App\Observers\Search\ProductImageEmbeddingObserver;
 use App\Support\Access\AccessPermissions;
 use App\Support\Access\ActivePasswordUserProvider;
+use App\Support\Guidance\ValidationMessages;
 use App\Support\Sales\SalesAccess;
 use App\Support\Search\EmbeddingExecutionContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
@@ -42,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Lang::addLines(ValidationMessages::lines(), config('app.locale'));
         $setupLimitResponse = fn (Request $request, array $headers): Response => $request->expectsJson()
             ? response()->json(['message' => 'محاولات إعداد كثيرة. انتظر قليلًا ثم حاول مجددًا.'], 429, $headers)
             : response()->view('auth.setup', ['prepared' => false, 'expiresAt' => null, 'rateLimited' => true], 429, $headers);

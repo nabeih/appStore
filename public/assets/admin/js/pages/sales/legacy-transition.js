@@ -15,6 +15,7 @@
             }, body: JSON.stringify(values),
         });
         const body = await response.json();
+        if (!response.ok && body.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: body.guidance }));
         if (!response.ok) throw new Error(Object.values(body.errors || {}).flat().join(' — ') || body.message || 'تعذر إتمام الطلب؛ أعد المعاينة للتحقق من النتيجة.');
         return body;
     };

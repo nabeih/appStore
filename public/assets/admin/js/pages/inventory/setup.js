@@ -128,6 +128,7 @@
             });
             result = await response.json().catch(() => ({}));
             if (!response.ok) {
+                if (result.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: result.guidance }));
                 const message = response.status === 403 ? 'انتهت مرحلة التعديل المباشر للمخزون.' : response.status === 419 ? 'انتهت صلاحية الصفحة. حدّث الصفحة ثم أعد المحاولة.' : response.status === 404 ? 'السطر لم يعد موجودًا. حدّث الجدول.' : Object.values(result.errors || {}).flat().join('\n') || result.message || 'تعذر حفظ التصحيح.';
                 throw new Error(message);
             }

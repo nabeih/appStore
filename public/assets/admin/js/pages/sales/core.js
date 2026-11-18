@@ -17,15 +17,17 @@
             headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf, ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...init.headers } });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
+            if (result.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: result.guidance }));
             const message = response.status === 419 || response.status === 401 ? 'انتهت الجلسة. افتح تسجيل الدخول في تبويب آخر ثم أعد المحاولة مع إبقاء هذه الصفحة.'
                 : Object.entries(result.errors || {}).filter(([key]) => key !== 'minimum_quote').flatMap(([,value]) => value).join('\n') || result.message || 'تعذر إكمال الطلب. احتفظ بالصفحة وأعد المحاولة.';
-            throw Object.assign(new Error(message), { fields: result.errors || {}, status: response.status });
+            throw Object.assign(new Error(message), { fields: result.errors || {}, status: response.status, guidance: result.guidance || null });
         }
         return result;
     }
     function error(root, message) {
         const box = root.querySelector('[data-sales-errors]'); if (!box) return;
         box.textContent = message instanceof Error ? message.message : message || ''; box.hidden = !message;
+        if (message) window.StoreAssistant?.attach(box, message.guidance);
         if (message) box.focus();
     }
     function paymentRow(accounts, initial = {}) {

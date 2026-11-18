@@ -6,6 +6,7 @@ use App\Actions\Inventory\ProgressiveOperation;
 use App\Models\AuditEvent;
 use App\Models\Branch;
 use App\Models\User;
+use App\Support\Guidance\GuidanceException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -42,7 +43,7 @@ class OperationContext
             throw ValidationException::withMessages(['transaction_date' => 'العملية تُرحّل بتاريخ اليوم؛ التأريخ الرجعي يحتاج مسار مراجعة مستقل.']);
         }
         if ($branch->financial_closed_through && $date <= substr((string) $branch->financial_closed_through, 0, 10)) {
-            throw ValidationException::withMessages(['transaction_date' => 'الفترة المالية مغلقة لهذا التاريخ.']);
+            throw GuidanceException::forCode('finance.closed_period', 'transaction_date', 'الفترة المالية مغلقة لهذا التاريخ. راجع التاريخ والفترة مع المسؤول المالي قبل المتابعة؛ لا تغيّر التاريخ لتجاوز الإغلاق.');
         }
 
         return $date;
@@ -55,7 +56,7 @@ class OperationContext
 
     public static function ready(): void
     {
-        abort_unless(DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists(), 409, 'يلزم تهيئة صلاحيات المبيعات وحسابات الاستلام أولًا.');
+        abort_unless(DB::table('sales_controls')->where('id', 1)->whereNotNull('activated_at')->exists(), 409, 'يلزم تهيئة صلاحيات المبيعات وحسابات الاستلام أولًا. يفتح المالك «حالة تشغيل المحل»، ويكمل إعداد المبيعات ثم يراجع حساب القبض وجاهزية الفرع.');
     }
 
     public static function hash(array $data): string

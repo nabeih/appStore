@@ -17,6 +17,7 @@ use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Access\AccessPermissions;
+use App\Support\Guidance\GuidanceException;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use Carbon\CarbonImmutable;
@@ -167,7 +168,7 @@ class ProgressiveOperation
             return;
         }
         if (! $this->activation($branch->id)) {
-            throw ValidationException::withMessages(['setup' => 'البيع ممنوع: فترة الإعداد الافتتاحي ما زالت مفتوحة (إعداد فقط). يلزم اعتماد التشغيل التدريجي أو إنهاء الإعداد من المالك.']);
+            throw GuidanceException::forCode('sales.branch_setup', 'setup', 'البيع ممنوع: فترة الإعداد الافتتاحي ما زالت مفتوحة (إعداد فقط). يراجع المالك «حالة تشغيل المحل» والأصناف وحساب القبض، ثم يعتمد التشغيل التدريجي أو ينهي الإعداد بعد استيفاء المتطلبات.');
         }
         if ($blockers = $this->sharedBlockers()) {
             $this->fail(['الجاهزية المركزية غير مكتملة؛ يلزم مراجعة المالك.']);

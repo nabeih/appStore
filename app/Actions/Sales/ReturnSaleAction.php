@@ -25,7 +25,7 @@ class ReturnSaleAction
     {
         $branch = OperationContext::branch($actor, $invoice->branch_id, $exchange ? 'sales.exchange' : 'sales.return');
         $date = OperationContext::date($branch, $data['transaction_date'] ?? null);
-        abort_unless($invoice->status === 'approved', 409, 'المرتجع يحتاج فاتورة بيع معتمدة.');
+        abort_unless($invoice->status === 'approved', 409, 'المرتجع يحتاج فاتورة بيع معتمدة. افتح الفاتورة الأصلية من فواتير المبيعات وراجع حالتها؛ لا تستخدم تصحيح المخزون لإرجاع قطعة مباعة.');
         app(ProgressiveOperation::class)->assertOriginalSale($invoice);
         $items = $invoice->items()->orderBy('id')->get()->keyBy('id');
         $rows = [];

@@ -12,6 +12,7 @@ use App\Models\JournalEntry;
 use App\Models\OpeningStockEntry;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Guidance\GuidanceException;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use Illuminate\Support\Collection;
@@ -122,7 +123,7 @@ class ManageOpeningDraftAction
             $branch = OperationContext::branch($actor, $entry->branch_id, 'inventory.correct_setup');
             $branch = Branch::whereKey($branch->id)->lockForUpdate()->firstOrFail();
             if ($branch->opening_stock_closed_at) {
-                throw ValidationException::withMessages(['opening' => 'أُغلق إعداد أول المدة.']);
+                throw GuidanceException::forCode('opening.closed', 'opening', 'أُغلق إعداد أول المدة لهذا الفرع. سجل البضاعة الافتتاحية متاح للعرض والطباعة؛ راجع المستند واستخدم تصحيح بند إن كان متاحًا ومسموحًا، بدل تعديل الإدخال القديم.');
             }
             $current = OpeningStockEntry::whereKey($entry->id)->lockForUpdate()->firstOrFail();
             abort_unless($current->status === 'draft' && $current->version === (int) $data['version'], 409, 'المسودة تغيرت أو رُحّلت.');

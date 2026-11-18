@@ -46,4 +46,14 @@ class FinancialAccountController extends Controller
 
         return response()->json(['url' => route('finance.accounts.index'), 'message' => 'اعتُمد رصيد البداية.']);
     }
+
+    public function status(Request $request, FinancialAccount $account, ManageFinancialAccountsAction $manage): JsonResponse
+    {
+        $data = $request->validate(['is_active' => ['required', 'boolean'], 'confirmed' => ['required', 'accepted'],
+            'reason' => ['required', 'string', 'min:3', 'max:500']]);
+        $active = (bool) $data['is_active'];
+        $manage->setActive($account, $active, $data['reason'], $request->user());
+
+        return response()->json(['url' => route('finance.accounts.index'), 'message' => $active ? 'تم تفعيل الحساب.' : 'تم تجميد الحساب؛ الرصيد والقيود السابقة محفوظة.']);
+    }
 }

@@ -7,6 +7,7 @@ use App\Actions\Store\StoreContext;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
 use App\Models\SaleInvoice;
+use App\Support\Guidance\OwnerOnboarding;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
 use Illuminate\Http\Request;
@@ -42,6 +43,9 @@ class DashboardController extends Controller
             $stats[] = ['label' => 'طلبات الموقع الجديدة', 'value' => app(StoreContext::class)->orders($actor)->where('status', 'new')->count(), 'icon' => 'fa-bag-shopping'];
         }
 
-        return view('dashboard.index', compact('stats', 'recent', 'valuation', 'allowedBranches', 'branchId'));
+        $onboardingBranch = $allowedBranches->firstWhere('id', $branchId ?? $actor->branch_id) ?? ($branchId === null ? $allowedBranches->first() : null);
+        $onboarding = app(OwnerOnboarding::class)->build($actor, $onboardingBranch);
+
+        return view('dashboard.index', compact('stats', 'recent', 'valuation', 'allowedBranches', 'branchId', 'onboarding'));
     }
 }

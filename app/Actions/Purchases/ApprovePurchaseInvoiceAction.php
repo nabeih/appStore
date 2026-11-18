@@ -12,6 +12,7 @@ use App\Models\PurchaseInvoice;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Support\Guidance\GuidanceException;
 use App\Support\Inventory\OpeningStock\DecimalAmount;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
@@ -39,11 +40,11 @@ class ApprovePurchaseInvoiceAction
             Branch::whereKey($current->branch_id)->lockForUpdate()->firstOrFail();
             $supplier = Supplier::whereKey($current->supplier_id)->lockForUpdate()->first();
             if (! $supplier) {
-                throw ValidationException::withMessages(['supplier_id' => 'المورد مؤرشف. استعده قبل اعتماد الفاتورة.']);
+                throw GuidanceException::forCode('purchases.supplier_archived', 'supplier_id', 'المورد مؤرشف. افتح صفحة المورد وراجع حالته، ثم استعده إن كنت مخولًا قبل اعتماد الفاتورة.');
             }
             app(ProgressiveOperation::class)->assertParty($current->branch_id, 'supplier', $supplier->id);
             if ($current->supplier_invoice_number && PurchaseInvoice::where('supplier_id', $supplier->id)->where('supplier_invoice_number', $current->supplier_invoice_number)->where('status', 'approved')->where('id', '!=', $current->id)->exists()) {
-                throw ValidationException::withMessages(['supplier_invoice_number' => 'رقم فاتورة المورد مسجل مسبقًا في فاتورة معتمدة.']);
+                throw ValidationException::withMessages(['supplier_invoice_number' => 'رقم فاتورة المورد مسجل مسبقًا في فاتورة معتمدة. ابحث عنه في فواتير الشراء وتحقق من عدم إدخال الفاتورة نفسها مرتين قبل المتابعة.']);
             }
             $items = $current->items()->orderBy('product_variant_id')->lockForUpdate()->get();
             $plan = $this->prepare->execute(['supplier_id' => $current->supplier_id, 'branch_id' => $current->branch_id, 'invoice_date' => $current->invoice_date->toDateString(),

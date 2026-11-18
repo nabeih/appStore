@@ -44,6 +44,7 @@ class SidebarNavigation
                 ['sales.reports', 'تقارير المبيعات', 'fa-chart-line', ['sales.reports', 'sales.view_cost', 'sales.view'], ['sales.reports']],
             ]],
             ['account', 'الحساب', 'fa-user-circle', [
+                ['assistant.index', 'مساعد المتجر', 'fa-circle-question', [], ['assistant.*']],
                 ['profile.show', 'ملفي الشخصي وكلمة المرور', 'fa-user-circle', [], ['profile.*']],
             ]],
         ];

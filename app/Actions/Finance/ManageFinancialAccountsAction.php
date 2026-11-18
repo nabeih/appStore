@@ -8,6 +8,7 @@ use App\Models\JournalEntry;
 use App\Models\User;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +27,26 @@ class ManageFinancialAccountsAction
         foreach (self::SYSTEM as $code => $name) {
             FinancialAccount::firstOrCreate(['code' => $code], ['name' => $name, 'type' => 'system']);
         }
+    }
+
+    public function setActive(FinancialAccount $account, bool $active, string $reason, User $actor): void
+    {
+        Gate::forUser($actor)->authorize('sales.manage_accounts');
+        OperationContext::run(function () use ($account, $active, $reason, $actor): void {
+            $current = FinancialAccount::whereKey($account->id)->lockForUpdate()->firstOrFail();
+            abort_unless($current->branch_id, 422, 'الحسابات النظامية والعامة لا تُجمّد من حسابات القبض.');
+            OperationContext::branch($actor, (int) $current->branch_id, 'sales.manage_accounts', false);
+            if (! in_array($current->type, ['cash', 'bank', 'wallet'], true) || ! $current->is_posting || $current->children()->exists()) {
+                throw ValidationException::withMessages(['account' => 'التجميد والتفعيل متاحان لحسابات القبض التفصيلية فقط؛ الحسابات النظامية والتجميعية محمية.']);
+            }
+            if ($current->is_active === $active) {
+                return;
+            }
+            $before = $current->is_active;
+            $current->update(['is_active' => $active]);
+            OperationContext::audit($current, $actor, $active ? 'account.activated' : 'account.frozen', $reason,
+                ['before_active' => $before, 'after_active' => $active]);
+        });
     }
 
     public function execute(array $data, User $actor): FinancialAccount
@@ -118,6 +139,9 @@ class ManageFinancialAccountsAction
                 abort_unless($existingAmount === Money::minor($data['opening_balance']), 409, $current->name.' #'.$current->id.': رصيد البداية المعتمد '.Money::format($existingAmount).' ₪؛ لا يمكن استبداله بمبلغ مختلف.');
 
                 return;
+            }
+            if (! $current->is_active || ! $current->is_posting) {
+                throw ValidationException::withMessages(['account' => 'الحساب مجمّد أو تجميعي؛ فعّل حساب القبض التفصيلي قبل اعتماد رصيد البداية، بما فيه الصفر.']);
             }
             if (! in_array($current->type, ['cash', 'bank', 'wallet'], true) || $current->lines()->exists()) {
                 throw ValidationException::withMessages(['account' => 'رصيد البداية يحدد قبل أول حركة فقط. بعد التشغيل استخدم مستندًا ماليًا مناسبًا.']);

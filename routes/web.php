@@ -23,6 +23,7 @@ use App\Http\Controllers\Web\Finance\ExpenseController;
 use App\Http\Controllers\Web\Finance\FinanceReviewController;
 use App\Http\Controllers\Web\Finance\FinancialAccountController;
 use App\Http\Controllers\Web\Finance\TreasuryController;
+use App\Http\Controllers\Web\Guidance\AssistantController;
 use App\Http\Controllers\Web\Inventory\DocumentCorrectionController;
 use App\Http\Controllers\Web\Inventory\InventoryController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockCatalogController;
@@ -60,6 +61,8 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->group(function () {
+    Route::get('/help', [AssistantController::class, 'index'])->name('assistant.index');
+    Route::post('/help/ask', [AssistantController::class, 'ask'])->middleware('throttle:30,1,store-assistant')->name('assistant.ask');
     Route::get('/onboarding/branch', [FirstBranchController::class, 'create'])->name('onboarding.branch');
     Route::post('/onboarding/branch', [FirstBranchController::class, 'store'])->middleware('throttle:10,1')->name('onboarding.branch.store');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
@@ -163,6 +166,7 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::post('/finance/purchases/{invoice}/reverse', [FinanceReviewController::class, 'reversePurchase'])->middleware('can:finance.reverse')->whereNumber('invoice')->name('finance.purchases.reverse');
     Route::get('/finance/accounts', [FinancialAccountController::class, 'index'])->middleware('can:sales.manage_accounts')->name('finance.accounts.index');
     Route::post('/finance/accounts/{account}/opening', [FinancialAccountController::class, 'opening'])->whereNumber('account')->middleware('can:sales.manage_accounts')->name('finance.accounts.opening');
+    Route::post('/finance/accounts/{account}/status', [FinancialAccountController::class, 'status'])->whereNumber('account')->middleware('can:sales.manage_accounts')->name('finance.accounts.status');
     Route::post('/finance/accounts', [FinancialAccountController::class, 'store'])->name('finance.accounts.store');
     Route::get('/inventory/readiness/export', [InventoryReviewController::class, 'export'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.export');
     Route::get('/inventory/readiness', [InventoryReviewController::class, 'index'])->middleware(['can:inventory.valuation_review', 'can:sales.view_cost'])->name('inventory.review.index');

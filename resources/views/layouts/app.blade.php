@@ -28,6 +28,7 @@
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/store/commerce.css') }}">
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/css/mobile-documents.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/admin/css/guidance.css') }}">
 </head>
 
 <body class="laravel-admin">
@@ -47,6 +48,8 @@
 
             @include('partials.topbar')
 
+            @include('guidance.widget')
+
             @yield('content')
 
         </main>
@@ -58,6 +61,7 @@
 
     <script src="{{ asset('assets/admin/js/pages/auth/session.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/layout.js') }}" defer></script>
+    <script src="{{ asset('assets/admin/js/guidance.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/navigation.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/search.js') }}" defer></script>
     <script src="{{ asset('assets/admin/js/pages/catalog/fabric-swatches.js') }}" defer></script>

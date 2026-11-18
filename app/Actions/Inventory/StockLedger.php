@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Inventory;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Guidance\GuidanceException;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use Brick\Math\BigDecimal;
@@ -49,20 +50,20 @@ class StockLedger
     public function value(Inventory $stock): int
     {
         if (array_key_exists('readiness_quantity', $stock->getAttributes()) && (int) $stock->readiness_quantity !== (int) $stock->quantity) {
-            throw ValidationException::withMessages(['rows' => 'كمية هذا الصنف لا تطابق سجل الحركات. راجع جاهزية المخزون؛ بقية الأصناف السليمة متاحة.']);
+            throw GuidanceException::forCode('stock.quantity_mismatch', 'rows', 'كمية هذا الصنف لا تطابق سجل الحركات. افتح مراجعة وجاهزية المخزون لمراجعة مستند المصدر، أو اطلب ذلك من المسؤول؛ بقية الأصناف السليمة متاحة.');
         }
         if (array_key_exists('readiness_unknown', $stock->getAttributes()) && (int) $stock->readiness_unknown === 0 && $stock->value_minor !== null
             && (int) $stock->readiness_value !== (int) $stock->value_minor) {
-            throw ValidationException::withMessages(['rows' => 'قيمة هذا الصنف تختلف عن سجل الحركات. يلزم مراجعتها قبل البيع.']);
+            throw GuidanceException::forCode('stock.value_mismatch', 'rows', 'قيمة هذا الصنف تختلف عن سجل الحركات. راجع مستنداته وأثرها المالي من مراجعة وجاهزية المخزون قبل البيع، أو اطلب ذلك من المسؤول.');
         }
         if ((int) ($stock->readiness_unknown ?? 0) > 0) {
-            throw ValidationException::withMessages(['rows' => 'قيمة حركة مخزون غير مكتملة؛ راجع دليل المستند المصدر قبل البيع.']);
+            throw GuidanceException::forCode('stock.cost_unknown', 'rows', 'قيمة حركة مخزون غير مكتملة؛ راجع دليل المستند المصدر في مراجعة وجاهزية المخزون قبل البيع. لا نفترض أن التكلفة صفر.');
         }
         if ($stock->value_minor === null) {
             if ((int) $stock->quantity === 0) {
                 return 0;
             }
-            throw ValidationException::withMessages(['rows' => 'رصيد قديم يحتاج مراجعة قيمته وتوثيقها من صفحة جاهزية المخزون قبل البيع أو إضافة شراء عليه.']);
+            throw GuidanceException::forCode('stock.cost_unknown', 'rows', 'رصيد قديم يحتاج مراجعة قيمته وتوثيقها من صفحة جاهزية المخزون قبل البيع أو إضافة شراء عليه. اطلب من المسؤول مراجعة المصدر؛ لا تدخل الرصيد مرة أخرى.');
         }
 
         return Money::integer((string) $stock->value_minor);
@@ -83,7 +84,7 @@ class StockLedger
     public function cost(Inventory $stock, int $quantity): int
     {
         if ($quantity <= 0 || $quantity > (int) $stock->quantity - (int) ($stock->reserved_quantity ?? 0)) {
-            throw ValidationException::withMessages(['rows' => 'الكمية المطلوبة غير متاحة. حدّث المخزون ثم أعد المحاولة.']);
+            throw GuidanceException::forCode('stock.insufficient', 'rows', 'الكمية المطلوبة غير متاحة من هذا اللون والمقاس في الفرع. حدّث الكمية المتاحة أو قلّل عدد القطع في السلة ثم راجعها.');
         }
 
         return Money::ratio($this->value($stock), $quantity, (int) $stock->quantity);

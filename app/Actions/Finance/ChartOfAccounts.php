@@ -119,6 +119,7 @@ class ChartOfAccounts
             $normal = $data['normal_balance'];
             $posting = (bool) $data['is_posting'];
             $active = (bool) $data['is_active'];
+            $statusChanged = $current->is_active !== $active;
             if ($parent && ($parent->is_posting || ! $parent->is_active || $parent->account_group !== $group || ($parent->branch_id !== null && (int) $parent->branch_id !== $branchId))) {
                 $this->fail('الحساب الأب يجب أن يكون تجميعيًا فعالًا من المجموعة والفرع نفسيهما، أو عامًا لجميع الفروع.');
             }
@@ -134,10 +135,10 @@ class ChartOfAccounts
             if ($current->exists) {
                 $structural = $current->code !== $data['code'] || $current->account_group !== $group || $current->normal_balance !== $normal
                     || (bool) $current->is_posting !== $posting || $current->parent_id != ($parent?->id) || $current->branch_id != $branchId;
-                if ($current->is_protected && ($structural || ! $active)) {
+                if ($current->is_protected && ($structural || $statusChanged)) {
                     $this->fail('حساب مرتبط بالنظام: لا يُغير رمزه أو تصنيفه أو حالته من شجرة الحسابات.');
                 }
-                if (($current->lines()->exists() && ($structural || ! $active)) || ($current->children()->exists() && ($structural || ! $active))) {
+                if (($current->lines()->exists() && ($structural || $statusChanged)) || ($current->children()->exists() && ($structural || $statusChanged))) {
                     $this->fail('لا يُغير هيكل أو تصنيف حساب له قيود أو حسابات فرعية، ولا يُعطل.');
                 }
             }

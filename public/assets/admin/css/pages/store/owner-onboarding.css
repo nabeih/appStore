@@ -1,0 +1,8 @@
+.owner-onboarding{margin-block:1.25rem;min-width:0;overflow-wrap:anywhere}
+.owner-onboarding progress{display:block;width:100%;height:1rem;margin-block:.75rem;accent-color:var(--primary-color,#82517c)}
+.owner-onboarding .commerce-header{flex-wrap:wrap;gap:1rem}
+.owner-onboarding-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:1rem;margin-block:1rem;padding-inline-start:1.75rem}
+.owner-onboarding-steps li{padding:1rem;border:1px solid #e5e7eb;border-radius:12px;min-width:0}
+.owner-onboarding-steps p{margin-block:.5rem;line-height:1.8}
+.owner-onboarding-state{display:inline-block;margin-inline-start:.5rem;font-size:.85em;color:#4b5563}
+.owner-onboarding summary{cursor:pointer;font-weight:700;padding-block:.6rem}

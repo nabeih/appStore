@@ -125,6 +125,7 @@
         if (response.status === 413) throw new Error('حجم الصور يتجاوز حد الخادم. قلل عدد الصور أو حجمها.');
         if (response.status === 401 || response.status === 419) throw new Error('انتهت الجلسة. افتح تسجيل الدخول في نافذة أخرى ثم أعد المحاولة.');
         const data = await response.json();
+        if (!response.ok && data.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: data.guidance }));
         if (!response.ok) throw new Error(Object.values(data.errors || {}).flat().join('\n') || data.message || 'تعذر تنفيذ الطلب.');
         return data;
     };

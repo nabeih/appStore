@@ -5,6 +5,7 @@ use App\Http\Middleware\Auth\FirstRunSetupGate;
 use App\Http\Middleware\Auth\PreventBackHistory;
 use App\Http\Middleware\Auth\RequireFirstBranch;
 use App\Http\Middleware\Mobile\MobileApiContext;
+use App\Support\Guidance\GuidanceResponse;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -31,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['active.user' => EnsureActiveUser::class, 'first.branch' => RequireFirstBranch::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->respond(fn (Response $response, Throwable $error, Request $request) => app(GuidanceResponse::class)->enrich($response, $error, $request));
         $exceptions->render(function (Throwable $error, Request $request) {
             if ($request->is('api/v1/*')) {
                 return app(MobileApiContext::class)->failure($error);

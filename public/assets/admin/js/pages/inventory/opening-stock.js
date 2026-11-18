@@ -135,6 +135,7 @@
         const response = await fetch(url, { ...init, headers: { Accept: 'application/json', 'X-CSRF-TOKEN': config.csrf, ...init.headers } });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
+            if (result.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: result.guidance }));
             if (response.status === 413) throw new Error('حجم الطلب يتجاوز حد الخادم. قلل حجم الصور أو عددها ثم أعد المراجعة.');
             const message = response.status === 419 ? 'انتهت صلاحية الصفحة. افتح سجل المستندات في تبويب آخر للتحقق من الحفظ قبل تحديث هذه الصفحة.' : (result.message || 'تعذر إكمال الطلب. حاول مرة أخرى.');
             throw Object.assign(new Error(message), { fields: result.errors || {} });
