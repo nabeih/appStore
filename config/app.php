@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Platform Facebook Page
+    |--------------------------------------------------------------------------
+    |
+    | The official Facebook page of تطبيق الأناقة الذكي, linked from the
+    | fixed copyright line in every storefront footer. Leave empty to hide it.
+    |
+    */
+
+    'facebook_url' => env('APP_FACEBOOK_URL', 'https://www.facebook.com/profile.php?id=61596779331108'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

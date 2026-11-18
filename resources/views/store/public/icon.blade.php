@@ -21,6 +21,9 @@
 @case('phone')
 <path d="M7 3H4c-3 7 9 19 16 16v-3l-5-2-2 2a15 15 0 0 1-5-5l2-2-3-6Z"/>
 @break
+@case('facebook')
+<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+@break
 @case('hanger')
 <path d="M10 6a2 2 0 1 1 3 2l-1 1v3L3 17v2h18v-2l-9-5"/>
 @break

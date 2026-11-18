@@ -64,7 +64,7 @@
 <section><h2>تواصل معنا</h2>@if($settings->phone)<a class="shop-contact-line" href="tel:{{ preg_replace('/[^+0-9]/','',$settings->phone) }}">@include('store.public.icon',['name'=>'phone'])<bdi>{{ $settings->phone }}</bdi></a>@else<p>معلومات التواصل تتوفر قريبًا.</p>@endif<a href="{{ route('store.checkout') }}">حقيبة التسوق</a><a href="{{ route('store.home') }}">جميع المنتجات</a></section>
 <section class="shop-footer-brand"><strong>{{ $settings->name }}</strong><p>{{ $settings->seo_description ?: 'اختيارات للأيام الجميلة. اكتشف الألوان والمقاسات التي تناسبك.' }}</p><span class="shop-footer-flower" aria-hidden="true">✳</span></section>
 </div>
-<div class="shop-copyright">حقوق النشر © {{ date('Y') }} {{ $settings->name }}</div>
+<div class="shop-copyright"><span>© {{ date('Y') }} تطبيق الأناقة الذكي. جميع الحقوق محفوظة.</span>@if(config('app.facebook_url'))<a class="shop-social" href="{{ config('app.facebook_url') }}" target="_blank" rel="noopener">@include('store.public.icon',['name'=>'facebook'])<span>تابعنا على فيسبوك</span></a>@endif</div>
 </footer>
 <dialog class="shop-cart-dialog" data-cart-dialog aria-label="حقيبة التسوق">
 <header><h2>حقيبة التسوق <span data-cart-count>0</span></h2><button type="button" class="shop-icon-button" data-close-dialog aria-label="إغلاق السلة">@include('store.public.icon',['name'=>'close'])</button></header>
