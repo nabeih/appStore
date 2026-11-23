@@ -159,6 +159,15 @@ class StoreCommerceTest extends SalesTestCase
         $this->put(route('store.admin.content.update', ['settings', 1]), $settings + ['announcement' => str_repeat('أ', 501)])->assertSessionHasErrors('announcement');
     }
 
+    public function test_footer_shows_fixed_platform_copyright_and_facebook_link(): void
+    {
+        $this->settings->update(['name' => 'متجر تجريبي']);
+        $this->get(route('store.home'))->assertOk()->assertSee('تطبيق الأناقة الذكي')
+            ->assertSee('href="https://www.facebook.com/profile.php?id=61596779331108"', false)->assertSee('rel="noopener"', false);
+        config(['app.facebook_url' => '']);
+        $this->get(route('store.home'))->assertOk()->assertSee('تطبيق الأناقة الذكي')->assertDontSee('shop-social', false);
+    }
+
     public function test_new_order_has_no_reservation_or_financial_effect_and_replay_is_once(): void
     {
         $before = [DB::table('journal_entries')->count(), DB::table('stock_movements')->count()];
