@@ -5,6 +5,7 @@
         'branch' => $inventory->branch?->name ?? '—',
         'color' => $inventory->productVariant?->color?->name ?? '—',
         'size' => $inventory->productVariant?->size?->name ?? '—',
+        'sku' => $inventory->productVariant?->sku ?? '—',
         'category' => $inventory->productVariant->product->category?->name ?? '—',
         'category_id' => $inventory->productVariant->product->category_id,
         'color_id' => $inventory->productVariant->color_id,
@@ -21,6 +22,7 @@
     }
     $details = [
         'name' => $setupData['name'],
+        'sku' => $setupData['sku'], 'color' => $setupData['color'], 'size' => $setupData['size'],
         'description' => $inventory->productVariant->product->description,
         'price' => $inventory->productVariant->selling_price,
         'color_id' => $inventory->productVariant->color_id,
@@ -34,7 +36,7 @@
     @can('inventory.manage_catalog')
         <button type="button" class="btn btn-outline btn-sm" data-product-details="{{ json_encode($details) }}">بيانات المنتج</button>
     @endcan
-    @if($setupChangesEnabled && !$inventory->branch?->opening_stock_closed_at && !app(\App\Actions\Inventory\ProgressiveOperation::class)->activation($inventory->branch_id) && auth()->user()->can('sales.view_cost'))
+    @if($setupChangesEnabled && !$inventory->branch?->opening_stock_closed_at && !$progressiveBranchIds->has($inventory->branch_id) && auth()->user()->can('sales.view_cost'))
         @can('inventory.correct_setup')
             <button type="button" class="btn btn-outline btn-sm" data-inventory-action="edit" aria-label="تصحيح افتتاحي {{ $setupData['name'] }}">تصحيح أول المدة</button>
             <button type="button" class="btn btn-danger btn-sm" data-inventory-action="delete" aria-label="حذف {{ $setupData['name'] }} من {{ $setupData['branch'] }}">حذف افتتاحي</button>

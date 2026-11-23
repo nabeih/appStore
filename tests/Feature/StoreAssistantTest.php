@@ -26,7 +26,7 @@ class StoreAssistantTest extends SalesTestCase
 {
     protected function setUp(): void
     {
-        if (getenv('DB_CONNECTION') !== 'mysql' || getenv('DB_DATABASE') !== 'appstore_golive_20261031_tests') {
+        if (getenv('DB_CONNECTION') !== 'mysql' || ! in_array(getenv('DB_DATABASE'), ['appstore_golive_20261031_tests', 'appstore_account_status_20261118_tests'], true)) {
             throw new \LogicException('The assistant tests require the guarded isolated MySQL runner.');
         }
         parent::setUp();

@@ -14,6 +14,7 @@ class DeleteInventoryRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'classification' => ['sometimes', 'in:entry_error'],
             'revision' => ['required', 'string', 'size:64', 'regex:/^[a-f0-9]+$/'],
             'reason' => ['nullable', 'string', 'max:500'],
         ];

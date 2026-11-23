@@ -14,12 +14,12 @@
             @if($canManage)
                 @if(\App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()))<a class="btn btn-outline" href="{{ route('catalog.minimum.edit',$product) }}">الحد الأدنى للبيع</a>@endif
                 <button type="button" class="btn btn-primary" data-product-details="{{ json_encode(['name'=>$product->name,'description'=>$product->description,'variant_id'=>null,'url'=>url('/api/products/'.$product->id)]) }}">تعديل المنتج</button>
-                <button type="button" class="btn btn-danger" data-product-delete data-url="{{ url('/api/products/'.$product->id) }}">حذف / تعطيل المنتج</button>
+                <button type="button" class="btn btn-danger" data-product-delete data-url="{{ url('/api/products/'.$product->id) }}">أرشفة / تعطيل المنتج</button>
             @endif
         </div>
     </header>
     <p data-product-show-feedback role="alert" hidden></p>
-    @if($canManage)<p class="sale-muted">التعديل يفتح نافذة البيانات الحالية. المنتج المرتبط بمستندات يُعطّل عند الحذف مع حفظ مستنداته ومخزونه، وغير المرتبط يُؤرشف.</p>@endif
+    @if($canManage)<p class="sale-muted">التعديل يفتح نافذة البيانات الحالية. لا يوجد حذف نهائي هنا. بعد تصفير المخزون بطريقة موثقة: المنتج المرتبط بمستندات يُعطّل مع حفظ تاريخه، وغير المرتبط يُؤرشف. المخزون الموجب يمنع الإجراء.</p>@endif
     <section class="card"><h2>وصف المنتج</h2><p class="product-show-description">{{ filled($product->description) ? $product->description : 'لا يوجد وصف لهذا المنتج.' }}</p></section>
     <section class="card"><h2>الصور والألوان</h2>
         <div class="product-show-gallery">
@@ -32,7 +32,7 @@
                 @else
                     <div class="product-show-no-image" role="img" aria-label="لا توجد صورة للون {{ $color->name }}">لا توجد صورة لهذا اللون</div>
                 @endif
-                <figcaption><x-catalog.color-dot :swatch-url="$product->swatches->firstWhere('color_id', $colorId)?->url" :hex="$color->display_hex" :label="$color->name" /> {{ $color->name }}</figcaption>
+                <figcaption><x-catalog.color-dot :swatch-url="$product->swatches->firstWhere('color_id', $colorId)?->url" :hex="$color->display_hex" :label="$color->name" /> {{ $color->name }} — {{ $color->code }}</figcaption>
             </figure>
         @empty<p>لا توجد ألوان أو صور مرتبطة بتركيبات متاحة للعرض.</p>@endforelse
         </div>
@@ -42,7 +42,7 @@
         <div class="product-show-variants">
         @forelse($product->variants as $variant)
             <article class="product-show-variant">
-                <header><h3>{{ $variant->color->name }} / {{ $variant->size->name }}</h3>
+                <header><h3>{{ $variant->color->name }} ({{ $variant->color->code }}) / {{ $variant->size->name }}</h3>
                     @if(!$variant->is_active)<span class="badge">تركيبة غير فعالة</span>@endif
                 </header>
                 <p>SKU: <bdi>{{ $variant->sku }}</bdi></p>

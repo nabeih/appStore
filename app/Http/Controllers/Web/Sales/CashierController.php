@@ -48,7 +48,8 @@ class CashierController extends Controller
                 'sku' => $item->sku, 'color' => $item->color_name, 'size' => $item->size_name, 'quantity' => $item->quantity, 'unit_price' => Money::format($item->unit_price_minor),
                 'base_price' => Money::format($item->base_price_minor), 'price_reason' => $item->price_reason, 'discount' => $item->discount_instructions ?? ['type' => 'amount', 'value' => '0']])->all() ?? [],
             'discount' => $invoice?->discount_instructions['discount'] ?? ['type' => 'amount', 'value' => '0'], 'reason' => $invoice?->discount_instructions['reason'] ?? '',
-            'payment_mode' => $invoice?->payment_instructions['payment_mode'] ?? 'paid', 'payments' => $invoice?->payment_instructions['payments'] ?? []];
+            'payment_mode' => $invoice?->payment_instructions['payment_mode'] ?? 'paid', 'payments' => $invoice?->payment_instructions['payments'] ?? [],
+            'customer_credits' => $invoice?->payment_instructions['customer_credits'] ?? []];
 
         return view('sales.cashier.index', compact('branches', 'accounts', 'capabilities', 'state', 'invoice'));
     }
@@ -118,7 +119,7 @@ class CashierController extends Controller
         $plan = $prepare->execute($request->validated(), $request->user(), false, false, [], true);
         $attributes = $plan['attributes'];
         $result = ['gross' => Money::format($attributes['gross_minor']), 'discount' => Money::format($attributes['line_discount_minor'] + $attributes['invoice_discount_minor']),
-            'total' => Money::format($attributes['total_minor']), 'paid' => Money::format($plan['payments']['paid']), 'due' => Money::format($attributes['total_minor'] - $plan['payments']['paid']),
+            'total' => Money::format($attributes['total_minor']), 'paid' => Money::format($plan['payments']['paid'] + $plan['credit_amount']), 'due' => Money::format($attributes['total_minor'] - $plan['payments']['paid'] - $plan['credit_amount']),
             'change' => Money::format($plan['payments']['change']), 'quantity' => $attributes['total_quantity'],
             'lines' => array_map(fn ($row): string => Money::format($row['net_minor']), $plan['rows']), 'minimum_warning' => $plan['minimum_warning']];
         if (SalesAccess::allows($request->user(), 'sales.view_cost')) {

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/setup.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/account.css') }}">
     <script src="{{ asset('assets/admin/js/pages/auth/setup.js') }}" defer></script>
+    <x-validation-feedback />
 </head>
 <body>
 <main class="login-card setup-card">

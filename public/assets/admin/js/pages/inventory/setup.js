@@ -47,7 +47,7 @@
         }
         el('inventorySetupTitle').textContent = mode === 'delete' ? 'حذف سطر المخزون' : 'تصحيح بيانات المخزون';
         el('inventorySetupProduct').textContent = `${selected.code} — ${selected.name}`;
-        el('inventorySetupScope').textContent = `${selected.branch} • ${selected.color} • ${selected.size} • الكمية الحالية: ${selected.quantity}`;
+        el('inventorySetupScope').textContent = `${selected.branch} • ${selected.color} • ${selected.size} • SKU: ${selected.sku} • الكمية الحالية: ${selected.quantity}`;
         el('inventorySetupName').value = selected.name;
         el('inventorySetupCode').value = selected.code;
         el('inventorySetupQuantity').value = selected.quantity;

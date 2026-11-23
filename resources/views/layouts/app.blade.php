@@ -29,6 +29,7 @@
     @stack('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/css/mobile-documents.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/guidance.css') }}">
+    <x-validation-feedback />
 </head>
 
 <body class="laravel-admin">

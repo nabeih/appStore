@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreProductRequest;
 use App\Http\Requests\Catalog\UpdateProductRequest;
 use App\Http\Requests\Search\SearchRequest;
+use App\Models\Inventory;
 use App\Models\OpeningStockItem;
 use App\Models\Product;
 use App\Models\PurchaseInvoiceItem;
@@ -20,6 +21,7 @@ use App\Support\Sales\OperationContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -119,6 +121,10 @@ class ProductController extends Controller
         $message = OperationContext::run(function () use ($id): string {
             $product = $this->visibleProducts(auth()->user())->whereKey($id)->lockForUpdate()->firstOrFail();
             $ids = $product->variants()->pluck('id');
+            if (Inventory::whereIn('product_variant_id', $ids)->where(fn ($query) => $query->where('quantity', '>', 0)
+                ->orWhere('quarantined_quantity', '>', 0)->orWhere('damaged_quantity', '>', 0)->orWhere('value_minor', '>', 0))->exists()) {
+                throw ValidationException::withMessages(['product' => 'لا يمكن أرشفة أو تعطيل منتج له مخزون موجب أو قيمة باقية في أحد الفروع. راجع المخزون والمرتجع أو التصحيح الرسمي أولًا؛ لم يُحذف المنتج.']);
+            }
             $documented = StockMovement::whereIn('product_variant_id', $ids)->exists()
                 || OpeningStockItem::whereIn('product_variant_id', $ids)->exists()
                 || PurchaseInvoiceItem::whereIn('product_variant_id', $ids)->exists()

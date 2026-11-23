@@ -21,7 +21,10 @@ class ProgressiveOperationController extends Controller
         $data = $request->validate(['confirmed' => ['required', 'accepted'], 'account_id' => ['nullable', 'integer', 'min:1']]);
         $account = $setup->execute($request->user(), $branch->id, isset($data['account_id']) ? (int) $data['account_id'] : null);
 
-        return response()->json(['url' => route('inventory.operation.index', ['branch_id' => $branch->id]), 'message' => 'اكتملت تهيئة المبيعات باستخدام '.$account->name.' #'.$account->id.' دون اعتماد رصيد بداية أو إغلاق الإعداد.']);
+        $message = 'اكتملت تهيئة المبيعات باستخدام '.$account->name.' #'.$account->id.' دون اعتماد رصيد بداية أو إغلاق الإعداد.';
+        $request->session()->flash('operation_success', $message);
+
+        return response()->json(['url' => route('inventory.operation.index', ['branch_id' => $branch->id]), 'message' => $message]);
     }
 
     public function status(Request $request, ProgressiveOperation $operation): JsonResponse
@@ -63,7 +66,10 @@ class ProgressiveOperationController extends Controller
             'confirmed' => ['required', 'accepted'], 'external_movements_confirmed' => ['required', 'accepted']]);
         $operation->activate($branch, $data, $request->user());
 
-        return response()->json(['url' => route('inventory.operation.index', ['branch_id' => $branch->id]), 'message' => 'اعتمد التشغيل التدريجي للفرع، دون إغلاق الإعداد أو ترحيل أرصدة إضافية.']);
+        $message = 'اعتمد التشغيل التدريجي للفرع، دون إغلاق الإعداد أو ترحيل أرصدة إضافية.';
+        $request->session()->flash('operation_success', $message);
+
+        return response()->json(['url' => route('inventory.operation.index', ['branch_id' => $branch->id]), 'message' => $message]);
     }
 
     public function confirmZero(Request $request, Branch $branch, string $kind, int $record, ProgressiveOperation $operation): JsonResponse

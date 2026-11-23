@@ -37,6 +37,11 @@ class SupplierPayment extends Model
         return $this->belongsTo(FinancialAccount::class, 'financial_account_id');
     }
 
+    public function settlement(): BelongsTo
+    {
+        return $this->belongsTo(SupplierDebtSettlement::class, 'supplier_debt_settlement_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

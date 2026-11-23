@@ -45,6 +45,6 @@ class DocumentCorrectionController extends Controller
 
     private function rules(): array
     {
-        return ['quantity' => ['required', 'integer', 'min:0', 'max:1000000'], 'unit_cost' => ['required', 'regex:/\A\d{1,7}(?:\.\d{1,2})?\z/'], 'reason' => ['required', 'string', 'min:5', 'max:1000']];
+        return ['classification' => ['sometimes', 'in:entry_error'], 'quantity' => ['required', 'integer', 'min:0', 'max:1000000'], 'unit_cost' => ['required', 'regex:/\A\d{1,7}(?:\.\d{1,2})?\z/'], 'reason' => ['required', 'string', 'min:5', 'max:1000']];
     }
 }

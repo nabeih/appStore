@@ -23,7 +23,7 @@ class InventoryProductDetailsTest extends SalesTestCase
 {
     protected function setUp(): void
     {
-        if (getenv('DB_CONNECTION') === 'mysql' && ! in_array(getenv('DB_DATABASE'), ['appstore_fabric_swatch_test', 'appstore_golive_20261031_tests'], true)) {
+        if (getenv('DB_CONNECTION') === 'mysql' && ! in_array(getenv('DB_DATABASE'), ['appstore_fabric_swatch_test', 'appstore_golive_20261031_tests', 'appstore_account_status_20261118_tests'], true)) {
             throw new \RuntimeException('Only the approved isolated MySQL database may be used.');
         }
         parent::setUp();
@@ -122,6 +122,9 @@ class InventoryProductDetailsTest extends SalesTestCase
         $this->putJson('/api/products/'.$variant->product_id, ['name' => 'تعديل مرفوض'])->assertNotFound();
         $this->deleteJson('/api/products/'.$variant->product_id)->assertNotFound();
         $this->assertTrue($variant->product->fresh()->is_active);
+        $this->putJson('/api/products/'.$variant->product_id, ['is_active' => false])->assertNotFound();
+        $this->putJson('/api/products/'.$variant->product_id, ['variants' => [['id' => $variant->id, 'color_id' => $variant->color_id,
+            'size_id' => $variant->size_id, 'selling_price' => '35', 'is_active' => false]]])->assertNotFound();
     }
 
     public function test_empty_product_and_unstocked_variant_have_explicit_empty_states_for_catalog_manager(): void
@@ -174,11 +177,19 @@ class InventoryProductDetailsTest extends SalesTestCase
         $this->assertSame('SHIRT-BLK-L', $variant->fresh()->sku);
     }
 
-    public function test_existing_product_delete_policy_disables_documented_products_without_deleting_stock(): void
+    public function test_product_with_stock_cannot_be_hidden_and_documented_empty_product_is_disabled_without_deleting_history(): void
     {
         $variant = $this->stock();
         $before = DB::table('inventories')->get()->toJson();
-        $this->deleteJson('/api/products/'.$variant->product_id)->assertOk();
+        $this->deleteJson('/api/products/'.$variant->product_id)->assertUnprocessable()->assertJsonValidationErrors('product');
+        $this->putJson('/api/products/'.$variant->product_id, ['is_active' => false])->assertUnprocessable()->assertJsonValidationErrors('is_active');
+        $this->putJson('/api/products/'.$variant->product_id, ['variants' => [['id' => $variant->id, 'color_id' => $variant->color_id,
+            'size_id' => $variant->size_id, 'selling_price' => '35', 'is_active' => false]]])->assertUnprocessable()->assertJsonValidationErrors('is_active');
+        $this->assertTrue($variant->product->fresh()->is_active);
+        $this->assertSame($before, DB::table('inventories')->get()->toJson());
+        $this->sale($variant, ['rows' => [['product_variant_id' => $variant->id, 'quantity' => 10]]]);
+        $before = DB::table('inventories')->get()->toJson();
+        $this->deleteJson('/api/products/'.$variant->product_id)->assertOk()->assertJsonPath('message', 'عُطل المنتج مع الاحتفاظ بمستنداته ومخزونه.');
         $this->assertFalse($variant->product->fresh()->is_active);
         $this->assertSame($before, DB::table('inventories')->get()->toJson());
         $this->get(route('inventory.products.show', $variant->product_id))->assertOk()->assertSee('منتج معطّل');

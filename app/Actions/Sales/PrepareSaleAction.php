@@ -2,6 +2,7 @@
 
 namespace App\Actions\Sales;
 
+use App\Actions\Customers\RecordCustomerReceiptAction;
 use App\Actions\Finance\ManageFinancialAccountsAction;
 use App\Actions\Inventory\ProgressiveOperation;
 use App\Actions\Inventory\StockLedger;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesAccess;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class PrepareSaleAction
@@ -127,14 +129,31 @@ class PrepareSaleAction
             }
         }
         $customer = ! empty($data['customer_id']) ? Customer::findOrFail($data['customer_id']) : null;
-        $payments = $this->accounts->payments($data['payments'] ?? [], $branch->id, $total, true);
+        $creditInput = $data['customer_credits'] ?? [];
+        if ($creditInput !== []) {
+            Gate::forUser($actor)->authorize('sales.collect');
+            if (! $customer) {
+                $this->fail('اختر عميلًا قبل استخدام رصيده المقدم.');
+            }
+        }
+        $credits = app(RecordCustomerReceiptAction::class)->credits($creditInput, $customer?->id, $branch->id);
+        $creditAmount = Money::sum(array_column($credits, 'amount'));
+        if ($creditAmount > $total) {
+            $this->fail('الرصيد المستخدم يتجاوز قيمة الفاتورة. راجع مبلغ استخدام الرصيد.');
+        }
+        $paymentInput = $data['payments'] ?? [];
+        if ($creditAmount > 0 && $creditAmount === $total && count($paymentInput) === 1 && blank($paymentInput[0]['amount'] ?? null)) {
+            $paymentInput = [];
+        }
+        $payments = $this->accounts->payments($paymentInput, $branch->id, $total - $creditAmount, true);
+        $settled = Money::add($payments['paid'], $creditAmount);
         $mode = $data['payment_mode'] ?? 'paid';
         if ($customer && $total > $payments['paid']) {
             app(ProgressiveOperation::class)->assertParty($branch->id, 'customer', $customer->id);
         }
         if ($checkSettlement) {
-            if (($mode === 'paid' && $payments['paid'] !== $total) || ($mode === 'credit' && $payments['paid'] !== 0)
-                || ($mode === 'partial' && ($payments['paid'] <= 0 || $payments['paid'] >= $total))) {
+            if (($mode === 'paid' && $settled !== $total) || ($mode === 'credit' && $settled !== 0)
+                || ($mode === 'partial' && ($settled <= 0 || $settled >= $total))) {
                 $this->fail('راجع وضع السداد والمبالغ: سداد كامل، دفعة جزئية، أو آجل بالكامل.');
             }
             if ($total > $payments['paid'] && ! $customer) {
@@ -142,7 +161,7 @@ class PrepareSaleAction
             }
         }
 
-        return ['rows' => $rows, 'payments' => $payments, 'customer' => $customer, 'branch' => $branch, 'minimum_warning' => $minimumWarning,
+        return ['rows' => $rows, 'payments' => $payments, 'credits' => $credits, 'credit_amount' => $creditAmount, 'customer' => $customer, 'branch' => $branch, 'minimum_warning' => $minimumWarning,
             'attributes' => ['branch_id' => $branch->id, 'customer_id' => $customer?->id, 'customer_name' => $customer?->name ?? 'زبون نقدي',
                 'branch_name' => $branch->name, 'cashier_name' => $actor->name, 'invoice_date' => $date, 'total_quantity' => $quantity,
                 'gross_minor' => $gross, 'line_discount_minor' => $lineDiscount, 'invoice_discount_minor' => $invoiceDiscount,

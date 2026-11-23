@@ -13,6 +13,7 @@
     }
     el('exchange-minimum-confirm')?.addEventListener('change', () => { reviewed = false; version++; clearTimeout(timer); request?.abort(); el('adjustment-submit').disabled = true; preview(); });
     function payload() {
+        let returnIndex = 0; form.querySelectorAll('[data-return-item]').forEach(row => { const quantity = row.querySelector('[data-return-quantity]'); if (!(Number(quantity.value) > 0)) { delete quantity.dataset.validationField; delete row.querySelector('[data-return-condition]').dataset.validationField; return; } quantity.dataset.validationField = `${exchange ? 'return_rows' : 'rows'}.${returnIndex}.quantity`; row.querySelector('[data-return-condition]').dataset.validationField = `${exchange ? 'return_rows' : 'rows'}.${returnIndex}.condition`; if (Number(quantity.value) > 0) returnIndex++; });
         const returns = [...form.querySelectorAll('[data-return-item]')].map(row => ({ sale_item_id: Number(row.dataset.returnItem),
             quantity: Number(row.querySelector('[data-return-quantity]').value), condition: row.querySelector('[data-return-condition]').value })).filter(row => row.quantity > 0);
         const common = { client_uuid: clientUuid, customer_id: customerId, reason: el('adjustment-reason').value.trim(), refund_payments: el('adjustment-refund-mode').value === 'refund' ? ui.payments(el('adjustment-refunds')) : [] };
@@ -36,7 +37,7 @@
             new_sale_total: 'صافي البدائل', credit_applied: 'رصيد خُصص للبدائل', full_due_before_payment: 'المركز الكامل قبل القبض',
             received: 'المقبوض للفاتورتين', change: 'الباقي النقدي للعميل', remaining_due: 'المستحق بعد التسوية', refunded: 'رد الأموال', remaining_credit: 'رصيد متبقٍ للعميل', gross_profit_change: 'التغير في مجمل الربح' };
         try {
-            const result = await ui.request(config.previewUrl,{ method: 'POST', data: payload(), signal: controller.signal }); if (current !== version) return;
+            const result = await ui.request(config.previewUrl,{ validationScope: form, method: 'POST', data: payload(), signal: controller.signal }); if (current !== version) return;
             const container = el('adjustment-summary'); container.replaceChildren();
             Object.entries(result).forEach(([key,value]) => { if (!labels[key]) return; const cell = ui.element('div','',labels[key]); cell.append(ui.element('strong','',value+' ₪')); container.append(cell); });
             minimumWarning = result.minimum_warning;
@@ -77,10 +78,10 @@
             const remove = ui.element('button','','×'); remove.type = 'button'; remove.dataset.removeLine = ''; remove.addEventListener('click',() => { rows.splice(index,1); renderRows(); invalidate(); }); header.append(remove); card.append(header);
             const grid = ui.element('div','sale-grid');
             const field = (text,input) => { const label = ui.element('label','',text); label.append(input); grid.append(label); };
-            const quantity = ui.element('input'); quantity.type = 'number'; quantity.min = '1'; quantity.max = '1000000'; quantity.step = '1'; quantity.value = row.quantity;
+            const quantity = ui.element('input'); quantity.dataset.validationField = `rows.${index}.quantity`; quantity.type = 'number'; quantity.min = '1'; quantity.max = '1000000'; quantity.step = '1'; quantity.value = row.quantity;
             quantity.addEventListener('input',() => row.quantity = quantity.value); field('الكمية',quantity);
-            const price = ui.element('input'); price.type = 'text'; price.inputMode = 'decimal'; price.value = row.unit_price; price.readOnly = !config.canChangePrice; price.addEventListener('input',() => row.unit_price = price.value); field('سعر الوحدة ₪',price);
-            const discount = ui.element('input'); discount.type = 'text'; discount.inputMode = 'decimal'; discount.value = row.discount || '0'; discount.addEventListener('input',() => row.discount = discount.value); field('خصم السطر بمبلغ ₪',discount);
+            const price = ui.element('input'); price.dataset.validationField = `rows.${index}.unit_price`; price.type = 'text'; price.inputMode = 'decimal'; price.value = row.unit_price; price.readOnly = !config.canChangePrice; price.addEventListener('input',() => row.unit_price = price.value); field('سعر الوحدة ₪',price);
+            const discount = ui.element('input'); discount.dataset.validationField = `rows.${index}.discount.value`; discount.type = 'text'; discount.inputMode = 'decimal'; discount.value = row.discount || '0'; discount.addEventListener('input',() => row.discount = discount.value); field('خصم السطر بمبلغ ₪',discount);
             card.append(grid); container.append(card);
         });
     }
@@ -110,7 +111,7 @@
     }
     form.addEventListener('submit',async event => {
         event.preventDefault(); if (!reviewed || busy) return; busy = true; clearTimeout(timer); request?.abort(); ui.error(form,''); el('adjustment-fields').disabled = true;
-        try { const result = await ui.request(config.storeUrl,{ method: 'POST',data: payload() }); dirty = false; busy = false; location.assign(result.url); }
+        try { const result = await ui.request(config.storeUrl,{ validationScope: form, method: 'POST',data: payload() }); dirty = false; busy = false; location.assign(result.url); }
         catch (failure) { ui.error(form,failure); busy = false; el('adjustment-fields').disabled = false; invalidate(); }
     });
     window.addEventListener('beforeunload',event => { if (dirty || busy) { event.preventDefault(); event.returnValue = ''; } });

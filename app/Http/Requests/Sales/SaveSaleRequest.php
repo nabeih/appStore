@@ -29,6 +29,11 @@ class SaveSaleRequest extends FormRequest
     {
         return ['client_uuid' => ['required', 'uuid'], 'version' => ['sometimes', 'integer', 'min:1'], 'below_minimum_confirmed' => ['sometimes', 'boolean'],
             'below_minimum_confirmation' => ['nullable', 'string', 'size:64'],
+            'customer_credits' => ['sometimes', 'array', 'list', 'max:100'],
+            'customer_credits.*' => ['required', 'array:advance_receipt_id,sale_return_id,amount'],
+            'customer_credits.*.advance_receipt_id' => ['required_without:customer_credits.*.sale_return_id', 'integer', 'min:1', 'distinct'],
+            'customer_credits.*.sale_return_id' => ['required_without:customer_credits.*.advance_receipt_id', 'prohibits:customer_credits.*.advance_receipt_id', 'integer', 'min:1', 'distinct'],
+            'customer_credits.*.amount' => ['required', 'regex:/\A\d{1,12}(?:\.\d{1,2})?\z/'],
             'branch_id' => ['required', 'integer', 'min:1'], 'customer_id' => ['nullable', 'integer', 'min:1'],
             'invoice_date' => ['sometimes', 'date_format:Y-m-d'], 'payment_mode' => ['required', Rule::in(['paid', 'partial', 'credit'])],
             'reason' => ['nullable', 'string', 'max:500'], 'notes' => ['nullable', 'string', 'max:2000'],

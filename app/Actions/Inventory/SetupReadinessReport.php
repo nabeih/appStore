@@ -5,6 +5,7 @@ namespace App\Actions\Inventory;
 use App\Actions\Finance\Expenses\RecognizePrepaidExpense;
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\ManageFinancialAccountsAction;
+use App\Actions\Finance\ManageSupplierDebtSettlement;
 use App\Models\AuditEvent;
 use App\Models\Branch;
 use App\Models\FinancialAccount;
@@ -12,6 +13,7 @@ use App\Models\OpeningStockEntry;
 use App\Models\OpeningStockItem;
 use App\Models\PurchaseInvoice;
 use App\Models\PurchaseInvoiceItem;
+use App\Models\SupplierDebtSettlement;
 use App\Models\SupplierPayment;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
@@ -121,6 +123,11 @@ class SetupReadinessReport
                 $supplierDue[$id] = Money::add($supplierDue[$id] ?? 0, $purchase['due_minor']);
             }
         }
+        if (app(ManageSupplierDebtSettlement::class)->installed()) {
+            foreach (SupplierDebtSettlement::where('branch_id', $branch->id)->where('status', 'approved')->get() as $settlement) {
+                $supplierDue[$settlement->supplier_id] = Money::add($supplierDue[$settlement->supplier_id] ?? 0, $settlement->amount_minor - $settlement->paid_minor);
+            }
+        }
         $suppliers = [];
         foreach (array_unique(array_merge(array_keys($supplierDue), array_keys($supplierLedger))) as $id) {
             $operational = $supplierDue[$id] ?? 0;
@@ -173,6 +180,8 @@ class SetupReadinessReport
         foreach (app(ProgressiveOperation::class)->closureBlockers($branch) as $message) {
             $blockers[] = ['code' => 'progressive_incomplete', 'message' => $message];
         }
+        $openingProof = app(ProgressiveStockProof::class)->build($branch->id);
+        $add($openingProof['unverified_opening_documents'] !== [], 'opening_corrections_unsettled', 'توجد مستندات افتتاحية معدّلة لم تكتمل أدلتها أو تسوياتها المالية، بما فيها المستندات المحذوفة بالكامل. راجع تسوية التغييرات قبل إكمال الجاهزية.');
         $closedEvent = AuditEvent::where('subject_type', $branch->getMorphClass())->where('subject_id', $branch->id)
             ->where('action', 'inventory.setup_closed')->latest('id')->first();
         $closure = $branch->opening_stock_closed_at ? ['at' => $branch->opening_stock_closed_at, 'by' => $branch->opening_stock_closed_by,

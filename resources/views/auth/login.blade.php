@@ -7,6 +7,7 @@
     <title>تسجيل الدخول | متجر الأناقة</title>
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/login.css') }}">
     <script src="{{ asset('assets/admin/js/pages/auth/login.js') }}" defer></script>
+    <x-validation-feedback />
 </head>
 <body>
     <main class="login-card">

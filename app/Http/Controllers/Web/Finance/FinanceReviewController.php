@@ -110,7 +110,7 @@ class FinanceReviewController extends Controller
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:1000']]);
         $action->execute($payment, $request->user(), $data['reason']);
 
-        return response()->json(['url' => route('purchases.invoices.show', $payment->purchase_invoice_id), 'message' => 'عكست الدفعة وأعيد مستحق المورد دون حذف السند.']);
+        return response()->json(['url' => $payment->supplier_debt_settlement_id ? route('suppliers.debts.show', $payment->supplier_debt_settlement_id) : route('purchases.invoices.show', $payment->purchase_invoice_id), 'message' => 'عكست الدفعة وأعيد مستحق المورد دون حذف السند.']);
     }
 
     public function reversePurchase(Request $request, PurchaseInvoice $invoice, ReversePurchaseAction $action): JsonResponse

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/login.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/setup.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/auth/account.css') }}">
+    <x-validation-feedback />
 </head>
 <body>
 <main class="login-card setup-card">

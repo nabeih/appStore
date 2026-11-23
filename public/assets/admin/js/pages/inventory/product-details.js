@@ -12,6 +12,7 @@
             form.reset();
             feedback.hidden = true;
             form.elements.name.value = details.name;
+            dialog.querySelector('h2').textContent = details.variant_id ? `${details.name} — ${details.color || '—'} / ${details.size || '—'} — SKU: ${details.sku || '—'}` : 'بيانات المنتج';
             form.elements.description.value = details.description || '';
             var variantFields = form.querySelector('[data-product-variant-fields]');
             variantFields.hidden = !details.variant_id;

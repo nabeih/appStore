@@ -6,11 +6,13 @@ use App\Http\Middleware\Auth\PreventBackHistory;
 use App\Http\Middleware\Auth\RequireFirstBranch;
 use App\Http\Middleware\Mobile\MobileApiContext;
 use App\Support\Guidance\GuidanceResponse;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
@@ -57,6 +59,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
 
                 return response()->json(['message' => $message], $status, $headers)->header('Cache-Control', 'no-store');
+            }
+            if (! $error instanceof ValidationException && ! $error instanceof AuthenticationException && ! $error instanceof HttpResponseException) {
+                $status = $error instanceof HttpExceptionInterface ? $error->getStatusCode() : 500;
+                if ($status >= 500) {
+                    $message = 'تعذر إكمال العملية حاليًا. احتفظ بالبيانات المدخلة وأعد المحاولة؛ إذا استمرت المشكلة تواصل مع مسؤول النظام.';
+                    if ($request->expectsJson() || $request->is('api/*')) {
+                        return response()->json(['message' => $message], $status)->header('Cache-Control', 'no-store');
+                    }
+                    $guidance = ['title' => 'تعذر إكمال العملية', 'message' => $message, 'next_step' => 'ارجع للنموذج واحتفظ بمدخلاتك قبل إعادة المحاولة.', 'action_url' => null, 'code' => 'request.failed'];
+
+                    return response()->view('guidance.error', compact('guidance', 'status'), $status)->header('Cache-Control', 'no-store');
+                }
             }
         });
         $exceptions->report(function (Throwable $error) {

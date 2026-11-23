@@ -28,6 +28,7 @@ class DispatchAppAlerts
         return match ($type) {
             'store_order' => ['store.orders.view'],
             'minimum_price' => ['notifications.price_alerts', 'sales.view'],
+            'customer_refund' => ['sales.manage_accounts', 'sales.customers', 'sales.collect'],
             'stock_low', 'stock_empty' => ['inventory.view'],
             'inventory_review', 'return_review' => ['inventory.valuation_review', 'sales.view_cost'],
             'opening_review' => ['finance.transition_review', 'inventory.valuation_review', 'sales.view_cost'],
@@ -174,7 +175,7 @@ class DispatchAppAlerts
             }
             $q->where(function (Builder $types) use ($actor): void {
                 $types->whereRaw('1=0');
-                foreach (['store_order', 'minimum_price', 'stock_low', 'stock_empty', 'inventory_review', 'return_review', 'opening_review', 'purchase_review', 'payment_review', 'expense_review', 'expense_due'] as $type) {
+                foreach (['store_order', 'minimum_price', 'customer_refund', 'stock_low', 'stock_empty', 'inventory_review', 'return_review', 'opening_review', 'purchase_review', 'payment_review', 'expense_review', 'expense_due'] as $type) {
                     if ($this->receives($actor, $type)) {
                         $types->orWhere('type', $type);
                     }

@@ -113,7 +113,7 @@ let clientUuid = storage.get('appstore-checkout-uuid') || uuid();
 const csrf = () => find('meta[name=csrf-token]')?.content;
 const rows = () => cart.map(item => ({ product_variant_id: item.id, quantity: item.quantity }));
 async function request(url, body, signal) {
-    const response = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: JSON.stringify(body), signal });
+    const response = await fetch(url, { validationScope: form, method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }, body: JSON.stringify(body), signal });
     let result; try { result = await response.json(); } catch { throw Error('تعذر الاتصال. سلتك محفوظة؛ أعد المحاولة بعد قليل.'); }
     if (!response.ok) { const failure = Error(result.errors ? Object.values(result.errors).flat().join(' ') : result.message || 'تعذر إتمام الطلب.'); failure.fields = result.errors; throw failure; }
     return result;

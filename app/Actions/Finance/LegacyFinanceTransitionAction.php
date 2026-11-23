@@ -2,8 +2,10 @@
 
 namespace App\Actions\Finance;
 
+use App\Actions\Inventory\OpeningStock\OpeningFinancialSupport;
 use App\Models\AuditEvent;
 use App\Models\FinancialAccount;
+use App\Models\InventorySetupChange;
 use App\Models\JournalEntry;
 use App\Models\OpeningStockEntry;
 use App\Models\PurchaseInvoice;
@@ -126,7 +128,19 @@ class LegacyFinanceTransitionAction
                 ->whereIn('source_id', $items->modelKeys())->where('branch_id', $branch->id)->orderBy('id')->get()->groupBy('source_id');
             $amount = 0;
             foreach ($items as $item) {
-                $itemValue = $data['source_kind'] === 'opening' ? Money::minor((string) $item->line_total) : (int) $item->line_total_minor;
+                if ($data['source_kind'] === 'opening') {
+                    try {
+                        $itemValue = Money::minor((string) $item->line_total);
+                        if ((int) $item->quantity < 1 || Money::multiply((int) $item->quantity, Money::minor((string) $item->unit_cost)) !== $itemValue) {
+                            $issues[] = 'تكلفة البند #'.$item->id.' أو إجماليه لا يطابق الكمية المثبتة.';
+                        }
+                    } catch (ValidationException) {
+                        $itemValue = 0;
+                        $issues[] = 'تكلفة أو قيمة البند #'.$item->id.' مجهولة أو غير صالحة؛ لا تُعامل كصفر.';
+                    }
+                } else {
+                    $itemValue = (int) $item->line_total_minor;
+                }
                 $amount = Money::add($amount, $itemValue);
                 $moves = $movementGroups->get($item->id, collect());
                 if ($moves->count() !== 1 || (int) $moves->first()?->quantity_change !== (int) $item->quantity
@@ -137,7 +151,12 @@ class LegacyFinanceTransitionAction
                 }
                 $basis[] = [$item->getAttributes(), $moves->toArray()];
             }
-            $expected = $data['source_kind'] === 'opening' ? Money::minor((string) $source->total_cost) : (int) $source->total_minor;
+            try {
+                $expected = $data['source_kind'] === 'opening' ? Money::minor((string) $source->total_cost) : (int) $source->total_minor;
+            } catch (ValidationException) {
+                $expected = -1;
+                $issues[] = 'قيمة المستند مجهولة أو غير صالحة؛ لا يُعتمد أثر مالي تقديري.';
+            }
             if ($items->isEmpty() || $amount !== $expected || (int) $items->sum('quantity') !== (int) $source->total_quantity) {
                 $issues[] = 'إجمالي المستند لا يطابق البنود.';
             }
@@ -157,12 +176,39 @@ class LegacyFinanceTransitionAction
         if (count($codes) !== $accounts->count()) {
             $issues[] = 'تعريف الحسابات النظامية غير مكتمل؛ المعاينة لا تهيئ حسابات.';
         }
+        foreach ($accounts as $account) {
+            if (! $account->is_active || $account->is_posting === false || $account->branch_id !== null || $account->type !== 'system') {
+                $issues[] = 'حساب نظامي غير جاهز للترحيل: '.$account->code.' #'.$account->id;
+            }
+        }
         $entry = $this->entry($source, $event);
+        if ($data['source_kind'] === 'opening' && ! $entry) {
+            foreach (JournalEntry::where('branch_id', $branch->id)->whereDate('transaction_date', $date)->whereNull('reversal_of_id')
+                ->whereDoesntHave('reversals')->with('lines')->get() as $candidate) {
+                $linkedOpening = $candidate->source_type === $source->getMorphClass() && $candidate->event === 'opening'
+                    && OpeningStockEntry::whereKey($candidate->source_id)->exists();
+                if (! $linkedOpening && $this->matches($candidate, $lines, $accounts->pluck('id', 'code')->all(), $date)) {
+                    $issues[] = 'يوجد قيد مطابق غير مرتبط بمستند افتتاحي معروف #'.$candidate->id.'؛ راجع الربط بدل إنشاء قيد مكرر.';
+                }
+            }
+        }
         $status = 'eligible';
+        $openingSupport = null;
+        $openingVerified = false;
+        if ($entry && $data['source_kind'] === 'opening' && InventorySetupChange::where('opening_stock_entry_id', $source->id)->exists()) {
+            try {
+                $openingSupport = app(OpeningFinancialSupport::class)->review($source);
+                $lines = $openingSupport['effective_lines'];
+                $basis[] = $openingSupport;
+                $openingVerified = true;
+            } catch (ValidationException) {
+                $issues[] = 'تغيّر الافتتاح بعد ترحيله وتوجد تصحيحات غير مثبتة أو متعارضة. راجع تسوية التغييرات؛ لا تُنشئ قيد افتتاحي آخر.';
+            }
+        }
         if ($entry) {
             if ($entry->reversals()->exists()) {
                 $issues[] = 'قيد المصدر معكوس؛ لا يعاد ترحيله من مسار البداية نفسه.';
-            } elseif ((int) $entry->branch_id !== (int) $branch->id || ! $this->matches($entry, $lines, $accounts->pluck('id', 'code')->all(), $date)) {
+            } elseif (! $openingVerified && ((int) $entry->branch_id !== (int) $branch->id || ! $this->matches($entry, $lines, $accounts->pluck('id', 'code')->all(), $date))) {
                 $issues[] = 'يوجد قيد للمصدر لا يطابق الأثر المقترح؛ يلزم مراجعة مستقلة.';
             } else {
                 $status = $data['source_kind'] !== 'opening' && ! $source->financial_posted_at ? 'eligible' : 'already_posted';
@@ -172,7 +218,7 @@ class LegacyFinanceTransitionAction
         }
         $plan = ['source_kind' => $data['source_kind'], 'source_id' => $source->id, 'branch_id' => $branch->id,
             'posting_date' => $date, 'status' => $issues === [] ? $status : 'rejected', 'issues' => array_values(array_unique($issues)),
-            'lines' => $lines, 'journal_id' => $entry?->id, 'evidence' => $data['evidence'] ?? '',
+            'financial_support' => $openingSupport, 'lines' => $lines, 'journal_id' => $entry?->id, 'evidence' => $data['evidence'] ?? '',
             'account_id' => $data['account_id'] ?? null, 'funding_evidence' => $data['funding_evidence'] ?? '',
             'funding_confirmed' => (bool) ($data['funding_confirmed'] ?? false), 'opening_inclusion' => $data['opening_inclusion'] ?? null];
         $plan['amount_text'] = $lines === [] ? null : Money::format(abs((int) $lines[0]['amount']));
@@ -181,6 +227,9 @@ class LegacyFinanceTransitionAction
             'purchase' => 'إثبات قيمة الشراء في الدفتر وزيادة مستحق المورد، دون استلام البضاعة مرة ثانية.',
             'payment' => 'تخفيض مستحق المورد ورصيد حساب السداد بالمبلغ نفسه، دون إنشاء دفعة أخرى.',
         };
+        if ($openingSupport !== null) {
+            $plan['effect_text'] = 'إثبات الافتتاح الأصلي وتسوياته الموثقة معًا؛ لا إعادة ترحيل للأصل ولا تغيير للكميات. راجع تفصيل المعالجة قبل أي إجراء.';
+        }
         $plan['revision'] = OperationContext::hash([$plan, $basis, $accounts->toArray(), $entry?->lines->toArray()]);
 
         return $plan;
@@ -294,10 +343,12 @@ class LegacyFinanceTransitionAction
                 continue;
             }
             $expected[] = [(int) (is_int($line['account']) ? $line['account'] : ($accounts[$line['account']] ?? 0)),
-                (int) $line['amount'], $line['supplier_id'] ?? null, $line['purchase_invoice_id'] ?? null];
+                (int) $line['amount'], $line['supplier_id'] ?? null, $line['purchase_invoice_id'] ?? null,
+                $line['expense_id'] ?? null, $line['customer_id'] ?? null, $line['sale_invoice_id'] ?? null, $line['sale_return_id'] ?? null];
         }
         $actual = $entry->lines->map(fn ($line): array => [(int) $line->financial_account_id,
-            (int) $line->debit_minor - (int) $line->credit_minor, $line->supplier_id, $line->purchase_invoice_id])->all();
+            (int) $line->debit_minor - (int) $line->credit_minor, $line->supplier_id, $line->purchase_invoice_id,
+            $line->expense_id, $line->customer_id, $line->sale_invoice_id, $line->sale_return_id])->all();
         sort($expected);
         sort($actual);
 

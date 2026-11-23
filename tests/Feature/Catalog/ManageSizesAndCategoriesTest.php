@@ -2,15 +2,49 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\Actions\Catalog\CreateColorAction;
 use App\Models\Category;
 use App\Models\OpeningStockItem;
 use App\Models\Product;
 use App\Models\Size;
 use App\Models\User;
+use App\Support\Sales\SalesAccess;
 use Tests\Feature\Sales\SalesTestCase;
 
 class ManageSizesAndCategoriesTest extends SalesTestCase
 {
+    public function test_bulk_sizes_are_atomic_and_reject_duplicates_and_unauthorized_roles(): void
+    {
+        $this->postJson(route('catalog.attributes.sizes.store'), ['batch_names' => "S\nM\nL\nXL"])->assertCreated();
+        $this->assertDatabaseCount('sizes', 4);
+        foreach (['S', 'M', 'L', 'XL'] as $name) {
+            $this->assertDatabaseHas('sizes', ['name' => $name, 'code' => $name]);
+        }
+        $this->postJson(route('catalog.attributes.sizes.store'), ['batch_names' => "XXL\nM"])->assertUnprocessable();
+        $this->assertDatabaseMissing('sizes', ['name' => 'XXL']);
+        $this->postJson(route('catalog.attributes.sizes.store'), ['names' => ['XXL', 'xxl']])->assertUnprocessable();
+        $this->postJson(route('catalog.attributes.sizes.store'), ['name' => 'XXL', 'names' => ['XXXL']])->assertUnprocessable();
+        $cashier = User::factory()->create(['role_id' => SalesAccess::provisionRole('sales_cashier')->id, 'branch_id' => $this->branchId]);
+        $this->actingAs($cashier)->postJson(route('catalog.attributes.sizes.store'), ['batch_names' => 'XXL'])->assertForbidden();
+        $this->assertDatabaseCount('sizes', 4);
+    }
+
+    public function test_color_abbreviations_only_affect_new_colors_and_preserve_existing_skus(): void
+    {
+        $variant = $this->stock();
+        $before = $variant->sku;
+        $blue = app(CreateColorAction::class)->execute(['name' => 'أزرق']);
+        $this->assertSame('BLU', $blue->code);
+        $other = app(CreateColorAction::class)->execute(['name' => 'blue']);
+        $this->assertNotSame($blue->code, $other->code);
+        $this->assertSame($before, $variant->fresh()->sku);
+        $this->assertSame('BLK', $variant->color->fresh()->code);
+        $custom = app(CreateColorAction::class)->execute(['name' => 'لون مخصص اختبار', 'hex_code' => '#12ABEF']);
+        $this->assertSame('HEX-12ABEF', $custom->code);
+        $duplicateHex = app(CreateColorAction::class)->execute(['name' => 'لون مخصص آخر', 'hex_code' => '#12ABEF']);
+        $this->assertNotSame($custom->code, $duplicateHex->code);
+    }
+
     public function test_renaming_a_used_size_preserves_skus_stock_and_document_snapshots(): void
     {
         $variant = $this->stock();

@@ -33,7 +33,7 @@ class SaveSaleAction
             $plan = $this->prepare->execute($data, $actor, false, false);
             $attributes = $plan['attributes'];
             $attributes['cost_minor'] = null;
-            $attributes += ['request_hash' => $hash, 'payment_instructions' => ['payments' => $data['payments'] ?? [], 'payment_mode' => $data['payment_mode'] ?? 'paid'],
+            $attributes += ['request_hash' => $hash, 'payment_instructions' => ['payments' => $data['payments'] ?? [], 'payment_mode' => $data['payment_mode'] ?? 'paid', 'customer_credits' => $data['customer_credits'] ?? []],
                 'discount_instructions' => ['discount' => $data['discount'] ?? [], 'reason' => $data['reason'] ?? null,
                     'below_minimum_confirmed' => (bool) ($data['below_minimum_confirmed'] ?? false),
                     'below_minimum_confirmation' => $data['below_minimum_confirmation'] ?? null], 'notes' => $data['notes'] ?? null];

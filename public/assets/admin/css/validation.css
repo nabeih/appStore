@@ -1,0 +1,6 @@
+[aria-invalid="true"].validation-invalid{border:2px solid #b42318!important;outline-offset:3px}
+.validation-field-error{display:block;color:#a51d16;font-size:.9rem;line-height:1.7;margin:.3rem 0;text-align:start;white-space:pre-line}
+.validation-summary{border:1px solid #b42318;border-inline-start:5px solid #b42318;background:#fff4f2;color:#7a201b;padding:1rem;margin-block:1rem;border-radius:8px;text-align:start}
+.validation-summary ul{padding-inline-start:1.3rem;margin:.5rem 0}.validation-summary button{color:inherit;background:none;border:0;text-decoration:underline;cursor:pointer;font:inherit;text-align:start}
+
+.validation-field-error > span{display:block}

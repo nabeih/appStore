@@ -47,11 +47,11 @@
         const change = () => { const cash = select.selectedOptions[0]?.dataset.type === 'cash'; confirmedLabel.hidden = cash; referenceLabel.hidden = cash; };
         select.addEventListener('change', change); change(); row.append(accountLabel, amountLabel, remove, confirmedLabel, referenceLabel); return row;
     }
-    function payments(container) {
+    function payments(container, prefix = 'payments') {
         if (!container) return [];
         return [...container.querySelectorAll('[data-payment-row]')].filter(row => row.querySelector('[data-payment-account]').value)
-            .map(row => ({ account_id: Number(row.querySelector('[data-payment-account]').value), amount: row.querySelector('[data-payment-amount]').value.trim() || null,
-                confirmed: row.querySelector('[data-payment-confirmed]')?.checked || false, reference: row.querySelector('[data-payment-reference]')?.value.trim() || null }));
+            .map((row, index) => { ['account','amount','confirmed','reference'].forEach(field => { const input = row.querySelector(`[data-payment-${field}]`); if (input) input.dataset.validationField = `${prefix}.${index}.${field === 'account' ? 'account_id' : field}`; }); return ({ account_id: Number(row.querySelector('[data-payment-account]').value), amount: row.querySelector('[data-payment-amount]').value.trim() || null,
+                confirmed: row.querySelector('[data-payment-confirmed]')?.checked || false, reference: row.querySelector('[data-payment-reference]')?.value.trim() || null }); });
     }
     document.addEventListener('click', event => {
         const button = event.target.closest('[data-close-sale-dialog]'); if (button) button.closest('dialog').close();
@@ -67,11 +67,11 @@
             data.progressive_opening = { counted_at: counted ? new Date(counted).toISOString() : '', evidence: declaration.querySelector('[data-progressive-evidence]').value, confirmed: true };
         }
         ['goods_confirmed', 'funds_confirmed', 'confirm_opening', 'confirmed'].forEach(key => { const input = form.elements.namedItem(key); if (input?.type === 'checkbox') data[key] = input.checked; });
-        if (form.querySelector('[data-refund-rows]')) data.refund_payments = payments(form.querySelector('[data-refund-rows]'));
+        if (form.querySelector('[data-refund-rows]')) data.refund_payments = payments(form.querySelector('[data-refund-rows]'), 'refund_payments');
         form.dataset.busy = '1'; error(form, '');
         form.querySelectorAll('fieldset, button').forEach(node => node.disabled = true);
         try {
-            const result = await request(form.action, { method: form.dataset.method || 'POST', data });
+            const result = await request(form.action, { validationScope: form, method: form.dataset.method || 'POST', data });
             if (result.url) location.assign(result.url);
             else { form.dispatchEvent(new CustomEvent('sales:saved', { detail: result })); const status = form.querySelector('[data-sales-status]'); if (status) { status.textContent = result.message || 'تم الحفظ.'; status.hidden = false; } }
         } catch (failure) { error(form, failure); }

@@ -51,6 +51,7 @@ class AppAlertController extends Controller
         return match ($event->type) {
             'store_order' => route('store.orders.show', $event->subject_id),
             'minimum_price' => route('sales.invoices.show', $event->subject_id),
+            'customer_refund' => route('customers.receipts.show', $event->subject_id),
             'stock_low', 'stock_empty' => route('inventory.index', ['branch_id' => $event->branch_id, 'q' => ProductVariant::whereKey($event->subject_id)->value('sku')]),
             'inventory_review', 'return_review' => route('inventory.review.index', ['branch_id' => $event->branch_id]),
             'expense_review', 'expense_due' => route('finance.expenses.show', $event->subject_id),

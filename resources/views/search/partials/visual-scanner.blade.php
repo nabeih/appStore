@@ -3,13 +3,13 @@
     <header><h2>البحث بصورة الملابس</h2><button type="button" data-visual-close aria-label="إغلاق">×</button></header>
     <div class="product-scanner-body">
         <p>صوّر القطعة كاملة بإضاءة واضحة. ستُرسل الصورة إلى التطبيق المحلي فقط بعد تأكيدك، دون حفظها دائمًا.</p>
-        <label>الفرع<select data-visual-branch>@foreach(\App\Support\Sales\SalesReports::branches(auth()->user(), false) as $visualBranch)<option value="{{ $visualBranch->id }}">{{ $visualBranch->name }}</option>@endforeach</select></label>
+        <label>الفرع<select data-validation-field="branch_id" data-visual-branch>@foreach(\App\Support\Sales\SalesReports::branches(auth()->user(), false) as $visualBranch)<option value="{{ $visualBranch->id }}">{{ $visualBranch->name }}</option>@endforeach</select></label>
         <p role="status" data-visual-status></p>
         <video data-visual-video autoplay muted playsinline hidden></video>
         <div data-visual-input><div class="product-search-tools">
             <button type="button" class="btn btn-outline" data-visual-camera>تشغيل الكاميرا الخلفية</button>
             <button type="button" class="btn btn-outline" data-visual-capture hidden>التقاط صورة</button>
-            <label class="btn btn-outline">اختيار صورة<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-visual-file></label>
+            <label class="btn btn-outline">اختيار صورة<input data-validation-field="image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-visual-file></label>
         </div>
         <img data-visual-preview hidden alt="معاينة الصورة قبل إرسالها" style="max-width:100%;max-height:240px;object-fit:contain">
         <button type="button" class="btn btn-primary" data-visual-submit disabled>تأكيد الصورة والبحث</button>

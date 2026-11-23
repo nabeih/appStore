@@ -132,7 +132,11 @@
         el('osStatus').textContent = message;
     }
     async function json(url, init = {}) {
-        const response = await fetch(url, { ...init, headers: { Accept: 'application/json', 'X-CSRF-TOKEN': config.csrf, ...init.headers } });
+        body.querySelectorAll('[data-field]').forEach(input => {
+            const index = rows.filter(hasData).findIndex(row => row.id === input.dataset.id);
+            input.dataset.validationField = `rows.${index}.${input.dataset.field}`;
+        });
+        const response = await fetch(url, { validationScope: dialog, ...init, headers: { Accept: 'application/json', 'X-CSRF-TOKEN': config.csrf, ...init.headers } });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
             if (result.guidance) window.dispatchEvent(new CustomEvent('appstore:guidance', { detail: result.guidance }));
@@ -158,10 +162,10 @@
     function render() {
         body.innerHTML = rows.map((row, index) => `<tr data-row="${row.id}">
             <td>${index + 1}</td>
-            <td data-label="الكود"><input aria-label="كود المنتج السطر ${index + 1}" data-id="${row.id}" data-field="code" dir="ltr" maxlength="50" value="${escape(row.code)}" placeholder="تلقائي"></td>
-            <td data-label="اسم المنتج"><input aria-label="اسم المنتج السطر ${index + 1}" data-id="${row.id}" data-field="name" maxlength="200" value="${escape(row.name)}"></td>
-            ${[['category_id', 'categories', 'التصنيف'], ['color_id', 'colors', 'اللون'], ['size_id', 'sizes', 'المقاس']].map(([field, list, label]) => `<td data-label="${label}"><select aria-label="${label} السطر ${index + 1}" data-id="${row.id}" data-field="${field}">${options(catalog[list], row[field])}</select></td>`).join('')}
-            ${[['qty', 'الكمية'], ['cost', 'تكلفة الوحدة'], ['price', 'سعر البيع'], ...(config.canManageMinimum ? [['minimum_selling_price', 'الحد الأدنى']] : [])].map(([field, label]) => `<td data-label="${label}"><input type="number" aria-label="${label} السطر ${index + 1}" min="${field === 'qty' ? 1 : 0}" max="${field === 'qty' ? 1000000 : 9999999.99}" step="${field === 'qty' ? 1 : '0.01'}" data-id="${row.id}" data-field="${field}" value="${escape(row[field])}"></td>`).join('')}
+            <td data-label="الكود"><input aria-label="كود المنتج السطر ${index + 1}" data-id="${row.id}" data-field="code" data-validation-field="rows.${rows.filter(hasData).indexOf(row)}.code" dir="ltr" maxlength="50" value="${escape(row.code)}" placeholder="تلقائي"></td>
+            <td data-label="اسم المنتج"><input aria-label="اسم المنتج السطر ${index + 1}" data-id="${row.id}" data-field="name" data-validation-field="rows.${rows.filter(hasData).indexOf(row)}.name" maxlength="200" value="${escape(row.name)}"></td>
+            ${[['category_id', 'categories', 'التصنيف'], ['color_id', 'colors', 'اللون'], ['size_id', 'sizes', 'المقاس']].map(([field, list, label]) => `<td data-label="${label}"><select aria-label="${label} السطر ${index + 1}" data-id="${row.id}" data-field="${field}" data-validation-field="rows.${rows.filter(hasData).indexOf(row)}.${field}">${options(catalog[list], row[field])}</select></td>`).join('')}
+            ${[['qty', 'الكمية'], ['cost', 'تكلفة الوحدة'], ['price', 'سعر البيع'], ...(config.canManageMinimum ? [['minimum_selling_price', 'الحد الأدنى']] : [])].map(([field, label]) => `<td data-label="${label}"><input type="number" aria-label="${label} السطر ${index + 1}" min="${field === 'qty' ? 1 : 0}" max="${field === 'qty' ? 1000000 : 9999999.99}" step="${field === 'qty' ? 1 : '0.01'}" data-id="${row.id}" data-field="${field}" data-validation-field="rows.${rows.filter(hasData).indexOf(row)}.${field}" value="${escape(row[field])}"></td>`).join('')}
             <td><button type="button" class="btn btn-outline btn-sm" data-remove="${row.id}" aria-label="حذف السطر ${index + 1}">✕</button></td>
         </tr>`).join('');
         if (!rows.length) body.innerHTML = '<tr data-opening-empty><td colspan="12">لا توجد أصناف مدخلة <button type="button" class="btn btn-outline" data-add-empty-row>إضافة سطر</button></td></tr>';

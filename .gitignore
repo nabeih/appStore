@@ -28,3 +28,23 @@ Thumbs.db
 /resources/ai/visual-search/__pycache__/
 /tests/Python/__pycache__/
 /appStore.zip
+
+# Keep test sources; ignore generated execution artifacts only.
+/coverage/
+/build/coverage/
+/test-results/
+/test-reports/
+/playwright-report/
+/phpunit-coverage/
+/junit*.xml
+/coverage*.xml
+/test-results*.xml
+/clover.xml
+/cobertura.xml
+/coverage.txt
+/.nyc_output/
+/build/logs/
+/storage/app/reports/
+/tmp/
+/.env.*
+!/.env.example

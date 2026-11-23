@@ -3,6 +3,7 @@
 namespace App\Actions\Catalog;
 
 use App\Models\Color;
+use App\Models\Inventory;
 use App\Models\OpeningStockItem;
 use App\Models\Product;
 use App\Models\ProductImage;
@@ -31,6 +32,12 @@ class UpdateProductAction
                 $current = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $variants = $current->variants()->with(['color', 'size'])->lockForUpdate()->get()->keyBy('id');
                 $ids = $variants->keys();
+                $disabledIds = ! (bool) ($data['is_active'] ?? true) ? $ids->all()
+                    : collect($data['variants'] ?? [])->filter(fn ($row) => isset($row['id']) && array_key_exists('is_active', $row) && ! (bool) $row['is_active'])->pluck('id')->all();
+                if ($disabledIds !== [] && Inventory::whereIn('product_variant_id', $disabledIds)
+                    ->where(fn ($query) => $query->where('quantity', '>', 0)->orWhere('quarantined_quantity', '>', 0)->orWhere('damaged_quantity', '>', 0)->orWhere('value_minor', '>', 0))->exists()) {
+                    throw ValidationException::withMessages(['is_active' => 'لا يمكن تعطيل صنف له مخزون موجب أو قيمة باقية؛ راجع رصيده والمرتجع أو التصحيح الرسمي أولًا.']);
+                }
                 $documented = StockMovement::whereIn('product_variant_id', $ids)->exists()
                     || OpeningStockItem::whereIn('product_variant_id', $ids)->exists()
                     || PurchaseInvoiceItem::whereIn('product_variant_id', $ids)->exists()

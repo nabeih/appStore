@@ -16,8 +16,10 @@
                 headers:{Accept:'application/json', 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content}
             });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.message || 'تعذر حذف المنتج.');
-            window.location.assign(page.dataset.backUrl);
+            if (!response.ok) throw new Error(Object.values(result.errors || {}).flat().join(' ') || result.message || 'تعذر تنفيذ الأرشفة؛ لم يُحذف المنتج.');
+            feedback.textContent = result.message; feedback.hidden = false;
+            button.hidden = true;
+            const back = document.createElement('a'); back.href = page.dataset.backUrl; back.textContent = 'العودة إلى المخزون'; back.className = 'btn btn-outline'; feedback.append(' ', back);
         } catch (error) {
             feedback.textContent = error instanceof TypeError ? 'تعذر الاتصال. حدّث الصفحة للتحقق من النتيجة قبل إعادة المحاولة.' : error.message;
             feedback.hidden = false;

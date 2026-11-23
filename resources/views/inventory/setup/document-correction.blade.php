@@ -3,7 +3,7 @@
 @include('sales.partials.assets')
 @section('content')
 <div class="sale-page sale-panel"><h1>تصحيح بند — {{ $source->number }}</h1><p>{{ $line->product_name }} — {{ $line->color_name }} / {{ $line->size_name }} — {{ $line->sku }}</p>
-<p class="sale-notice">هذا تصحيح خطأ إدخال موثق بتاريخ اليوم، مع إبقاء المستند والقيود الأصلية. رجوع البضاعة الفعلي يُعالج بمستند مرتجع. لا إعادة احتساب تلقائية لمصادر تكلفة مختلطة.</p>
+<p class="sale-notice">هذا تصحيح خطأ إدخال موثق بتاريخ اليوم، مع إبقاء المستند والقيود الأصلية. رجوع البضاعة الفعلي يُعالج بمستند مرتجع. البيع أو الخروج خارج التطبيق ليس تصحيح إدخال؛ يحتاج إثبات الإيراد والتكلفة بصورة مستقلة. لا إعادة احتساب تلقائية لمصادر تكلفة مختلطة.</p>
 <form method="get" class="sale-grid"><label>الكمية الصحيحة في المستند<input name="quantity" type="number" min="0" max="1000000" required value="{{ request('quantity',$defaults['quantity']) }}"></label><label>تكلفة الوحدة الصحيحة ₪<input name="unit_cost" inputmode="decimal" required value="{{ request('unit_cost',$defaults['unit_cost']) }}"></label><label>سبب التصحيح ودليله<input name="reason" minlength="5" maxlength="1000" required value="{{ request('reason') }}"></label><button class="btn btn-outline">معاينة أثر التصحيح</button></form>
 @if($problem)<p role="alert" class="sale-notice">{{ $problem }}</p><a href="{{ route('inventory.operation.index',['branch_id'=>$source->branch_id]) }}">مراجعة الجاهزية</a>@endif
 @if($plan)

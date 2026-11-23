@@ -11,6 +11,7 @@ use App\Models\SaleExchange;
 use App\Models\SaleItem;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Guidance\GuidanceException;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use Illuminate\Database\Eloquent\Model;
@@ -74,6 +75,9 @@ class CorrectDocumentItemAction
     private function plan(Model $document, int $itemId, array $data, User $actor): array
     {
         $this->authorize($document, $actor);
+        if (($data['classification'] ?? 'entry_error') !== 'entry_error') {
+            $this->fail('هذا المسار لتصحيح الإدخال فقط. خروج بضاعة أو بيع خارجي يحتاج مستنده ودليله المحاسبي؛ لا تستخدم تصحيح الكمية بدلًا منه.');
+        }
         DB::table('product_code_counters')->where('id', 1)->lockForUpdate()->first();
         $branch = Branch::whereKey($document->branch_id)->lockForUpdate()->firstOrFail();
         $date = OperationContext::date($branch);
@@ -87,7 +91,7 @@ class CorrectDocumentItemAction
         }
         $proof = app(ProgressiveStockProof::class)->build($branch->id)['rows'][$item->product_variant_id] ?? null;
         if (! $proof || ! $proof['ready']) {
-            $this->fail('مصدر الرصيد المالي والمخزني غير مثبت؛ راجع جاهزية الصنف دون إنشاء قيد تاريخي تلقائي.');
+            throw GuidanceException::forCode('stock.source_unproven', 'correction', 'مصدر الرصيد المالي والمخزني غير مثبت؛ راجع جاهزية الصنف ومستند الشراء أو الافتتاح دون إنشاء قيد تاريخي تلقائي.');
         }
         $history = StockMovement::where('branch_id', $branch->id)->where('product_variant_id', $item->product_variant_id)->orderBy('id')->lockForUpdate()->get();
         $source = $history->first();
@@ -125,7 +129,7 @@ class CorrectDocumentItemAction
         if ($delta === 0 && $quantity === $oldQuantity) {
             $this->fail('لا يوجد فرق يستلزم تصحيحًا.');
         }
-        $plan = ['item_id' => $item->id, 'item_type' => $item->getMorphClass(), 'variant_id' => $item->product_variant_id, 'date' => $date,
+        $plan = ['classification' => 'entry_error', 'item_id' => $item->id, 'item_type' => $item->getMorphClass(), 'variant_id' => $item->product_variant_id, 'date' => $date,
             'name' => $item->product_name, 'sku' => $item->sku, 'quantity' => $quantity, 'unit_cost' => Money::format($cost),
             'old_quantity' => $oldQuantity, 'old_value_minor' => $oldValue,
             'quantity_delta' => $quantity - $oldQuantity, 'document_delta_minor' => $delta, 'inventory_delta_minor' => $inventory, 'cogs_delta_minor' => $cogs,

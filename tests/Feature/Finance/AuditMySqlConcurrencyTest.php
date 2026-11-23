@@ -2,36 +2,48 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Actions\Customers\RecordCustomerReceiptAction;
 use App\Actions\Finance\Expenses\ManageExpenseAction;
+use App\Actions\Finance\FinanceReports;
 use App\Actions\Finance\LegacyFinanceTransitionAction;
 use App\Actions\Finance\ManageFinancialAccountsAction;
+use App\Actions\Finance\ManageSupplierDebtSettlement;
 use App\Actions\Finance\PostJournalAction;
+use App\Actions\Finance\ReconcileOpeningCorrections;
 use App\Actions\Finance\Treasury\ManageTreasuryAction;
 use App\Actions\Inventory\OpeningStock\PostOpeningStockAction;
 use App\Actions\Inventory\ProgressiveOperation;
+use App\Actions\Inventory\Setup\CorrectInventoryAction;
 use App\Actions\Inventory\SetupReadinessReport;
 use App\Actions\Purchases\ApprovePurchaseInvoiceAction;
 use App\Actions\Purchases\SavePurchaseInvoiceAction;
 use App\Actions\Sales\PostSaleAction;
 use App\Actions\Sales\ReturnSaleAction;
 use App\Actions\Sales\SaveSaleAction;
+use App\Models\AuditEvent;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Customer;
 use App\Models\FinancialAccount;
 use App\Models\Inventory;
+use App\Models\InventorySetupChange;
 use App\Models\JournalEntry;
 use App\Models\OpeningStockEntry;
 use App\Models\SaleInvoice;
 use App\Models\Size;
+use App\Models\StockMovement;
 use App\Models\Supplier;
+use App\Models\SupplierDebtSettlement;
+use App\Models\SupplierPayment;
 use App\Models\TreasuryDocument;
 use App\Models\User;
 use App\Support\Inventory\Setup\InventoryState;
 use App\Support\Sales\OperationContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -65,7 +77,7 @@ class AuditMySqlConcurrencyTest extends TestCase
             $this->markTestSkipped('Run with AUDIT_MYSQL_RACES=1; retains isolated audit race databases.');
         }
         $source = DB::connection();
-        if (! app()->environment('testing') || $source->getDriverName() !== 'mysql' || $source->getDatabaseName() !== 'appstore_golive_20261031_tests'
+        if (! app()->environment('testing') || $source->getDriverName() !== 'mysql' || ! in_array($source->getDatabaseName(), ['appstore_golive_20261031_tests', 'appstore_account_status_20261118_tests'], true)
             || $source->getConfig('host') !== '127.0.0.1' || $source->getConfig('url') || app()->configurationIsCached()) {
             throw new \LogicException('Audit races require the explicitly isolated source connection.');
         }
@@ -127,6 +139,7 @@ class AuditMySqlConcurrencyTest extends TestCase
 
     private function race(string $operation, array $jobs): array
     {
+        $batchStart = count($this->workers);
         $code = <<<'PHP'
 require getcwd().'/vendor/autoload.php';
 $app=require getcwd().'/bootstrap/app.php';
@@ -134,6 +147,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $config=json_decode(getenv('FINANCE_RACE_CONFIG'),true,512,JSON_THROW_ON_ERROR);
 config(['database.default'=>'finance_race','database.connections.finance_race'=>$config]);
 Illuminate\Support\Facades\DB::setDefaultConnection('finance_race');
+if(getenv('SUPPLIER_DEBT_EVIDENCE_ROOT')){config(['filesystems.disks.local.root'=>getenv('SUPPLIER_DEBT_EVIDENCE_ROOT')]);}
 $actor=App\Models\User::findOrFail((int)getenv('FINANCE_RACE_ACTOR'));
 $data=json_decode(getenv('FINANCE_RACE_JOB'),true,512,JSON_THROW_ON_ERROR);
 config(['finance.legacy_transition_enabled'=>true]);
@@ -143,6 +157,7 @@ if($data['fail_audit']??false){App\Models\AuditEvent::creating(function(){throw 
 try{
 $document=match($data['operation']??getenv('FINANCE_RACE_OPERATION')){
 'legacy_transition'=>app(App\Actions\Finance\LegacyFinanceTransitionAction::class)->execute($data['payload'],$actor),
+'opening_reconcile'=>app(App\Actions\Finance\ReconcileOpeningCorrections::class)->execute(App\Models\OpeningStockEntry::findOrFail($data['id']),$data['payload'],$actor),
 'setup_close'=>tap(App\Models\Branch::findOrFail($data['id']),fn($branch)=>app(App\Actions\Inventory\ReviewInventoryAction::class)->close($branch,$data['payload'],$actor)),
 'baseline'=>app(App\Actions\Inventory\ReviewInventoryAction::class)->baseline(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor),
 'correct_source'=>app(App\Actions\Inventory\Setup\CorrectInventoryAction::class)->update(App\Models\Inventory::findOrFail($data['id']),$data['payload'],$actor->id),
@@ -153,6 +168,10 @@ $document=match($data['operation']??getenv('FINANCE_RACE_OPERATION')){
 'exchange'=>app(App\Actions\Sales\ExchangeSaleAction::class)->execute(App\Models\SaleInvoice::findOrFail($data['id']),$data['payload'],$actor),
 'return'=>app(App\Actions\Sales\ReturnSaleAction::class)->execute(App\Models\SaleInvoice::findOrFail($data['id']),$data['payload'],$actor),
 'supplier'=>app(App\Actions\Purchases\RecordSupplierPaymentAction::class)->execute(App\Models\PurchaseInvoice::findOrFail($data['id']),$data['payload'],$actor->id),
+'supplier_debt_approve'=>app(App\Actions\Finance\ManageSupplierDebtSettlement::class)->approve(App\Models\SupplierDebtSettlement::findOrFail($data['id']),$data['payload'],$actor),
+'supplier_debt_pay'=>app(App\Actions\Purchases\RecordSupplierPaymentAction::class)->execute(App\Models\SupplierDebtSettlement::findOrFail($data['id']),$data['payload'],$actor->id),
+'supplier_debt_reverse'=>app(App\Actions\Finance\ManageSupplierDebtSettlement::class)->reverse(App\Models\SupplierDebtSettlement::findOrFail($data['id']),$actor,'Concurrent debt reversal'),
+'supplier_debt_payment_reverse'=>app(App\Actions\Finance\ReverseSupplierPaymentAction::class)->execute(App\Models\SupplierPayment::findOrFail($data['id']),$actor,'Concurrent payment reversal'),
 'expense'=>app(App\Actions\Finance\Expenses\ManageExpenseAction::class)->pay(App\Models\Expense::findOrFail($data['id']),$data['payload'],$actor),
 'expense_recognition'=>tap(App\Models\Expense::findOrFail($data['id']),fn($expense)=>app(App\Actions\Finance\Expenses\RecognizePrepaidExpense::class)->execute($expense,$actor)),
 'expense_reverse'=>app(App\Actions\Finance\Expenses\ManageExpenseAction::class)->reverse(App\Models\Expense::findOrFail($data['id']),$actor,'عكس عقد اختبار متزامن'),
@@ -164,13 +183,13 @@ PHP;
         $start = microtime(true) + 1.5;
         foreach ($jobs as $job) {
             $worker = new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'FINANCE_RACE_CONFIG' => json_encode(config('database.connections.finance_race'), JSON_THROW_ON_ERROR),
-                'FINANCE_RACE_ACTOR' => (string) $this->owner->id, 'FINANCE_RACE_JOB' => json_encode($job, JSON_THROW_ON_ERROR), 'FINANCE_RACE_START' => (string) $start, 'FINANCE_RACE_OPERATION' => $operation]);
+                'FINANCE_RACE_ACTOR' => (string) $this->owner->id, 'FINANCE_RACE_JOB' => json_encode($job, JSON_THROW_ON_ERROR), 'FINANCE_RACE_START' => (string) $start, 'FINANCE_RACE_OPERATION' => $operation, 'SUPPLIER_DEBT_EVIDENCE_ROOT' => config('filesystems.disks.local.root')]);
             $worker->setTimeout(40);
             $worker->start();
             $this->workers[] = $worker;
         }
         $results = [];
-        foreach ($this->workers as $worker) {
+        foreach (array_slice($this->workers, $batchStart) as $worker) {
             $worker->wait();
             $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput());
             $results[] = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
@@ -183,6 +202,38 @@ PHP;
     {
         $this->assertCount(1, array_filter($results, fn (array $row): bool => $row['ok']));
         $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
+    }
+
+    public static function customerAdvanceRaces(): array
+    {
+        return ['two refunds' => [false, false], 'refund against credit use' => [false, true], 'same refund replay' => [true, false]];
+    }
+
+    #[DataProvider('customerAdvanceRaces')]
+    public function test_mysql_customer_advance_cannot_be_spent_twice(bool $sameRequest, bool $againstSale): void
+    {
+        $advance = app(RecordCustomerReceiptAction::class)->execute([
+            'client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId, 'customer_id' => $this->customer->id, 'kind' => 'advance',
+            'amount' => '35', 'payments' => [['account_id' => $this->cash->id, 'amount' => '35']],
+        ], $this->owner);
+        $data = ['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId, 'customer_id' => $this->customer->id,
+            'kind' => 'refund', 'refund_confirmed' => true, 'credits' => [['advance_receipt_id' => $advance->id, 'amount' => '35']],
+            'payments' => [['account_id' => $this->cash->id, 'amount' => '35']]];
+        $other = array_replace($data, ['client_uuid' => $sameRequest ? $data['client_uuid'] : (string) Str::uuid()]);
+        if ($againstSale) {
+            $invoice = app(PostSaleAction::class)->execute($this->draft(true), $this->owner);
+            $other = array_replace($other, ['kind' => 'credit', 'payments' => [], 'allocations' => [['sale_invoice_id' => $invoice->id, 'amount' => '35']]]);
+        }
+        $results = $this->race('receipt', [$data, $other]);
+        if ($sameRequest) {
+            $this->assertTrue($results[0]['ok'] && $results[1]['ok']);
+            $this->assertSame($results[0]['id'], $results[1]['id']);
+        } else {
+            $this->assertOne($results);
+        }
+        $this->assertSame(3500, (int) DB::table('credit_usages')->where('advance_receipt_id', $advance->id)->sum('amount_minor'));
+        $this->assertSame(0, (int) DB::table('journal_lines')->sum('debit_minor') - (int) DB::table('journal_lines')->sum('credit_minor'));
+        $this->assertLessThanOrEqual(1, DB::table('app_alert_events')->where('type', 'customer_refund')->count());
     }
 
     public static function openingCorrectionRaceCases(): array
@@ -215,6 +266,31 @@ PHP;
         $this->assertSame($value === 0 ? 0 : 1, DB::table('stock_movements')->count());
         $this->assertSame(100000, app(PostJournalAction::class)->balance($this->cash->id));
         $this->assertNull(DB::table('sales_controls')->value('activated_at'));
+    }
+
+    public function test_mysql_reconciliation_replays_concurrent_requests_without_duplicate_journals(): void
+    {
+        config(['inventory.allow_setup_changes' => true, 'finance.legacy_transition_enabled' => true]);
+        DB::table('branches')->where('id', $this->branchId)->update(['opening_stock_closed_at' => null, 'opening_stock_closed_by' => null]);
+        $stock = Inventory::with('productVariant.product')->sole();
+        $data = ['revision' => InventoryState::revision($stock, $stock->productVariant, $stock->productVariant->product), 'reason' => 'Synthetic legacy deletion'];
+        $this->mock(PostJournalAction::class)->shouldReceive('execute')->once()->andReturn(new JournalEntry);
+        app(CorrectInventoryAction::class)->delete($stock, $data, $this->owner->id);
+        $this->app->forgetInstance(PostJournalAction::class);
+        $entry = OpeningStockEntry::sole();
+        $request = ['change_id' => InventorySetupChange::sole()->id, 'classification' => 'entry_error',
+            'posting_date' => OperationContext::today(), 'evidence' => 'Synthetic evidence', 'reason' => 'Concurrent reconciliation approval',
+            'operation_uuid' => (string) Str::uuid(), 'confirmed' => true];
+        $request['revision'] = app(ReconcileOpeningCorrections::class)->preview($entry, $request, $this->owner)['revision'];
+        $results = $this->race('opening_reconcile', [['id' => $entry->id, 'payload' => $request], ['id' => $entry->id, 'payload' => $request]]);
+        $this->assertTrue($results[0]['ok'], json_encode($results[0]));
+        $this->assertTrue($results[1]['ok'], json_encode($results[1]));
+        $this->assertSame($results[0]['id'], $results[1]['id']);
+        $this->assertSame(1, JournalEntry::where('event', 'opening_reconciliation')->count());
+        $this->assertSame(1, AuditEvent::where('action', 'finance.opening_reconciled')->count());
+        $this->assertSame(0, Inventory::count());
+        $this->assertSame(0, StockMovement::count());
+        $this->assertSame(0, app(PostJournalAction::class)->balance(FinancialAccount::where('code', 'inventory')->value('id')));
     }
 
     public function test_mysql_duplicate_opening_approval_receives_and_posts_once(): void
@@ -429,6 +505,98 @@ PHP;
         $report = app(SetupReadinessReport::class)->build(Branch::findOrFail($this->branchId));
         $this->assertSame(0, $report['reconciliation']['inventory']['difference_minor']);
         $this->assertSame(0, $report['inventory'][0]['difference']);
+    }
+
+    private function supplierDebtDraft(bool $withEvidence = true): SupplierDebtSettlement
+    {
+        config(['filesystems.disks.local.root' => storage_path('framework/testing/disks/'.$this->databaseName)]);
+        Storage::forgetDisk('local');
+        $supplier = Supplier::factory()->create();
+
+        return app(ManageSupplierDebtSettlement::class)->save($supplier, ['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId,
+            'amount' => '100', 'original_date' => now()->subYears(2)->toDateString(), 'tracking_started_on' => OperationContext::today(),
+            'posting_date' => OperationContext::today(), 'reference' => 'HISTORICAL-001', 'notes' => 'Unrecorded opening debt supported by supplier statement'],
+            $withEvidence ? UploadedFile::fake()->create('statement.pdf', 2, 'application/pdf') : null, $this->owner);
+    }
+
+    private function debtApproval(SupplierDebtSettlement $document): array
+    {
+        return ['revision' => app(ManageSupplierDebtSettlement::class)->review($document, $this->owner)['revision'], 'opening_confirmed' => true, 'unrecorded_confirmed' => true];
+    }
+
+    private function debtPayment(): array
+    {
+        return ['client_uuid' => (string) Str::uuid(), 'payment_date' => OperationContext::today(), 'account_id' => $this->cash->id, 'amount' => '80'];
+    }
+
+    public static function supplierDebtEvidenceCases(): array
+    {
+        return ['with evidence' => [true], 'without evidence' => [false]];
+    }
+
+    #[DataProvider('supplierDebtEvidenceCases')]
+    public function test_mysql_supplier_debt_approval_replay_posts_one_journal(bool $withEvidence): void
+    {
+        $document = $this->supplierDebtDraft($withEvidence);
+        $job = ['id' => $document->id, 'payload' => $this->debtApproval($document)];
+        $results = $this->race('supplier_debt_approve', [$job, $job]);
+        $this->assertCount(2, array_filter($results, fn ($row): bool => $row['ok']));
+        $this->assertSame(1, JournalEntry::where('event', 'supplier_debt_settlement')->count());
+        $this->assertSame(1, DB::table('audit_events')->where('action', 'supplier_debt.approved')->count());
+        $this->assertSame(1, (int) Inventory::value('quantity'));
+    }
+
+    public function test_mysql_supplier_debt_competing_payments_cannot_overspend(): void
+    {
+        $document = $this->supplierDebtDraft();
+        app(ManageSupplierDebtSettlement::class)->approve($document, $this->debtApproval($document), $this->owner);
+        $this->assertOne($this->race('supplier_debt_pay', [['id' => $document->id, 'payload' => $this->debtPayment()], ['id' => $document->id, 'payload' => $this->debtPayment()]]));
+        $this->assertSame(8000, $document->fresh()->paid_minor);
+        $this->assertSame(92000, app(PostJournalAction::class)->balance($this->cash->id));
+        $this->assertDatabaseCount('supplier_payments', 1);
+        $report = app(FinanceReports::class)->supplier($document->supplier_id, $this->branchId);
+        $this->assertSame(2000, $report['ledger_minor']);
+        $this->assertSame(0, $report['difference_minor']);
+    }
+
+    #[DataProvider('supplierDebtEvidenceCases')]
+    public function test_mysql_supplier_debt_payment_and_reversal_replays_are_idempotent(bool $withEvidence): void
+    {
+        $document = $this->supplierDebtDraft($withEvidence);
+        app(ManageSupplierDebtSettlement::class)->approve($document, $this->debtApproval($document), $this->owner);
+        $job = ['id' => $document->id, 'payload' => $this->debtPayment()];
+        $results = $this->race('supplier_debt_pay', [$job, $job]);
+        $this->assertCount(2, array_filter($results, fn ($row): bool => $row['ok']));
+        $this->assertSame($results[0]['id'], $results[1]['id']);
+        $payment = SupplierPayment::sole();
+        $results = $this->race('supplier_debt_payment_reverse', [['id' => $payment->id], ['id' => $payment->id]]);
+        $this->assertCount(2, array_filter($results, fn ($row): bool => $row['ok']));
+        $this->assertSame(0, $document->fresh()->paid_minor);
+        $this->assertSame(1, JournalEntry::whereNotNull('reversal_of_id')->count());
+        $this->assertSame(100000, app(PostJournalAction::class)->balance($this->cash->id));
+    }
+
+    public function test_mysql_supplier_debt_payment_cannot_race_a_debt_reversal(): void
+    {
+        $document = $this->supplierDebtDraft();
+        app(ManageSupplierDebtSettlement::class)->approve($document, $this->debtApproval($document), $this->owner);
+        $this->assertOne($this->race('supplier_debt_pay', [['id' => $document->id, 'payload' => $this->debtPayment()], ['id' => $document->id, 'operation' => 'supplier_debt_reverse']]));
+        $current = $document->fresh();
+        $this->assertTrue(($current->status === 'approved' && $current->paid_minor === 8000) || ($current->status === 'reversed' && $current->paid_minor === 0));
+    }
+
+    public function test_mysql_supplier_debt_distinct_drafts_cannot_double_the_opening_balance(): void
+    {
+        $first = $this->supplierDebtDraft();
+        $second = app(ManageSupplierDebtSettlement::class)->save($first->supplier, ['client_uuid' => (string) Str::uuid(), 'branch_id' => $this->branchId,
+            'amount' => '120', 'original_date' => now()->subYears(2)->toDateString(), 'tracking_started_on' => OperationContext::today(),
+            'posting_date' => OperationContext::today(), 'reference' => 'HISTORICAL-002', 'notes' => 'A second draft requiring duplicate recognition review'],
+            UploadedFile::fake()->create('second-statement.pdf', 2, 'application/pdf'), $this->owner);
+        $this->assertOne($this->race('supplier_debt_approve', [['id' => $first->id, 'payload' => $this->debtApproval($first)], ['id' => $second->id, 'payload' => $this->debtApproval($second)]]));
+        $this->assertSame(1, SupplierDebtSettlement::where('status', 'approved')->count());
+        $this->assertSame(1, JournalEntry::where('event', 'supplier_debt_settlement')->count());
+        $report = app(FinanceReports::class)->supplier($first->supplier_id, $this->branchId);
+        $this->assertSame(0, $report['difference_minor']);
     }
 
     private function transferData(): array

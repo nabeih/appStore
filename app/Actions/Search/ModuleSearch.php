@@ -2,6 +2,7 @@
 
 namespace App\Actions\Search;
 
+use App\Actions\Finance\ManageSupplierDebtSettlement;
 use App\Models\User;
 use App\Support\Sales\Money;
 use App\Support\Sales\SalesReports;
@@ -242,6 +243,14 @@ class ModuleSearch
                 }
                 if ($supplier) {
                     $receipt->orWhereHas('invoice', fn (Builder $invoice) => $this->documents($invoice, ['q' => $term], 'PI', ['supplier_name', 'supplier_invoice_number']));
+                    if (app(ManageSupplierDebtSettlement::class)->installed()) {
+                        $receipt->orWhereHas('settlement', function (Builder $settlement) use ($term): void {
+                            SearchTerm::apply($settlement, $term, ['reference']);
+                            if ($id = SearchTerm::documentId($term, 'SD')) {
+                                $settlement->orWhereKey($id);
+                            }
+                        });
+                    }
                 } else {
                     $receipt->orWhereHas('customer', fn (Builder $customer) => $this->contacts($customer->withTrashed(), $term))
                         ->orWhereHas('parts', fn (Builder $part) => SearchTerm::apply($part, $term, ['reference']))

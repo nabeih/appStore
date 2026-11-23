@@ -40,6 +40,11 @@ class CustomerReceipt extends Model
         return $this->hasMany(CreditUsage::class);
     }
 
+    public function advanceUsages(): HasMany
+    {
+        return $this->hasMany(CreditUsage::class, 'advance_receipt_id');
+    }
+
     public function getNumberAttribute(): string
     {
         return 'RC-'.str_pad((string) $this->id, 7, '0', STR_PAD_LEFT);

@@ -19,6 +19,7 @@
 <link rel="preload" href="{{ asset('assets/store/fonts/Changa-variable.ttf') }}" as="font" type="font/ttf" crossorigin>
 <script type="application/ld+json">{!! json_encode($siteStructured, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE) !!}</script>
 @yield('meta')
+    <x-validation-feedback />
 </head>
 <body class="live-store">
 <a class="skip-link" href="#store-content">انتقل إلى المحتوى</a>

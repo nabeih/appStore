@@ -146,8 +146,8 @@ class SalesIntegrationTest extends SalesTestCase
         $this->assertSame($snapshot, $invoice->items()->firstOrFail()->only(array_keys($snapshot)));
         $this->assertSame('40.00', $variant->fresh()->selling_price);
         Storage::disk('public')->assertExists('products/colors/original.jpg');
-        $this->deleteJson('/api/products/'.$variant->product_id)->assertOk();
-        $this->assertDatabaseHas('products', ['id' => $variant->product_id, 'is_active' => false, 'deleted_at' => null]);
+        $this->deleteJson('/api/products/'.$variant->product_id)->assertUnprocessable();
+        $this->assertDatabaseHas('products', ['id' => $variant->product_id, 'is_active' => true, 'deleted_at' => null]);
         $this->assertDatabaseHas('inventories', ['product_variant_id' => $variant->id, 'quantity' => 8, 'value_minor' => 16000]);
     }
 

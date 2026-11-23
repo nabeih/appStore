@@ -33,7 +33,7 @@ class OwnerAlertsAndStockExperienceTest extends SalesTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        if (DB::getDriverName() !== 'mysql' || DB::connection()->getDatabaseName() !== 'appstore_golive_20261031_tests') {
+        if (DB::getDriverName() !== 'mysql' || ! in_array(DB::connection()->getDatabaseName(), ['appstore_golive_20261031_tests', 'appstore_account_status_20261118_tests'], true)) {
             throw new \LogicException('Only the guarded isolated MySQL sandbox is permitted.');
         }
     }

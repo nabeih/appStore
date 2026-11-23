@@ -26,7 +26,7 @@
         <div id="store-assistant-context"></div>
         <div class="store-assistant-shortcuts"><button type="button" data-assistant-current>اشرح لي هذه الصفحة</button><a href="{{ route('assistant.index') }}">كل مواضيع المساعدة</a></div>
         <section id="store-assistant-answer" aria-live="polite" aria-atomic="true"></section>
-        <form id="store-assistant-form"><label for="store-assistant-question">كيف أقدر أساعدك؟</label><textarea id="store-assistant-question" maxlength="500" rows="3" placeholder="مثال: كيف أضيف بضاعة جديدة؟"></textarea><button type="submit" class="btn btn-primary">اسأل المساعد</button></form>
+        <form id="store-assistant-form"><label for="store-assistant-question">كيف أقدر أساعدك؟</label><textarea data-validation-field="question" id="store-assistant-question" maxlength="500" rows="3" placeholder="مثال: كيف أضيف بضاعة جديدة؟"></textarea><button type="submit" class="btn btn-primary">اسأل المساعد</button></form>
         <p id="store-assistant-status" role="status"></p>
     </div>
 </dialog>

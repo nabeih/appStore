@@ -26,7 +26,7 @@
                     </button>@endif
                 </div>
 
-                <div style="padding:0 16px">@include('search.partials.filters',['searchKind'=>'inventory','placeholder'=>'اسم المنتج أو كوده أو SKU'])<p class="module-search-help">نتائج البحث في جميع السجلات: {{ $inventories->total() }}</p></div>
+                <div style="padding:0 16px"><details class="document-filters" @if(array_filter($filters ?? [], fn ($value) => $value !== null && $value !== '' && $value !== 'all')) open @endif><summary>بحث وتصفية المخزون — التصنيف واللون والمقاس</summary>@include('search.partials.filters',['searchKind'=>'inventory','placeholder'=>'اسم المنتج أو كوده أو SKU'])</details><p class="module-search-help">نتائج البحث في جميع السجلات: {{ $inventories->total() }}</p></div>
                 {{-- جدول المخزون الحقيقي --}}
                 <div class="table-responsive">
 

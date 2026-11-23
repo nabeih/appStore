@@ -2,8 +2,10 @@
 
 namespace App\Actions\Finance;
 
+use App\Models\Branch;
 use App\Models\JournalEntry;
 use App\Models\PurchaseInvoice;
+use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\User;
 use App\Support\Sales\OperationContext;
@@ -24,7 +26,19 @@ class ReverseSupplierPaymentAction
             if (! $current->financial_posted_at) {
                 FinanceContext::fail('الدفعة القديمة تحتاج مراجعة الانتقال؛ لا تعكس ماليًا بالافتراض.');
             }
-            $invoice = PurchaseInvoice::whereKey($current->purchase_invoice_id)->lockForUpdate()->firstOrFail();
+            $invoice = $current->supplier_debt_settlement_id
+                ? $current->settlement()->lockForUpdate()->firstOrFail()
+                : PurchaseInvoice::whereKey($current->purchase_invoice_id)->lockForUpdate()->firstOrFail();
+            if ($current->supplier_debt_settlement_id) {
+                OperationContext::date(Branch::whereKey($current->branch_id)->lockForUpdate()->firstOrFail(), $date);
+                if (! Supplier::whereKey($current->supplier_id)->lockForUpdate()->exists()) {
+                    FinanceContext::fail('المورد مؤرشف؛ استعده أولًا قبل عكس السداد وإعادة المديونية.');
+                }
+                app(ManageSupplierDebtSettlement::class)->assertFinancialSupport($invoice);
+                if ($invoice->paid_minor < $current->amount_minor) {
+                    FinanceContext::fail('رصيد السداد لا يطابق السند؛ راجع كشف المورد قبل العكس.');
+                }
+            }
             $entry = JournalEntry::where('source_type', $current->getMorphClass())->where('source_id', $current->id)->where('event', 'supplier_payment')->firstOrFail();
             app(PostJournalAction::class)->reverse($entry, $actor, $reason, $date);
             $invoice->decrement('paid_minor', $current->amount_minor);

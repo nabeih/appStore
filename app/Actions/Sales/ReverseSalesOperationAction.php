@@ -156,7 +156,10 @@ class ReverseSalesOperationAction
         if ($receipt->status === 'reversed') {
             return;
         }
-        if ($receipt->kind === 'receipt') {
+        if ($receipt->kind === 'advance' && $receipt->advanceUsages()->whereHas('receipt', fn ($query) => $query->where('status', 'approved'))->exists()) {
+            $this->fail('الدفعة المقدمة مستخدمة أو مستردة؛ اعكس المستندات التابعة أولًا. لا يمكن إلغاء رصيد مصروف.');
+        }
+        if (in_array($receipt->kind, ['receipt', 'advance'], true)) {
             app(ManageFinancialAccountsAction::class)->assertFunds($receipt->parts()->get()->map->only(['financial_account_id', 'amount_minor'])->all());
         }
         foreach ($receipt->allocations()->with('invoice')->get() as $allocation) {

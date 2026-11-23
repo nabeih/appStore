@@ -26,6 +26,7 @@ use App\Http\Controllers\Web\Finance\TreasuryController;
 use App\Http\Controllers\Web\Guidance\AssistantController;
 use App\Http\Controllers\Web\Inventory\DocumentCorrectionController;
 use App\Http\Controllers\Web\Inventory\InventoryController;
+use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningImportController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockCatalogController;
 use App\Http\Controllers\Web\Inventory\OpeningStock\OpeningStockController;
 use App\Http\Controllers\Web\Inventory\ProductDetailsController;
@@ -45,6 +46,7 @@ use App\Http\Controllers\Web\Search\ProductSearchController;
 use App\Http\Controllers\Web\Search\SearchController;
 use App\Http\Controllers\Web\Search\VisualIndexController;
 use App\Http\Controllers\Web\Suppliers\SupplierController;
+use App\Http\Controllers\Web\Suppliers\SupplierDebtSettlementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [FirstRunSetupController::class, 'home'])->name('home');
@@ -134,6 +136,7 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
         Route::post('/receipts/preview', [CustomerReceiptController::class, 'preview'])->middleware('can:sales.collect')->name('receipts.preview');
         Route::get('/receipts/{receipt}', [CustomerReceiptController::class, 'show'])->whereNumber('receipt')->name('receipts.show');
         Route::post('/receipts/{receipt}/reverse', [CustomerReceiptController::class, 'reverse'])->whereNumber('receipt')->name('receipts.reverse');
+        Route::get('/{customer}/credits', [CustomerController::class, 'credits'])->middleware('can:sales.collect')->whereNumber('customer')->name('credits');
         Route::get('/{customer}', [CustomerController::class, 'show'])->whereNumber('customer')->withTrashed()->name('show');
         Route::put('/{customer}', [CustomerController::class, 'update'])->whereNumber('customer')->name('update');
         Route::post('/{customer}/archive', [CustomerController::class, 'archive'])->whereNumber('customer')->name('archive');
@@ -183,6 +186,14 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::get('catalog/products/{product}/color-images', [ProductColorImageController::class, 'index'])->whereNumber('product')->name('catalog.product-images.index');
     Route::post('catalog/products/{product}/color-images', [ProductColorImageController::class, 'store'])->middleware('can:inventory.manage_catalog')->whereNumber('product')->name('catalog.product-images.store');
     Route::prefix('suppliers')->name('suppliers.')->middleware(['can:sales.view_cost', 'can:purchases.view'])->group(function () {
+        Route::get('/{supplier}/debts/create', [SupplierDebtSettlementController::class, 'create'])->whereNumber('supplier')->middleware('can:finance.transition_review')->name('debts.create');
+        Route::post('/{supplier}/debts', [SupplierDebtSettlementController::class, 'store'])->whereNumber('supplier')->middleware('can:finance.transition_review')->name('debts.store');
+        Route::get('/debts/{settlement}', [SupplierDebtSettlementController::class, 'show'])->whereNumber('settlement')->name('debts.show');
+        Route::get('/debts/{settlement}/evidence', [SupplierDebtSettlementController::class, 'evidence'])->whereNumber('settlement')->name('debts.evidence');
+        Route::post('/debts/{settlement}/approve', [SupplierDebtSettlementController::class, 'approve'])->whereNumber('settlement')->middleware('can:finance.transition_review')->name('debts.approve');
+        Route::post('/debts/{settlement}/payments', [SupplierDebtSettlementController::class, 'pay'])->whereNumber('settlement')->middleware('can:finance.supplier_pay')->name('debts.pay');
+        Route::post('/debts/{settlement}/reverse', [SupplierDebtSettlementController::class, 'reverse'])->whereNumber('settlement')->middleware(['can:finance.reverse', 'can:finance.transition_review'])->name('debts.reverse');
+        Route::post('/debt-payments/{payment}/reverse', [SupplierDebtSettlementController::class, 'reversePayment'])->whereNumber('payment')->middleware('can:finance.reverse')->name('debts.payment-reverse');
         Route::get('/', [SupplierController::class, 'index'])->name('index');
         Route::post('/', [SupplierController::class, 'store'])->middleware('can:purchases.manage')->name('store');
         Route::get('/{supplier}', [SupplierController::class, 'show'])->whereNumber('supplier')->withTrashed()->name('show');
@@ -227,6 +238,12 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
     Route::post('/inventory/document-corrections/{kind}/{document}/{item}', [DocumentCorrectionController::class, 'store'])->whereIn('kind', ['opening', 'purchase'])->whereNumber(['document', 'item'])->middleware('can:sales.view_cost')->name('inventory.document-corrections.store');
     Route::get('/inventory/products/{product}', [ProductDetailsController::class, 'show'])->whereNumber('product')->middleware('can:inventory.view')->name('inventory.products.show');
     Route::prefix('inventory/opening-stock')->name('inventory.opening-stock.')->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->group(function () {
+        Route::middleware('can:inventory.manage_catalog')->group(function (): void {
+            Route::get('/import', [OpeningImportController::class, 'index'])->name('import.index');
+            Route::get('/import/template', [OpeningImportController::class, 'template'])->name('import.template');
+            Route::post('/import/preview', [OpeningImportController::class, 'preview'])->middleware('throttle:10,1')->name('import.preview');
+            Route::post('/import/draft', [OpeningImportController::class, 'store'])->middleware('throttle:10,1')->name('import.store');
+        });
         Route::get('/', [OpeningStockController::class, 'index'])->name('index');
         Route::post('/images/resolve', [OpeningStockCatalogController::class, 'images'])->name('images.resolve');
         Route::post('/drafts', [OpeningStockController::class, 'storeDraft'])->name('drafts.store');

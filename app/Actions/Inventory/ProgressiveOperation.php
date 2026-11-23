@@ -4,17 +4,23 @@ namespace App\Actions\Inventory;
 
 use App\Actions\Finance\FinanceContext;
 use App\Actions\Finance\ManageFinancialAccountsAction;
+use App\Actions\Finance\ManageSupplierDebtSettlement;
+use App\Actions\Inventory\OpeningStock\OpeningFinancialSupport;
 use App\Models\AuditEvent;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\FinancialAccount;
 use App\Models\Inventory;
+use App\Models\InventorySetupChange;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
+use App\Models\OpeningStockEntry;
+use App\Models\OpeningStockItem;
 use App\Models\PurchaseInvoice;
 use App\Models\SaleInvoice;
 use App\Models\StockMovement;
 use App\Models\Supplier;
+use App\Models\SupplierDebtSettlement;
 use App\Models\User;
 use App\Support\Access\AccessPermissions;
 use App\Support\Guidance\GuidanceException;
@@ -111,7 +117,7 @@ class ProgressiveOperation
         if (! $branch->is_active || ($branch->financial_closed_through && substr((string) $branch->financial_closed_through, 0, 10) >= OperationContext::today())) {
             $blockers[] = 'الفرع غير فعال أو الفترة المالية الحالية مغلقة.';
         }
-        if ($proof['unexplained_financial_minor'] !== 0 || $proof['orphan_movements'] !== 0) {
+        if ($proof['unverified_opening_documents'] !== [] || $proof['unexplained_financial_minor'] !== 0 || $proof['orphan_movements'] !== 0) {
             $blockers[] = 'يوجد أثر مالي للمخزون لا يمكن عزله إلى حركات مثبتة، أو حركات بلا رصيد مقابل؛ يلزم مراجعة المصدر.';
         }
         $ready = collect($proof['rows'])->where('ready', true)->filter(fn ($row) => $row['available'] > 0)->count();
@@ -126,6 +132,16 @@ class ProgressiveOperation
         $parties = [];
         foreach (['customer' => Customer::class, 'supplier' => Supplier::class] as $kind => $class) {
             $approvedIds = $partyApprovals->get($class, collect())->pluck('subject_id')->all();
+            if ($kind === 'supplier' && app(ManageSupplierDebtSettlement::class)->installed()) {
+                foreach (SupplierDebtSettlement::where('branch_id', $branch->id)->where('status', 'approved')->get() as $settlement) {
+                    try {
+                        app(ManageSupplierDebtSettlement::class)->assertFinancialSupport($settlement);
+                        $approvedIds[] = $settlement->supplier_id;
+                    } catch (ValidationException) {
+                        // An unsupported document must not make a supplier ready.
+                    }
+                }
+            }
             $parties[$kind] = $class::orderBy('id')->get(['id', 'name'])->map(fn ($party) => ['id' => $party->id, 'name' => $party->name, 'ready' => in_array($party->id, $approvedIds, true)])->all();
         }
         $report = ['branch_id' => $branch->id, 'branch' => $branch->name, 'state' => $this->state($branch),
@@ -178,12 +194,21 @@ class ProgressiveOperation
     public function assertStocks(int $branchId, array $variantIds): void
     {
         $branch = Branch::findOrFail($branchId);
+        if ($this->state($branch) === 'full') {
+            $openingIds = OpeningStockItem::whereIn('product_variant_id', $variantIds)->whereHas('entry', fn ($query) => $query->where('branch_id', $branchId))->pluck('opening_stock_entry_id');
+            $changedIds = InventorySetupChange::where('branch_id', $branchId)->whereIn('opening_stock_entry_id', $openingIds)->pluck('opening_stock_entry_id')->unique();
+            foreach (OpeningStockEntry::where('branch_id', $branchId)->whereIn('id', $changedIds)->get() as $opening) {
+                app(OpeningFinancialSupport::class)->assertValid($opening);
+            }
+
+            return;
+        }
         if ($this->state($branch) !== 'progressive') {
             return;
         }
         $this->assertBranch($branch);
         $proof = app(ProgressiveStockProof::class)->build($branchId);
-        if ($proof['unexplained_financial_minor'] !== 0 || $proof['orphan_movements'] > 0) {
+        if ($proof['unverified_opening_documents'] !== [] || $proof['unexplained_financial_minor'] !== 0 || $proof['orphan_movements'] > 0) {
             $this->fail(['تغيرت المطابقة المالية للمخزون ولا يمكن عزل أثرها؛ أعد مراجعة الجاهزية.']);
         }
         foreach ($variantIds as $id) {
@@ -213,6 +238,14 @@ class ProgressiveOperation
             return;
         }
         $class = $kind === 'customer' ? Customer::class : Supplier::class;
+        if ($kind === 'supplier' && app(ManageSupplierDebtSettlement::class)->installed()) {
+            $settlement = SupplierDebtSettlement::where('supplier_id', $id)->where('branch_id', $branchId)->where('status', 'approved')->first();
+            if ($settlement) {
+                app(ManageSupplierDebtSettlement::class)->assertFinancialSupport($settlement);
+
+                return;
+            }
+        }
         if (! AuditEvent::where('subject_type', $class)->where('subject_id', $id)->where('action', 'operation.party_zero_confirmed')->exists()) {
             $this->fail([$kind === 'customer' ? 'ذمة العميل غير معتمدة؛ يمكن البيع النقدي العابر دون استخدام ذمته.' : 'بداية ذمة المورد غير معتمدة؛ راجع الذمة قبل اعتماد شراء أو سداد.']);
         }
@@ -303,7 +336,7 @@ class ProgressiveOperation
         if (collect($report['parties'])->flatten(1)->contains('ready', false)) {
             $reasons[] = 'أرصدة بداية بعض العملاء أو الموردين لم تعتمد؛ لا تُنه الإعداد بصفر مجهول.';
         }
-        if ($report['stock_proof']['unexplained_financial_minor'] !== 0 || $report['stock_proof']['orphan_movements'] > 0) {
+        if ($report['stock_proof']['unverified_opening_documents'] !== [] || $report['stock_proof']['unexplained_financial_minor'] !== 0 || $report['stock_proof']['orphan_movements'] > 0) {
             $reasons[] = 'توجد آثار مخزنية أو مالية غير مفسرة.';
         }
 

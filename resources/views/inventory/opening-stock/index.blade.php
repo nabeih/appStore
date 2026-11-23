@@ -3,6 +3,7 @@
 @section('content')
 <div class="screen active os-page" data-search-region="openings">
     <header class="os-page-title"><div><h1 class="section-title">سجل البضاعة الافتتاحية</h1><p class="section-subtitle">بضاعتك الموجودة، بدون فاتورة شراء. يبقى السجل متاحًا للعرض والطباعة بعد الإغلاق.</p></div>@if($openingStockBranches->isNotEmpty())<button type="button" class="btn btn-primary" onclick="openQuickOpeningStockModal()">+ إدخال بضاعة</button>@endif</header>
+    @if($openingStockBranches->isNotEmpty()) @can('inventory.manage_catalog')<p><a class="btn btn-outline" href="{{ route('inventory.opening-stock.import.index') }}">استيراد بضاعة من Excel</a></p>@endcan @endif
     <details class="card document-filters" @if(array_filter($filters)) open @endif>
         <summary><span><i class="fas fa-sliders-h" aria-hidden="true"></i> تصفية المستندات</span><small>الفرع والتاريخ</small></summary>
         <form method="get" data-module-search class="os-filter-form document-filter-grid"><label>بحث<input name="q" type="search" maxlength="100" value="{{ $filters['q'] ?? '' }}" placeholder="رقم المستند أو المنتج أو SKU"></label><label>الحالة<select name="status"><option value="">الكل</option>@foreach(['draft'=>'مسودة','approved'=>'معتمد','cancelled'=>'ملغى'] as $value=>$label)<option value="{{ $value }}" @selected(($filters['status'] ?? '')===$value)>{{ $label }}</option>@endforeach</select></label>

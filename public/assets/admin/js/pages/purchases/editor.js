@@ -154,7 +154,7 @@
         const version = previewVersion;
         previewRequest = new AbortController();
         try {
-            const data = await request(config.previewUrl, { ...jsonOptions(payload()), signal: previewRequest.signal });
+            const data = await request(config.previewUrl, { validationScope: form, ...jsonOptions(payload()), signal: previewRequest.signal });
             if (version !== previewVersion) return;
             document.getElementById('preview-total').textContent = data.total;
             document.getElementById('preview-remaining').textContent = data.remaining;
@@ -198,7 +198,7 @@
             quantityCell.dataset.label = 'الكمية';
             const quantity = element('input');
             quantity.type = 'number'; quantity.min = '1'; quantity.max = '1000000'; quantity.step = '1'; quantity.required = true;
-            quantity.value = row.quantity;
+            quantity.value = row.quantity; quantity.dataset.validationField = `rows.${index}.quantity`;
             quantity.setAttribute('aria-label', `كمية ${row.name} ${row.color} ${row.size}`);
             quantity.addEventListener('input', () => { row.quantity = quantity.value; dirty = true; invalidatePreview(); });
             quantityCell.append(quantity);
@@ -206,6 +206,7 @@
             costCell.dataset.label = 'تكلفة الوحدة ₪';
             const cost = element('input');
             cost.type = 'text'; cost.inputMode = 'decimal'; cost.required = true; cost.value = row.unit_cost;
+            cost.dataset.validationField = `rows.${index}.unit_cost`;
             cost.setAttribute('aria-label', `تكلفة ${row.name} ${row.color} ${row.size}`);
             cost.addEventListener('input', () => { row.unit_cost = cost.value; dirty = true; invalidatePreview(); });
             costCell.append(cost);
@@ -348,7 +349,8 @@
                 const quantity = element('input'); quantity.type = 'number'; quantity.min = 1; quantity.max = 1000000; quantity.step = 1; quantity.value = 1;
                 quantity.required = true; quantity.disabled = true; quantity.setAttribute('aria-label', `كمية ${variant.color} ${variant.size}`);
                 const cost = element('input'); cost.type = 'text'; cost.inputMode = 'decimal'; cost.value = variant.unit_cost; cost.required = true; cost.disabled = true;
-                cost.pattern = '\\d{1,12}(?:\\.\\d{1,2})?'; cost.setAttribute('aria-label', `تكلفة ${variant.color} ${variant.size}`);
+                cost.pattern = '\\d{1,12}(?:\\.\\d{1,2})?'; cost.dataset.validationField = `rows.${index}.unit_cost`;
+            cost.setAttribute('aria-label', `تكلفة ${variant.color} ${variant.size}`);
                 const quantityCell = element('td'); quantityCell.append(quantity); const costCell = element('td'); costCell.append(cost);
                 checkbox.addEventListener('change', () => { quantity.disabled = cost.disabled = !checkbox.checked; });
                 row.purchaseVariant = variant;
@@ -411,10 +413,10 @@
         const message = document.getElementById('purchase-attribute-error'); message.hidden = true;
         const type = attributeType;
         try {
-            const saved = await request(type === 'color' ? config.colorStoreUrl : config.sizeStoreUrl, jsonOptions({
+            const saved = await request(type === 'color' ? config.colorStoreUrl : config.sizeStoreUrl, { validationScope: document.getElementById('purchase-attribute-editor'), ...jsonOptions({
                 name: document.getElementById('purchase-attribute-name').value.trim(), code: document.getElementById('purchase-attribute-code').value.trim().toUpperCase(),
                 ...(type === 'color' ? { hex_code: document.getElementById('purchase-attribute-hex').value } : {}),
-            }));
+            }) });
             const catalog = await request(config.optionsUrl); productCatalog = catalog;
             for (const key of ['colors', 'sizes']) {
                 const select = document.getElementById('new-product-' + key);
@@ -491,7 +493,7 @@
                 if (!image || quickExistingImages.has(String(color))) return;
                 multipart.append(`images[${imageIndex}][color_id]`, color); multipart.append(`images[${imageIndex}][image]`, image.file); imageIndex++;
             });
-            const result = await request(config.productStoreUrl, { method: 'POST', body: multipart });
+            const result = await request(config.productStoreUrl, { validationScope: productForm, method: 'POST', body: multipart });
             clearQuickImages();
             addRows(result.data.map(variant => ({ ...variant, ...combinations.get(`${variant.color_id}:${variant.size_id}`) }))); productDialog.close(); productResults.hidden = true;
         } catch (error) { message.textContent = error.message; message.hidden = false; }
@@ -509,7 +511,7 @@
         if (!state.rows.length) { showError('أضف صنفًا واحدًا على الأقل.'); return; }
         saving = true; document.getElementById('save-purchase').disabled = true; errors.hidden = true;
         try {
-            const data = await request(form.action, jsonOptions(payload(), config.saveMethod));
+            const data = await request(form.action, { ...jsonOptions(payload(), config.saveMethod), validationScope: form });
             dirty = false; window.location.assign(data.url);
         } catch (error) { showError(error.message); saving = false; document.getElementById('save-purchase').disabled = false; }
     });

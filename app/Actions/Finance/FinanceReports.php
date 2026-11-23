@@ -10,6 +10,7 @@ use App\Models\FinancialAccount;
 use App\Models\JournalLine;
 use App\Models\OpeningStockEntry;
 use App\Models\PurchaseInvoice;
+use App\Models\SupplierDebtSettlement;
 use App\Models\SupplierPayment;
 use App\Models\User;
 use App\Support\Sales\Money;
@@ -30,9 +31,16 @@ class FinanceReports
         $ledger = Money::integer((string) JournalLine::where('supplier_id', $supplierId)->whereHas('entry', fn ($query) => $query->where('branch_id', $branchId))
             ->whereHas('account', fn ($query) => $query->where('code', 'supplier_payables'))->selectRaw('COALESCE(SUM(credit_minor),0)-COALESCE(SUM(debit_minor),0) AS due')->value('due'));
         $invoices = PurchaseInvoice::where('supplier_id', $supplierId)->where('branch_id', $branchId)->where('status', 'approved')->withSum(['payments as actual_paid' => fn ($query) => $query->where('status', 'approved')], 'amount_minor')->get(['id', 'paid_minor']);
+        $settlementDrift = [];
+        if (app(ManageSupplierDebtSettlement::class)->installed()) {
+            $settlements = SupplierDebtSettlement::where('supplier_id', $supplierId)->where('branch_id', $branchId)->where('status', 'approved')
+                ->withSum(['payments as actual_paid' => fn ($q) => $q->where('status', 'approved')], 'amount_minor')->get();
+            $operational = Money::add($operational, Money::sum($settlements->map(fn ($row): int => $row->amount_minor - $row->paid_minor)->all()));
+            $settlementDrift = $settlements->filter(fn ($row): bool => $row->paid_minor !== (int) $row->actual_paid)->pluck('id')->all();
+        }
 
         return ['operational_minor' => $operational, 'ledger_minor' => $ledger, 'difference_minor' => $operational - $ledger,
-            'payment_cache_drift' => $invoices->filter(fn ($invoice) => (int) $invoice->paid_minor !== (int) $invoice->actual_paid)->pluck('id')->all()];
+            'payment_cache_drift' => $invoices->filter(fn ($invoice) => (int) $invoice->paid_minor !== (int) $invoice->actual_paid)->pluck('id')->all(), 'settlement_payment_cache_drift' => $settlementDrift];
     }
 
     public function completeness(?array $branchIds = null): array

@@ -6,14 +6,18 @@ use App\Actions\Search\ModuleSearch;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customers\SaveCustomerRequest;
 use App\Models\Customer;
+use App\Models\CustomerReceipt;
 use App\Models\FinancialAccount;
 use App\Models\SaleInvoice;
 use App\Models\SaleReturn;
+use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesReports;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -71,7 +75,28 @@ class CustomerController extends Controller
             ->filter(fn ($return): bool => $return->credit_minor > (int) $return->used_minor);
         $accounts = FinancialAccount::where('branch_id', $branchId)->where('is_active', true)->whereIn('type', ['cash', 'bank', 'wallet'])->get(['id', 'name', 'type']);
 
-        return view('customers.show', compact('customer', 'branches', 'filters', 'statement', 'invoices', 'credits', 'accounts', 'branchId'));
+        $advances = Schema::hasColumn('credit_usages', 'advance_receipt_id')
+            ? $this->availableAdvances($customer, $branchId) : collect();
+
+        return view('customers.show', compact('customer', 'branches', 'filters', 'statement', 'invoices', 'credits', 'advances', 'accounts', 'branchId'));
+    }
+
+    public function credits(Request $request, Customer $customer): JsonResponse
+    {
+        $data = $request->validate(['branch_id' => 'required|integer|min:1']);
+        OperationContext::branch($request->user(), (int) $data['branch_id'], 'sales.collect');
+        abort_unless(Schema::hasColumn('credit_usages', 'advance_receipt_id'), 503, 'تحديث الدفعات المقدمة غير مطبق.');
+
+        return response()->json(['data' => $this->availableAdvances($customer, (int) $data['branch_id'])->map(fn ($receipt) => [
+            'id' => $receipt->id, 'number' => $receipt->number, 'available' => Money::format($receipt->amount_minor - (int) $receipt->used_minor),
+        ])->values()])->header('Cache-Control', 'no-store, private');
+    }
+
+    private function availableAdvances(Customer $customer, int $branchId): Collection
+    {
+        return CustomerReceipt::where('customer_id', $customer->id)->where('branch_id', $branchId)->where('status', 'approved')->where('kind', 'advance')
+            ->withSum(['advanceUsages as used_minor' => fn ($query) => $query->whereHas('receipt', fn ($q) => $q->where('status', 'approved'))], 'amount_minor')
+            ->orderBy('id')->get()->filter(fn ($receipt) => $receipt->amount_minor > (int) $receipt->used_minor);
     }
 
     public function archive(Request $request, Customer $customer): JsonResponse

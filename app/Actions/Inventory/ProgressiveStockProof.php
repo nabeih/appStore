@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\Inventory;
 use App\Models\InventorySetupChange;
 use App\Models\JournalEntry;
+use App\Models\OpeningStockEntry;
 use App\Models\OpeningStockItem;
 use App\Models\PurchaseInvoiceItem;
 use App\Models\SaleItem;
@@ -33,9 +34,17 @@ class ProgressiveStockProof
         $journals = JournalEntry::where('branch_id', $branchId)->with('lines.account')->get();
         $bySource = $journals->groupBy(fn ($journal) => $journal->source_type.':'.$journal->source_id.':'.$journal->event);
         $reversals = $journals->whereNotNull('reversal_of_id')->groupBy('reversal_of_id');
-        $correctedOpenings = InventorySetupChange::whereIn('opening_stock_entry_id', $sources[OpeningStockItem::class]->pluck('opening_stock_entry_id'))
-            ->pluck('opening_stock_entry_id')->flip();
+        $correctedOpenings = InventorySetupChange::where('branch_id', $branchId)->whereNotNull('opening_stock_entry_id')
+            ->pluck('opening_stock_entry_id')->unique()->flip();
         $openingSupport = [];
+        foreach (OpeningStockEntry::where('branch_id', $branchId)->whereIn('id', $correctedOpenings->keys())->get() as $opening) {
+            try {
+                app(OpeningFinancialSupport::class)->assertValid($opening);
+                $openingSupport[$opening->id] = true;
+            } catch (ValidationException) {
+                $openingSupport[$opening->id] = false;
+            }
+        }
         $confirmations = AuditEvent::where('subject_type', Inventory::class)->whereIn('subject_id', $stocks->modelKeys())
             ->whereIn('action', ['operation.zero_opening_confirmed', 'operation.zero_cost_confirmed'])->get()->groupBy('subject_id');
         $rows = [];
@@ -96,11 +105,14 @@ class ProgressiveStockProof
                 }
                 if ($valid) {
                     $accounted = Money::add($accounted, (int) $movement->value_change_minor);
-                    if ($movement->movement_type === 'opening_stock') {
+                    if (in_array($movement->movement_type, ['opening_stock', 'purchase'], true)) {
                         $hasOpening = true;
                     }
                 } else {
-                    $add(true, 'financial_source_unproven', 'لم تكتمل المطابقة المالية أو المستندية لهذا الصنف؛ راجع مصدر الحركة.');
+                    $openingApproved = $proof && $proof['document'] instanceof OpeningStockEntry && $proof['document']->status === 'approved';
+                    $add(true, 'financial_source_unproven', $openingApproved
+                        ? 'المستند الافتتاحي معتمد مخزنيًا، لكن إثباته المحاسبي ناقص أو غير مطابق. راجع الانتقال المالي؛ لا تعِد إدخال الكميات أو اعتماد البضاعة.'
+                        : 'لم تكتمل المطابقة المالية أو المستندية لهذا الصنف؛ راجع مصدر الحركة.');
                 }
                 $documents[] = ['movement_id' => $movement->id, 'kind' => $movement->movement_type,
                     'number' => $proof ? $proof['document']->number : null, 'financial_verified' => (bool) $valid];
@@ -118,7 +130,7 @@ class ProgressiveStockProof
         $ledger = Money::sum($journals->map(fn ($journal) => $this->inventoryAmount($journal->lines))->all());
         $orphans = $movements->whereNotIn('product_variant_id', $stocks->pluck('product_variant_id'))->count();
 
-        return ['rows' => $rows, 'inventory_ledger_minor' => $ledger, 'proven_movements_minor' => $accounted,
+        return ['unverified_opening_documents' => array_keys(array_filter($openingSupport, fn (bool $valid): bool => ! $valid)), 'rows' => $rows, 'inventory_ledger_minor' => $ledger, 'proven_movements_minor' => $accounted,
             'unexplained_financial_minor' => Money::add($ledger, -$accounted), 'orphan_movements' => $orphans];
     }
 

@@ -7,12 +7,34 @@
     let minimumConfirmation = null, minimumVersion = null;
     let catalogRequest, catalogTimer, customerRequest, customerTimer, previewRequest, previewTimer, previewVersion = 0, lastPreview;
     const accounts = () => config.accounts.filter(account => String(account.branch_id) === el('cashier-branch').value);
+    let creditRequestVersion = 0;
+    async function loadCredits() {
+        const target = el('cashier-credits'); if (!target) return;
+        const version = ++creditRequestVersion, customerId = state.customer_id, branchId = el('cashier-branch').value;
+        target.replaceChildren();
+        if (!customerId) { target.textContent = 'اختر عميلًا لعرض رصيده في الفرع.'; return; }
+        target.textContent = 'جارٍ تحميل الرصيد...';
+        try {
+            const result = await ui.request(target.dataset.url+'/'+customerId+'/credits?'+new URLSearchParams({ branch_id: branchId }));
+            if (version !== creditRequestVersion) return;
+            target.replaceChildren();
+            for (const credit of result.data) {
+                const label = ui.element('label','',credit.number+' — المتاح '+credit.available+' ₪');
+                const input = document.createElement('input'); input.type = 'text'; input.inputMode = 'decimal'; input.dataset.advanceId = credit.id;
+                input.value = state.customer_credits?.find(row => row.advance_receipt_id === credit.id)?.amount || '';
+                label.append(input); target.append(label);
+            }
+            if (!result.data.length) target.textContent = 'لا توجد دفعات مقدمة متاحة لهذا العميل في الفرع.';
+            if (state.rows.length) invalidate();
+        } catch (failure) { if (version === creditRequestVersion) target.textContent = failure.message || 'تعذر تحميل الرصيد؛ أعد اختيار العميل.'; }
+    }
     function addPayment(initial = {}) {
         if (el('cashier-payments').children.length >= 10) return;
         const row = ui.paymentRow(accounts(), initial); row.addEventListener('removed', invalidate); el('cashier-payments').append(row);
     }
     function customer(person) {
         state.customer_id = person?.id || null; state.customer_name = person?.name || '';
+        state.customer_credits = []; loadCredits();
         el('cashier-customer-search').value = person?.name || '';
         el('cashier-customer-selection').textContent = person ? 'العميل المختار: '+person.name : 'زبون نقدي — السداد الكامل مطلوب.';
         el('cashier-customer-results').hidden = true; invalidate();
@@ -24,6 +46,7 @@
             discount: { type: el('cashier-discount-type').value, value: el('cashier-discount-value').value.trim() || '0' },
             reason: el('cashier-reason').value.trim() || null, notes: el('cashier-notes').value.trim() || null, payment_mode: el('cashier-payment-mode').value,
             below_minimum_confirmed: !!minimumConfirmation, below_minimum_confirmation: minimumConfirmation,
+            customer_credits: el('cashier-payment-mode').value === 'credit' ? [] : [...(el('cashier-credits')?.querySelectorAll('[data-advance-id]') || [])].filter(input => input.value.trim() && !/^0+(?:\.0+)?$/.test(input.value.trim())).map((input, index) => { input.dataset.validationField = `customer_credits.${index}.amount`; return { advance_receipt_id: Number(input.dataset.advanceId), amount: input.value.trim() }; }),
             payments: el('cashier-payment-mode').value === 'credit' ? [] : ui.payments(el('cashier-payments')) };
     }
     function invalidate() {
@@ -38,7 +61,7 @@
     async function preview() {
         const version = previewVersion, controller = new AbortController(); previewRequest = controller;
         try {
-            const result = await ui.request(config.previewUrl, { method: 'POST', data: payload(), signal: controller.signal });
+            const result = await ui.request(config.previewUrl, { method: 'POST', validationScope: form, data: payload(), signal: controller.signal });
             if (version !== previewVersion) return; lastPreview = result;
             Object.entries(result).forEach(([key,value]) => { const node = el('cashier-'+key.replaceAll('_','-')); if (node && typeof value === 'string') node.textContent = value+' ₪'; });
             el('cashier-lines').querySelectorAll('[data-line-total]').forEach((node,index) => node.textContent = result.lines[index]+' ₪');
@@ -55,13 +78,13 @@
             remove.addEventListener('click', () => { state.rows.splice(index,1); renderLines(); invalidate(); }); header.append(name,remove); card.append(header);
             const grid = ui.element('div','sale-grid');
             const field = (text,input) => { const label = ui.element('label','',text); label.append(input); grid.append(label); };
-            const quantity = ui.element('input'); quantity.type = 'number'; quantity.min = '1'; quantity.max = '1000000'; quantity.step = '1'; quantity.value = row.quantity;
+            const quantity = ui.element('input'); quantity.dataset.validationField = `rows.${index}.quantity`; quantity.type = 'number'; quantity.min = '1'; quantity.max = '1000000'; quantity.step = '1'; quantity.value = row.quantity;
             quantity.addEventListener('input', () => { row.quantity = quantity.value; invalidate(); }); field('الكمية',quantity);
-            const price = ui.element('input'); price.type = 'text'; price.inputMode = 'decimal'; price.value = row.unit_price; price.readOnly = !allowed('sales.override_price');
+            const price = ui.element('input'); price.dataset.validationField = `rows.${index}.unit_price`; price.type = 'text'; price.inputMode = 'decimal'; price.value = row.unit_price; price.readOnly = !allowed('sales.override_price');
             price.addEventListener('input', () => { row.unit_price = price.value; invalidate(); }); field('سعر الوحدة ₪',price);
-            const type = ui.element('select'); type.append(new Option('مبلغ على السطر ₪','amount'),new Option('نسبة على السطر %','percent')); type.value = row.discount?.type || 'amount';
+            const type = ui.element('select'); type.append(new Option('مبلغ على السطر ₪','amount'),new Option('نسبة على السطر %','percent')); type.dataset.validationField = `rows.${index}.discount.type`; type.value = row.discount?.type || 'amount';
             type.addEventListener('change', () => { row.discount = { ...row.discount,type: type.value }; invalidate(); }); field('نوع خصم السطر',type);
-            const discount = ui.element('input'); discount.type = 'text'; discount.inputMode = 'decimal'; discount.value = row.discount?.value || '0';
+            const discount = ui.element('input'); discount.dataset.validationField = `rows.${index}.discount.value`; discount.type = 'text'; discount.inputMode = 'decimal'; discount.value = row.discount?.value || '0';
             discount.addEventListener('input', () => { row.discount = { type: type.value,value: discount.value || '0' }; invalidate(); }); field('قيمة خصم السطر',discount);
             card.append(grid); const total = ui.element('div','cashier-line-total'), amount = ui.element('strong','','—'); amount.dataset.lineTotal = '';
             total.append(ui.element('span','','صافي السطر'),amount); card.append(total); container.append(card);
@@ -136,7 +159,7 @@
                 else button.append(ui.element('span','cashier-product-placeholder','اختيار اللون والمقاس'));
                 button.append(ui.element('strong','',product.name),ui.element('small','',product.code)); button.addEventListener('click',() => openProduct(product)); container.append(button);
             });
-            el('cashier-more').hidden = !nextPage; el('cashier-catalog-status').textContent = products.length ? 'اختر المنتج ثم اللون والمقاس.' : 'لا توجد بضائع متاحة تطابق البحث في الفرع.';
+            el('cashier-more').hidden = !nextPage; el('cashier-catalog-status').textContent = products.length ? 'اختر المنتج ثم اللون والمقاس.' : 'لا توجد بضائع متاحة تطابق البحث في الفرع. امسح البحث وتأكد من الفرع واللون والمقاس وحالة الصنف وجاهزية مصدره. راجع المسؤول إذا لم تملك صلاحية مراجعة المخزون.';
             return true;
         } catch (failure) { if (failure.name !== 'AbortError') el('cashier-catalog-status').textContent = failure.message; }
     }
@@ -161,14 +184,14 @@
     el('cashier-clear').addEventListener('click',() => { if (state.rows.length && confirm('تفريغ أصناف السلة الحالية؟')) { state.rows = []; renderLines(); invalidate(); } });
     el('cashier-branch').addEventListener('change',() => {
         if (state.rows.length && !confirm('تغيير الفرع يفرّغ أصناف السلة الحالية. متابعة؟')) { el('cashier-branch').value = previousBranch; return; }
-        previousBranch = el('cashier-branch').value; state.rows = []; el('cashier-payments').replaceChildren(); addPayment(); renderLines(); invalidate(); catalog();
+        previousBranch = el('cashier-branch').value; state.rows = []; state.customer_credits = []; loadCredits(); el('cashier-payments').replaceChildren(); addPayment(); renderLines(); invalidate(); catalog();
     });
     el('cashier-add-payment').addEventListener('click',() => { addPayment(); invalidate(); });
     el('cashier-payment-mode').addEventListener('change',() => { el('cashier-payment-section').hidden = el('cashier-payment-mode').value === 'credit'; invalidate(); });
     form.addEventListener('input',event => { if (!['cashier-search','cashier-customer-search','cashier-minimum-confirm'].includes(event.target.id) && !event.target.closest('#cashier-lines')) invalidate(); });
     form.addEventListener('change',event => { if (!event.target.closest('#cashier-lines') && !['cashier-branch','cashier-minimum-confirm'].includes(event.target.id)) invalidate(); });
     el('cashier-customer-search').addEventListener('input',() => {
-        state.customer_id = null; clearTimeout(customerTimer); customerRequest?.abort(); el('cashier-customer-results').hidden = true;
+        state.customer_id = null; state.customer_credits = []; loadCredits(); clearTimeout(customerTimer); customerRequest?.abort(); el('cashier-customer-results').hidden = true;
         el('cashier-customer-selection').textContent = 'اختر العميل من النتائج لربط المستحق به.'; invalidate();
         const q = el('cashier-customer-search').value.trim(); if (!q) return;
         customerTimer = setTimeout(async () => {
@@ -192,7 +215,7 @@
     });
     async function save(complete) {
         if (busy || !state.rows.length) return; busy = true; clearTimeout(previewTimer); previewRequest?.abort(); el('cashier-fields').disabled = true; ui.error(form,'');
-        try { const result = await ui.request(complete ? config.completeUrl : config.saveUrl,{ method: complete ? 'POST' : config.saveMethod,data: payload() }); dirty = false; busy = false; location.assign(result.url); }
+        try { const result = await ui.request(complete ? config.completeUrl : config.saveUrl,{ method: complete ? 'POST' : config.saveMethod,validationScope: form, data: payload() }); dirty = false; busy = false; location.assign(result.url); }
         catch (failure) { ui.error(form,failure); busy = false; el('cashier-fields').disabled = false; invalidate(); }
     }
     function confirmMinimum() {
@@ -213,5 +236,5 @@
     el('cashier-payment-section').hidden = el('cashier-payment-mode').value === 'credit';
     if (state.payments.length) state.payments.forEach(addPayment); else if (accounts().length) addPayment();
     if (state.customer_id) { el('cashier-customer-search').value = state.customer_name; el('cashier-customer-selection').textContent = 'العميل المختار: '+state.customer_name; }
-    renderLines(); catalog(); if (state.rows.length) { invalidate(); dirty = false; }
+    renderLines(); catalog(); loadCredits(); if (state.rows.length) { invalidate(); dirty = false; }
 })();

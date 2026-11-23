@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\Attributes\StoreSizeRequest;
 use App\Http\Requests\Catalog\Attributes\UpdateSizeRequest;
 use App\Models\Size;
+use App\Support\Sales\OperationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,8 +18,13 @@ class SizeController extends Controller
 {
     public function store(StoreSizeRequest $request, CreateSizeAction $create): JsonResponse|RedirectResponse
     {
-        $size = $create->execute($request->validated());
-        $message = 'تمت إضافة المقاس بنجاح.';
+        $data = $request->validated();
+        $sizes = OperationContext::run(function () use ($data, $create): array {
+            return array_map(fn ($name) => $create->execute(['name' => $name, 'sort_order' => $data['sort_order'] ?? 0]
+                + (empty($data['names']) ? ['code' => $data['code'] ?? null] : [])), $data['names'] ?? [$data['name']]);
+        });
+        $size = $sizes[0];
+        $message = count($sizes) === 1 ? 'تمت إضافة المقاس بنجاح.' : 'تمت إضافة '.count($sizes).' مقاسات بنجاح دون تكرار.';
 
         return $request->expectsJson() ? response()->json(['message' => $message, 'id' => $size->id, 'tab' => 'sizes'], 201)
             : redirect()->route('catalog.attributes.index', ['tab' => 'sizes'])->with('success', $message);

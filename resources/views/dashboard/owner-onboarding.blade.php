@@ -2,6 +2,7 @@
     @push('styles')
         <link rel="stylesheet" href="{{ asset('assets/admin/css/pages/store/owner-onboarding.css') }}">
     @endpush
+    @push('scripts')<script src="{{ asset('assets/admin/js/pages/inventory/onboarding-refresh.js') }}" defer></script>@endpush
     <section class="commerce-card owner-onboarding" dir="rtl" aria-labelledby="owner-onboarding-title" data-owner-onboarding>
         <header class="commerce-header">
             <div>

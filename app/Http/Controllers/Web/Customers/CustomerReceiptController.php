@@ -22,13 +22,13 @@ class CustomerReceiptController extends Controller
     {
         $receipt = $post->execute($request->validated(), $request->user());
 
-        return response()->json(['url' => route('customers.receipts.show', $receipt), 'number' => $receipt->number, 'message' => 'تم ترحيل السند وتخصيصه.']);
+        return response()->json(['url' => route('customers.receipts.show', $receipt), 'number' => $receipt->number, 'message' => $receipt->kind === 'advance' ? 'تم إيداع الرصيد للعميل دون فاتورة؛ الإيداع ليس إيراد بيع.' : 'تم ترحيل السند وتخصيصه.']);
     }
 
     public function show(Request $request, CustomerReceipt $receipt): View
     {
         OperationContext::branch($request->user(), $receipt->branch_id, 'sales.collect', false);
-        $receipt->load(['customer' => fn ($query) => $query->withTrashed(), 'parts.account', 'allocations.invoice', 'creditUsages.saleReturn']);
+        $receipt->load(['customer' => fn ($query) => $query->withTrashed(), 'parts.account', 'allocations.invoice', 'creditUsages.saleReturn', 'creditUsages.advance']);
 
         return view('customers.receipts.show', compact('receipt'));
     }

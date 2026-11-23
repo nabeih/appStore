@@ -105,6 +105,9 @@ class CorrectInventoryAction
 
     private function mutate(Inventory $inventory, array $data, bool $delete, ?int $actorId): ?Inventory
     {
+        if (($data['classification'] ?? 'entry_error') !== 'entry_error') {
+            $this->fail('تصحيح التجهيز مخصص لخطأ الإدخال فقط، وليس بيعًا أو خروج بضاعة. يلزم مستند خروج وإثبات إيراد مستقل؛ لا تصحح الرصيد بدل تسجيل العملية.');
+        }
         abort_unless($actorId, 403, 'يلزم مستخدم مخوّل لتصحيح البضاعة المعتمدة.');
         $actor = User::findOrFail($actorId);
         Gate::forUser($actor)->authorize('inventory.correct_setup');

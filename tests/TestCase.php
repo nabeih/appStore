@@ -15,7 +15,7 @@ abstract class TestCase extends BaseTestCase
         $connection = DB::connection();
         $database = $connection->getDatabaseName();
         if (! app()->environment('testing') || $connection->getDriverName() !== 'mysql'
-            || ($database !== 'appstore_golive_20261031_tests' && ! preg_match('/\Aappstore_first_run_race_[a-f0-9]{16}\z/', $database))) {
+            || (! in_array($database, ['appstore_golive_20261031_tests', 'appstore_account_status_20261118_tests'], true) && ! preg_match('/\Aappstore_first_run_race_[a-f0-9]{16}\z/', $database))) {
             throw new \LogicException('First-run fixtures are restricted to the explicitly isolated MySQL test databases.');
         }
         if ($connection->transactionLevel() !== 0) {

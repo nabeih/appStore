@@ -1,5 +1,5 @@
 <x-catalog.color-image-assets />
-<dialog id="quickOpeningStockModal" class="os-dialog" aria-labelledby="osDialogTitle">
+<dialog data-validation-scope id="quickOpeningStockModal" class="os-dialog" aria-labelledby="osDialogTitle">
     <header class="os-dialog-header">
         <div><h2 id="osDialogTitle">إدخال البضاعة الافتتاحية</h2><p>سجّل بضاعتك الموجودة بدون فاتورة شراء.</p></div>
         <button type="button" class="btn btn-outline" id="osClose" aria-label="إغلاق">✕</button>
@@ -8,15 +8,15 @@
         <div id="openingStockErrors" class="os-errors" role="alert" tabindex="-1" hidden></div>
         <fieldset id="osFields">
             <div class="os-fields">
-                <label>الفرع <select id="openingStockBranch" class="quick-stock-select">
+                <label>الفرع <select data-validation-field="branch_id" id="openingStockBranch" class="quick-stock-select">
                     @forelse ($openingStockBranches as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @empty
                         <option value="">لا يوجد فرع فعال</option>
                     @endforelse
                 </select></label>
-                <label>تاريخ الرصيد <input id="openingStockDate" type="date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}"></label>
-                <details class="os-grow os-inline-notes"><summary>ملاحظات (اختياري)</summary><input id="openingStockNotes" aria-label="ملاحظات المستند" maxlength="2000" placeholder="مثال: جرد البضاعة عند بدء العمل"></details>
+                <label>تاريخ الرصيد <input data-validation-field="opening_date" id="openingStockDate" type="date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}"></label>
+                <details class="os-grow os-inline-notes"><summary>ملاحظات (اختياري)</summary><input data-validation-field="notes" id="openingStockNotes" aria-label="ملاحظات المستند" maxlength="2000" placeholder="مثال: جرد البضاعة عند بدء العمل"></details>
             </div>
             <details class="os-notice"><summary>عن الإدخال الافتتاحي</summary><p>كل صنف يُدخل مرة واحدة لكل فرع. المستند المعتمد محفوظ للمراجعة ولا يُعدّل من هذه الشاشة.</p></details>
             @include('inventory.opening-stock.partials.progressive-declaration',['declarationId'=>'osProgressiveDeclaration'])
@@ -25,27 +25,27 @@
                 <label>اختيار منتج موجود <input type="search" id="osProductSearch" autocomplete="off" placeholder="ابحث بحرفين أو أكثر من الاسم أو الكود"></label>
                 <div id="osProductResults" class="os-search-results" aria-live="polite"></div>
                 <div class="os-fields">
-                    <label class="os-field-wide">اسم المنتج <input id="matrixProductName" maxlength="200" placeholder="مثال: قميص قطني"></label>
-                    <label>كود المنتج <input id="matrixProductCode" maxlength="50" dir="ltr" placeholder="اختياري للمنتج الجديد"></label>
-                    <label>التصنيف <select id="matrixCategory"></select></label>
-                    <label>الألوان <select id="matrixColors" multiple size="4" aria-describedby="osMultiHelp"></select></label>
-                    <label>المقاسات <select id="matrixSizes" multiple size="4" aria-describedby="osMultiHelp"></select></label>
+                    <label class="os-field-wide">اسم المنتج <input data-validation-field="name" id="matrixProductName" maxlength="200" placeholder="مثال: قميص قطني"></label>
+                    <label>كود المنتج <input data-validation-field="code" id="matrixProductCode" maxlength="50" dir="ltr" placeholder="اختياري للمنتج الجديد"></label>
+                    <label>التصنيف <select data-validation-field="category_id" id="matrixCategory"></select></label>
+                    <label>الألوان <select data-validation-field="color_ids" id="matrixColors" multiple size="4" aria-describedby="osMultiHelp"></select></label>
+                    <label>المقاسات <select data-validation-field="size_ids" id="matrixSizes" multiple size="4" aria-describedby="osMultiHelp"></select></label>
                 </div>
                 <small id="osMultiHelp">اختر الألوان والمقاسات المطلوبة. يمكنك اختيار أكثر من خيار.</small>
                 <div class="os-fields os-defaults">
-                    <label>الكمية لكل تركيبة <input id="matrixQty" type="number" min="1" max="1000000" step="1" placeholder="اختياري"></label>
-                    <label>تكلفة الوحدة ₪ <input id="matrixCost" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري"></label>
-                    <label>سعر البيع ₪ <input id="matrixPrice" type="number" min="0" max="9999999.99" step="0.01" placeholder="للتركيبات الجديدة"></label>
-                    @if(\App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()))<label>الحد الأدنى للبيع ₪ <input id="matrixMinimum" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري للتركيبات الجديدة"></label>@endif
+                    <label>الكمية لكل تركيبة <input data-validation-field="qty" id="matrixQty" type="number" min="1" max="1000000" step="1" placeholder="اختياري"></label>
+                    <label>تكلفة الوحدة ₪ <input data-validation-field="cost" id="matrixCost" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري"></label>
+                    <label>سعر البيع ₪ <input data-validation-field="price" id="matrixPrice" type="number" min="0" max="9999999.99" step="0.01" placeholder="للتركيبات الجديدة"></label>
+                    @if(\App\Support\Access\AccessPermissions::canManageMinimumPrices(auth()->user()))<label>الحد الأدنى للبيع ₪ <input data-validation-field="minimum_selling_price" id="matrixMinimum" type="number" min="0" max="9999999.99" step="0.01" placeholder="اختياري للتركيبات الجديدة"></label>@endif
                     <button type="button" class="btn btn-primary" id="osGenerate">إضافة التركيبات للجدول</button>
                 </div>
             </section>
             <details class="os-section">
                 <summary>تحتاج تصنيفًا أو لونًا أو مقاسًا جديدًا؟</summary>
                 <div class="os-fields os-defaults">
-                    <label>النوع <select id="osOptionType"><option value="category">تصنيف</option><option value="color">لون</option><option value="size">مقاس</option></select></label>
-                    <label>الاسم <input id="osOptionName" maxlength="100"></label>
-                    <label id="osOptionCodeLabel" hidden>الكود <input id="osOptionCode" dir="ltr" maxlength="20" placeholder="مثال: BLK أو XL"></label>
+                    <label>النوع <select data-validation-field="code" id="osOptionType"><option value="category">تصنيف</option><option value="color">لون</option><option value="size">مقاس</option></select></label>
+                    <label>الاسم <input data-validation-field="name" id="osOptionName" maxlength="100"></label>
+                    <label id="osOptionCodeLabel" hidden>الكود <input data-validation-field="null" id="osOptionCode" dir="ltr" maxlength="20" placeholder="مثال: BLK أو XL"></label>
                     <button type="button" class="btn btn-outline" id="osAddOption">إضافة للقائمة</button>
                 </div>
             </details>

@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CreditUsage extends Model
 {
-    protected $fillable = ['customer_receipt_id', 'sale_return_id', 'amount_minor'];
+    protected $fillable = ['customer_receipt_id', 'sale_return_id', 'advance_receipt_id', 'amount_minor'];
+
+    public function advance(): BelongsTo
+    {
+        return $this->belongsTo(CustomerReceipt::class, 'advance_receipt_id');
+    }
 
     public function receipt(): BelongsTo
     {

@@ -8,21 +8,22 @@
             <fieldset id="inventorySetupFields">
                 <div id="inventorySetupEditFields"><p class="inventory-setup-hint">تنبيه الملصقات: حفظ بيانات التركيبة قد يعيد حساب SKU وفق كود المنتج واللون والمقاس؛ ستحتاج الملصقات السابقة إلى إعادة طباعة إذا تغير. لا تُغيّر الأكواد لمجرد الطباعة.</p>
                     <div class="inventory-setup-product-fields">
-                        <label>اسم المنتج <input id="inventorySetupName" maxlength="200" required></label>
-                        <label>كود المنتج <input id="inventorySetupCode" maxlength="50" dir="ltr" required></label>
-                        <label>التصنيف <select id="inventorySetupCategory" required></select></label>
-                        <label>اللون <select id="inventorySetupColor" required></select></label>
-                        <label>المقاس <select id="inventorySetupSize" required></select></label>
+                        <label>اسم المنتج <input data-validation-field="name" id="inventorySetupName" maxlength="200" required></label>
+                        <label>كود المنتج <input data-validation-field="code" id="inventorySetupCode" maxlength="50" dir="ltr" required></label>
+                        <label>التصنيف <select data-validation-field="category_id" id="inventorySetupCategory" required></select></label>
+                        <label>اللون <select data-validation-field="color_id" id="inventorySetupColor" required></select></label>
+                        <label>المقاس <select data-validation-field="size_id" id="inventorySetupSize" required></select></label>
                     </div>
                     <div class="inventory-setup-fields">
-                    <label>الكمية المتاحة <input id="inventorySetupQuantity" type="number" min="0" max="1000000" step="1" required></label>
-                    <label>تكلفة الوحدة ₪ <input id="inventorySetupCost" type="number" min="0" max="9999999.99" step="0.01" required></label>
-                    <label>سعر البيع ₪ <input id="inventorySetupPrice" type="number" min="0" max="9999999.99" step="0.01" required></label>
+                    <label>الكمية المتاحة <input data-validation-field="quantity" id="inventorySetupQuantity" type="number" min="0" max="1000000" step="1" required></label>
+                    <label>تكلفة الوحدة ₪ <input data-validation-field="average_cost" id="inventorySetupCost" type="number" min="0" max="9999999.99" step="0.01" required></label>
+                    <label>سعر البيع ₪ <input data-validation-field="selling_price" id="inventorySetupPrice" type="number" min="0" max="9999999.99" step="0.01" required></label>
                 </div>
                 </div>
                 <p id="inventorySetupPriceHint" class="inventory-setup-hint">الاسم والكود والتصنيف تخص المنتج بكل ألوانه ومقاساته. سعر البيع مشترك لنفس اللون والمقاس في جميع الفروع. تغيير اللون لا يستبدل الصور المحفوظة تلقائيًا.</p>
                 <p id="inventorySetupDeleteWarning" class="inventory-setup-warning" hidden>سيُحذف سطر المخزون من هذا الفرع ويُصحّح المستند الافتتاحي المرتبط به. تعريف المنتج وصوره وبقية الفروع تبقى محفوظة.</p>
-                <label class="inventory-setup-reason">ملاحظة التصحيح (اختياري)<textarea id="inventorySetupReason" maxlength="500" rows="2" placeholder="مثال: تصحيح خطأ أثناء إدخال البضاعة"></textarea></label>
+                <p class="inventory-setup-warning">هذا المسار لتصحيح خطأ إدخال فقط. إذا خرجت البضاعة ببيع خارج التطبيق، فلا تستخدم الحذف أو تعديل الكمية لإثبات البيع؛ راجع المسؤول المالي لتوثيق الإيراد والتكلفة دون تكرار خروج البضاعة.</p>
+                <label class="inventory-setup-reason">ملاحظة التصحيح (اختياري)<textarea data-validation-field="reason" id="inventorySetupReason" maxlength="500" rows="2" placeholder="مثال: تصحيح خطأ أثناء إدخال البضاعة"></textarea></label>
             </fieldset>
         </div>
         <footer><span id="inventorySetupStatus" role="status"></span><button type="button" class="btn btn-outline" data-setup-close>إلغاء</button><button id="inventorySetupSubmit" class="btn btn-primary" type="submit">حفظ التعديل</button></footer>

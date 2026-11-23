@@ -6,6 +6,8 @@ use App\Actions\Search\ModuleSearch;
 use App\Actions\Store\StoreContext;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Search\SearchRequest;
+use App\Models\AuditEvent;
+use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Inventory;
@@ -34,9 +36,12 @@ class InventoryController extends Controller
         $colors = Color::orderBy('name')->get(['id', 'name']);
         $sizes = Size::orderBy('sort_order')->get(['id', 'name']);
         $setupChangesEnabled = (bool) config('inventory.allow_setup_changes');
+        $progressiveBranchIds = AuditEvent::where('subject_type', Branch::class)
+            ->whereIn('subject_id', $inventories->getCollection()->pluck('branch_id')->unique())
+            ->where('action', 'operation.progressive_started')->pluck('subject_id')->flip();
 
         $transitQuantities = app(StoreContext::class)->transitQuantities($inventories->getCollection());
 
-        return view('inventory.index', compact('inventories', 'openingStockBranches', 'setupChangesEnabled', 'filters', 'branches', 'categories', 'colors', 'sizes', 'transitQuantities'));
+        return view('inventory.index', compact('inventories', 'openingStockBranches', 'setupChangesEnabled', 'progressiveBranchIds', 'filters', 'branches', 'categories', 'colors', 'sizes', 'transitQuantities'));
     }
 }

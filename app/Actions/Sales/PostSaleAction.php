@@ -71,6 +71,11 @@ class PostSaleAction
                 app(RecordCustomerReceiptAction::class)->post($current->customer_id, $branch->id,
                     [['invoice' => $current, 'amount' => $plan['payments']['paid']]], $plan['payments'], $actor, 'sale', $current->id);
             }
+            if (! $deferSettlement && $plan['credit_amount'] > 0) {
+                app(RecordCustomerReceiptAction::class)->post($current->customer_id, $branch->id,
+                    [['invoice' => $current, 'amount' => $plan['credit_amount']]], ['parts' => [], 'paid' => $plan['credit_amount'], 'change' => 0],
+                    $actor, 'sale', $current->id, 'credit', $plan['credits']);
+            }
             OperationContext::audit($current, $actor, 'sale.approved', $data['reason'] ?? null, ['discount_minor' => $current->line_discount_minor + $current->invoice_discount_minor,
                 'price_changes' => $items->where('price_reason', '!=', null)->map->only(['id', 'base_price_minor', 'unit_price_minor', 'price_reason'])->values()->all()]);
             if (collect($plan['rows'])->contains(fn (array $row): bool => $row['net_minor'] < $row['minimum_snapshot_minor'] * $row['quantity'])) {
