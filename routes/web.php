@@ -257,6 +257,7 @@ Route::middleware(['auth', 'auth.session', 'active.user', 'first.branch'])->grou
         Route::get('/{entry}', [OpeningStockController::class, 'show'])->whereNumber('entry')->name('show');
     });
     Route::get('/inventory/{inventory}/correction-readiness', [InventorySetupController::class, 'readiness'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.correction-readiness');
+    Route::get('/inventory/{inventory}/correction-route', [InventorySetupController::class, 'route'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.correction-route');
     Route::put('/inventory/{inventory}', [InventorySetupController::class, 'update'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.update');
     Route::delete('/inventory/{inventory}', [InventorySetupController::class, 'destroy'])->middleware(['can:inventory.correct_setup', 'can:sales.view_cost'])->whereNumber('inventory')->name('inventory.destroy');
     Route::view('/design-preview', 'index')->name('design.preview');

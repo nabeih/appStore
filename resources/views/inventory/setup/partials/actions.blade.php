@@ -16,6 +16,7 @@
         'update_url' => route('inventory.update', $inventory),
         'delete_url' => route('inventory.destroy', $inventory),
         'readiness_url' => route('inventory.correction-readiness', $inventory),
+        'route_url' => route('inventory.correction-route', $inventory),
     ];
     if (auth()->user()->can('sales.view_cost')) {
         $setupData['average_cost'] = (string) $inventory->average_cost;
@@ -36,7 +37,7 @@
     @can('inventory.manage_catalog')
         <button type="button" class="btn btn-outline btn-sm" data-product-details="{{ json_encode($details) }}">بيانات المنتج</button>
     @endcan
-    @if($setupChangesEnabled && !$inventory->branch?->opening_stock_closed_at && !$progressiveBranchIds->has($inventory->branch_id) && auth()->user()->can('sales.view_cost'))
+    @if(auth()->user()->can('sales.view_cost'))
         @can('inventory.correct_setup')
             <button type="button" class="btn btn-outline btn-sm" data-inventory-action="edit" aria-label="تصحيح افتتاحي {{ $setupData['name'] }}">تصحيح أول المدة</button>
             <button type="button" class="btn btn-danger btn-sm" data-inventory-action="delete" aria-label="حذف {{ $setupData['name'] }} من {{ $setupData['branch'] }}">حذف افتتاحي</button>

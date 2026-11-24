@@ -48,7 +48,7 @@ class CorrectInventoryAction
         $reason = null;
         try {
             abort_unless(config('inventory.allow_setup_changes'), 403, 'انتهت مرحلة تصحيح إدخال البضاعة.');
-            app(ProgressiveOperation::class)->guardCorrection($branch->id);
+            app(ProgressiveOperation::class)->guardCorrection($branch->id, true);
             if ($branch->opening_stock_closed_at) {
                 $this->fail('أُغلق إعداد أول المدة لهذا الفرع.');
             }
@@ -121,7 +121,7 @@ class CorrectInventoryAction
                     OperationContext::branch(User::findOrFail($actorId), (int) $inventory->branch_id, 'inventory.correct_setup');
                 }
                 $branch = Branch::whereKey($inventory->branch_id)->lockForUpdate()->firstOrFail();
-                app(ProgressiveOperation::class)->guardCorrection($branch->id);
+                app(ProgressiveOperation::class)->guardCorrection($branch->id, true);
                 if ($branch->opening_stock_closed_at) {
                     $this->fail('أُغلق إعداد أول المدة لهذا الفرع.');
                 }

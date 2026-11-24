@@ -31,6 +31,13 @@
         if (!button || busy) return;
         selected = JSON.parse(button.closest('[data-inventory-details]').dataset.inventoryDetails);
         mode = button.dataset.inventoryAction;
+        try {
+            const routeResponse = await fetch(selected.route_url, { headers: { Accept: 'application/json' } });
+            const route = await routeResponse.json();
+            if (!routeResponse.ok) throw new Error(route.message || 'تعذر تحديد مسار التصحيح.');
+            if (route.mode === 'document_correction') { window.location.assign(route.url); return; }
+            if (!route.allowed) { feedback(route.reason); return; }
+        } catch (failure) { feedback(failure.message); return; }
         if (mode === 'delete') {
             busy = true; button.disabled = true;
             try {

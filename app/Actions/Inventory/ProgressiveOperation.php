@@ -313,9 +313,9 @@ class ProgressiveOperation
         });
     }
 
-    public function guardCorrection(int $branchId): void
+    public function guardCorrection(int $branchId, bool $allowEligibleOpeningCorrection = false): void
     {
-        if ($this->activation($branchId)) {
+        if ($this->activation($branchId) && ! $allowEligibleOpeningCorrection) {
             $this->fail(['بدأ التشغيل التدريجي؛ لا تعديل أو حذف مباشر لأرصدة البداية. استخدم مستند المصدر الآمن، أو اطلب مراجعة إذا لم يوجد مسار تصحيح.']);
         }
     }

@@ -285,6 +285,19 @@ class OwnerReadinessAndDocumentCorrectionTest extends SalesTestCase
         $this->assertSame(0, AuditEvent::where('action', 'inventory.document_corrected')->count());
     }
 
+    public function test_inventory_route_uses_direct_opening_correction_then_document_correction_after_closure(): void
+    {
+        config(['inventory.allow_setup_changes' => true]);
+        $variant = $this->stock('20', '10', 10);
+        $inventory = Inventory::where('product_variant_id', $variant->id)->sole();
+        $this->getJson(route('inventory.correction-route', $inventory))->assertOk()->assertJsonPath('mode', 'document_correction');
+        Branch::whereKey($this->branchId)->update(['opening_stock_closed_at' => now()]);
+        $item = OpeningStockEntry::firstOrFail()->items()->sole();
+        $this->getJson(route('inventory.correction-route', $inventory))->assertOk()
+            ->assertJsonPath('mode', 'document_correction')
+            ->assertJsonPath('url', route('inventory.document-corrections.show', ['opening', $item->opening_stock_entry_id, $item->id]));
+    }
+
     private function correctionData(Model $document, int $item): array
     {
         $data = ['quantity' => 12, 'unit_cost' => '15.00', 'reason' => 'تصحيح خطأ إدخال بدليل موثق'];
