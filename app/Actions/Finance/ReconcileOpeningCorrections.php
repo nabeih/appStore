@@ -29,9 +29,14 @@ class ReconcileOpeningCorrections
         if (! $audit) {
             OperationContext::date($branch, $data['posting_date']);
         }
-        $lines = $support->settlementLines($change, $data['classification'], $plan['base_journal_id'] !== null, $data['revenue_journal_id'] ?? null);
-        $status = $audit ? 'already_posted' : ($plan['status'] === 'posted' && $data['classification'] === 'entry_error' ? 'already_posted' : 'eligible');
-        if ($plan['delta_minor'] === 0 && $plan['base_journal_id'] === null) {
+        $historicallyIncluded = $plan['status'] === 'included_in_transition';
+        $lines = $historicallyIncluded || $plan['status'] === 'non_financial'
+            ? []
+            : $support->settlementLines($change, $data['classification'], $plan['base_journal_id'] !== null, $data['revenue_journal_id'] ?? null);
+        $status = $audit || $historicallyIncluded
+            ? 'already_posted'
+            : ($plan['status'] === 'posted' && $data['classification'] === 'entry_error' ? 'already_posted' : 'eligible');
+        if ($plan['status'] === 'non_financial' && $plan['base_journal_id'] === null) {
             $status = 'no_effect';
         }
         if ($audit) {
@@ -42,7 +47,8 @@ class ReconcileOpeningCorrections
         $report = ['entry_id' => $document->id, 'number' => $document->number, 'branch_id' => $document->branch_id, 'actor_id' => $actor->id,
             'original_journal_id' => $review['original_journal_id'], 'original_minor' => $review['original_minor'], 'current_minor' => $review['current_minor'],
             'change_id' => $change->id, 'change_hash' => $plan['change_hash'], 'delta_minor' => $plan['delta_minor'], 'quantity_delta' => $plan['quantity_delta'],
-            'base_journal_id' => $plan['base_journal_id'], 'journal_id' => $plan['settlement_journal_id'] ?? $plan['base_journal_id'],
+            'base_journal_id' => $plan['base_journal_id'], 'journal_id' => $plan['settlement_journal_id'] ?? $plan['base_journal_id'] ?? ($historicallyIncluded ? $review['original_journal_id'] : null),
+            'financial_status' => $plan['status'],
             'classification' => $data['classification'], 'posting_date' => $data['posting_date'], 'evidence' => $data['evidence'],
             'revenue_journal_id' => $data['revenue_journal_id'] ?? null, 'status' => $status, 'lines' => $lines,
             'other_unsettled_changes' => collect($review['changes'])->where('status', 'missing')->where('id', '!=', $change->id)->pluck('id')->all(),

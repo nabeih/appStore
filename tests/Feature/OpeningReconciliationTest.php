@@ -24,6 +24,7 @@ use App\Models\Size;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\Inventory\Setup\InventoryState;
+use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
 use App\Support\Sales\SalesAccess;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -124,6 +125,105 @@ class OpeningReconciliationTest extends SalesTestCase
         $this->assertTrue(collect($proof['rows'])->every('ready', true));
         $this->assertSame((int) Inventory::sum('value_minor'), $this->balance('inventory'));
         $this->assertSame((int) Inventory::sum('value_minor'), (int) StockMovement::sum('value_change_minor'));
+    }
+
+    private function markAsHistoricalTransition(OpeningStockEntry $entry, int $minor): JournalEntry
+    {
+        $journal = JournalEntry::where('event', 'opening')->with('lines.account')->sole();
+        foreach ($journal->lines as $line) {
+            $line->update($line->account->code === 'inventory'
+                ? ['debit_minor' => $minor, 'credit_minor' => 0]
+                : ['debit_minor' => 0, 'credit_minor' => $minor]);
+        }
+        $entry->update(['opening_date' => now()->subDay()->toDateString()]);
+        AuditEvent::create(['subject_type' => $entry->getMorphClass(), 'subject_id' => $entry->id, 'branch_id' => $entry->branch_id,
+            'user_id' => $this->owner->id, 'action' => 'finance.legacy_posted', 'reason' => 'ØªØ±Ø­ÙŠÙ„ ØªØ§Ø±ÙŠØ®ÙŠ Ø§ØµØ·Ù†Ø§Ø¹ÙŠ Ù…ÙˆØ«Ù‚', 'data' => [
+                'journal_id' => $journal->id, 'request_hash' => str_repeat('a', 64), 'preview' => [
+                    'source_kind' => 'opening', 'source_id' => $entry->id, 'branch_id' => $entry->branch_id,
+                    'posting_date' => $journal->transaction_date->toDateString(),
+                    'lines' => [['account' => 'inventory', 'amount' => $minor], ['account' => 'opening_equity', 'amount' => -$minor]],
+                ],
+            ]]);
+
+        return $journal->fresh('lines.account');
+    }
+
+    public function test_legacy_metadata_corrections_without_value_minor_are_non_financial(): void
+    {
+        [$entry] = $this->fixture(false, false);
+        $item = $entry->items()->orderBy('id')->firstOrFail();
+        $state = ['quantity' => $item->quantity, 'average_cost' => $item->unit_cost, 'product_code' => 'OLD-CODE'];
+        foreach ([1, 2, 3] as $index) {
+            InventorySetupChange::create(['inventory_id' => Inventory::where('product_variant_id', $item->product_variant_id)->sole()->id,
+                'branch_id' => $entry->branch_id, 'product_variant_id' => $item->product_variant_id, 'opening_stock_entry_id' => $entry->id,
+                'opening_stock_item_id' => $item->id, 'user_id' => $this->owner->id, 'operation' => 'updated',
+                'reason' => 'ØªØ¹Ø¯ÙŠÙ„ ØªØ¹Ø±ÙŠÙÙŠ ØªØ§Ø±ÙŠØ®ÙŠ '.$index, 'before_state' => $state,
+                'after_state' => array_replace($state, ['product_code' => 'OLD-CODE-'.$index])]);
+        }
+        $review = app(OpeningFinancialSupport::class)->review($entry->fresh());
+        $this->assertSame(3, collect($review['changes'])->where('status', 'non_financial')->count());
+        $this->assertSame(0, JournalEntry::where('event', 'opening_reconciliation')->count());
+    }
+
+    public function test_read_only_command_scans_every_opening_document_and_separates_human_review(): void
+    {
+        $this->fixture();
+        $this->artisan('app:opening-corrections-reconcile', ['--actor' => $this->owner->id, '--branch' => $this->branchId, '--all' => true])
+            ->expectsOutputToContain('requires_human_review')->assertSuccessful();
+    }
+
+    public function test_repeated_future_product_corrections_keep_document_stock_and_journals_aligned(): void
+    {
+        [$entry] = $this->fixture(false, false);
+        $stock = Inventory::orderBy('id')->firstOrFail();
+        $stock = app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['name' => 'RECON-NAME-1']), $this->owner->id);
+        $stock = app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['code' => 'RECON-RENAMED']), $this->owner->id);
+        $stock = app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['selling_price' => '175.00']), $this->owner->id);
+        $stock = app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['average_cost' => '90.00']), $this->owner->id);
+        $stock = app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['quantity' => 2]), $this->owner->id);
+        app(CorrectInventoryAction::class)->delete($stock, $this->correction($stock), $this->owner->id);
+        app(OpeningFinancialSupport::class)->assertValid($entry->fresh());
+        $this->assertBalanced();
+        $this->assertSame(0, JournalEntry::where('event', 'opening_reconciliation')->count());
+    }
+
+    public function test_correction_included_in_documented_historical_transition_cannot_post_a_duplicate_journal(): void
+    {
+        [$entry, $change] = $this->fixture();
+        DB::table('inventory_setup_changes')->where('id', $change->id)->update(['created_at' => now()->subMinute()]);
+        $journal = $this->markAsHistoricalTransition($entry->fresh(), Money::minor($entry->fresh()->total_cost));
+        $review = app(OpeningFinancialSupport::class)->review($entry->fresh());
+        $this->assertSame('included_in_transition', $review['changes'][0]['status']);
+        $plan = app(ReconcileOpeningCorrections::class)->preview($entry->fresh(), $this->request($change->fresh()), $this->owner);
+        $this->assertSame('already_posted', $plan['status']);
+        $this->assertSame($journal->id, $this->apply($entry->fresh(), $this->request($change->fresh()))->id);
+        $this->assertSame(0, JournalEntry::where('event', 'opening_reconciliation')->count());
+        $this->assertBalanced();
+    }
+
+    public function test_post_transition_missing_correction_requires_one_independent_settlement(): void
+    {
+        [$entry, $change] = $this->fixture();
+        DB::table('inventory_setup_changes')->where('id', $change->id)->update(['created_at' => now()->subMinute()]);
+        $this->markAsHistoricalTransition($entry->fresh(), Money::minor($entry->fresh()->total_cost));
+        $stock = Inventory::sole();
+        $this->mock(PostJournalAction::class)->shouldReceive('execute')->once()->andReturn(new JournalEntry);
+        app(CorrectInventoryAction::class)->update($stock, $this->correction($stock, ['average_cost' => '90.00']), $this->owner->id);
+        $this->app->forgetInstance(PostJournalAction::class);
+        $later = InventorySetupChange::latest('id')->firstOrFail();
+        $plan = app(ReconcileOpeningCorrections::class)->preview($entry->fresh(), $this->request($later), $this->owner);
+        $this->assertSame('eligible', $plan['status']);
+        $this->apply($entry->fresh(), $this->request($later));
+        $this->assertSame(1, JournalEntry::where('event', 'opening_reconciliation')->count());
+    }
+
+    public function test_conflicting_historical_transition_evidence_remains_blocked(): void
+    {
+        [$entry, $change] = $this->fixture();
+        DB::table('inventory_setup_changes')->where('id', $change->id)->update(['created_at' => now()->subMinute()]);
+        $this->markAsHistoricalTransition($entry->fresh(), 99999);
+        $this->expectException(ValidationException::class);
+        app(OpeningFinancialSupport::class)->review($entry->fresh(), false, true);
     }
 
     public function test_missing_600_to_300_correction_is_blocked_then_settled_without_changing_stock_or_original_journal(): void

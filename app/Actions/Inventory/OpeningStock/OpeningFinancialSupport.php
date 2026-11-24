@@ -10,6 +10,7 @@ use App\Models\OpeningStockItem;
 use App\Models\StockMovement;
 use App\Support\Sales\Money;
 use App\Support\Sales\OperationContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -50,6 +51,7 @@ class OpeningFinancialSupport
             ->with(['lines.account', 'reversals'])->when($lock, fn ($query) => $query->lockForUpdate())->get()->groupBy('source_id');
         $audits = AuditEvent::where('subject_type', (new InventorySetupChange)->getMorphClass())->whereIn('subject_id', $changes->modelKeys())
             ->where('action', 'finance.opening_reconciled')->when($lock, fn ($query) => $query->lockForUpdate())->get()->groupBy('subject_id');
+        $transition = $this->transitionEvidence($entry, $original->first());
         $correctionTotal = 0;
         $plans = [];
         $lastStates = [];
@@ -72,7 +74,9 @@ class OpeningFinancialSupport
                 $this->fail();
             }
             $audit = $audits->get($change->id, collect());
-            $status = $base->isNotEmpty() || $delta === 0 ? 'posted' : 'missing';
+            $includedInTransition = $transition !== null && $delta !== 0
+                && $change->created_at !== null && $change->created_at->lessThan($transition['created_at']);
+            $status = $delta === 0 ? 'non_financial' : ($base->isNotEmpty() ? 'posted' : ($includedInTransition ? 'included_in_transition' : 'missing'));
             if ($audit->isNotEmpty() || $settlements->isNotEmpty()) {
                 if ($audit->count() !== 1 || $settlements->count() !== 1) {
                     $this->fail();
@@ -97,7 +101,9 @@ class OpeningFinancialSupport
             }
             $plans[] = $data + ['id' => $change->id, 'variant_id' => $change->product_variant_id, 'item_id' => $itemId,
                 'status' => $status, 'base_journal_id' => $base->first()?->id, 'settlement_journal_id' => $settlements->first()?->id];
-            $correctionTotal = Money::add($correctionTotal, $delta);
+            if (! $includedInTransition) {
+                $correctionTotal = Money::add($correctionTotal, $delta);
+            }
         }
         $movementGroups = StockMovement::where('source_type', (new OpeningStockItem)->getMorphClass())
             ->whereIn('source_id', array_unique(array_merge($items->modelKeys(), array_keys($lastStates))))->get()->groupBy('source_id');
@@ -119,9 +125,10 @@ class OpeningFinancialSupport
                 $this->fail();
             }
         }
-        $initial = Money::add($total, -$correctionTotal);
+        $initial = $transition === null ? Money::add($total, -$correctionTotal) : $transition['minor'];
         if ($initial < 0 || ! $this->matches($original->first(), 'opening', $entry->branch_id, $initial)
-            || $original->first()->transaction_date->toDateString() !== $entry->opening_date->toDateString()) {
+            || ($transition !== null && $total !== Money::add($initial, $correctionTotal))
+            || ($transition === null && $original->first()->transaction_date->toDateString() !== $entry->opening_date->toDateString())) {
             $this->fail();
         }
 
@@ -141,6 +148,7 @@ class OpeningFinancialSupport
 
         return ['effective_lines' => $effectiveLines, 'entry_id' => $entry->id, 'branch_id' => $entry->branch_id, 'original_journal_id' => $original->first()->id,
             'original_minor' => $initial, 'current_minor' => $total, 'changes' => $plans,
+            'transition_audit_id' => $transition['id'] ?? null,
             'basis' => OperationContext::hash([$entry->getAttributes(), $items->toArray(), $changes->toArray(), $journals->toArray(), $audits->toArray()])];
     }
 
@@ -163,12 +171,47 @@ class OpeningFinancialSupport
     /** @return array<string, int> */
     private function state(array $state): array
     {
-        if (! is_int($state['quantity'] ?? null) || ! is_int($state['value_minor'] ?? null) || ! is_string($state['average_cost'] ?? null)
-            || $state['quantity'] < 0 || $state['value_minor'] < 0 || Money::multiply($state['quantity'], Money::minor($state['average_cost'])) !== $state['value_minor']) {
+        if (! is_int($state['quantity'] ?? null) || ! is_string($state['average_cost'] ?? null) || $state['quantity'] < 0) {
+            $this->fail();
+        }
+        try {
+            $derived = Money::multiply($state['quantity'], Money::minor($state['average_cost']));
+        } catch (\Throwable) {
+            $this->fail();
+        }
+        $value = array_key_exists('value_minor', $state) ? $state['value_minor'] : $derived;
+        if (! is_int($value) || $value < 0 || $value !== $derived) {
             $this->fail();
         }
 
-        return ['quantity' => $state['quantity'], 'value_minor' => $state['value_minor'], 'unit_cost_minor' => Money::minor($state['average_cost'])];
+        return ['quantity' => $state['quantity'], 'value_minor' => $value, 'unit_cost_minor' => Money::minor($state['average_cost'])];
+    }
+
+    /** @return array{id:int,created_at:Carbon,minor:int}|null */
+    private function transitionEvidence(OpeningStockEntry $entry, JournalEntry $journal): ?array
+    {
+        $audits = AuditEvent::where('subject_type', $entry->getMorphClass())->where('subject_id', $entry->id)
+            ->where('action', 'finance.legacy_posted')->get();
+        if ($audits->isEmpty()) {
+            return null;
+        }
+        if ($audits->count() !== 1) {
+            $this->fail();
+        }
+        $audit = $audits->first();
+        $preview = $audit->data['preview'] ?? null;
+        if (! is_array($preview) || ($audit->data['journal_id'] ?? null) !== $journal->id
+            || ($preview['source_kind'] ?? null) !== 'opening' || ($preview['source_id'] ?? null) !== $entry->id
+            || ($preview['branch_id'] ?? null) !== $entry->branch_id || ($preview['posting_date'] ?? null) !== $journal->transaction_date->toDateString()
+            || ! is_array($preview['lines'] ?? null) || $audit->created_at === null) {
+            $this->fail();
+        }
+        $inventory = collect($preview['lines'])->firstWhere('account', 'inventory');
+        if (! is_array($inventory) || ! is_int($inventory['amount'] ?? null) || $inventory['amount'] < 0) {
+            $this->fail();
+        }
+
+        return ['id' => $audit->id, 'created_at' => $audit->created_at, 'minor' => $inventory['amount']];
     }
 
     /** @return list<array{account:string,amount:int}> */
